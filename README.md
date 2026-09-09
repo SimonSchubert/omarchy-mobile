@@ -162,12 +162,29 @@ first character of every line with them.
   <img src="docs/screenshots/notifications-after.png" width="38%" alt="After: cards clamped to the screen with symmetric insets">
 </p>
 
-The fix is one expression, and it is a no-op on any screen wider than about 390
-logical pixels:
+The fix follows the card's own stated contract. Its header says *"Pure
+presentational"*, and `cornerRadius` and `fontFamily` are both **injected by the
+container** — so the width limit arrives the same way, rather than the card
+reaching out to `Screen`:
 
 ```qml
-implicitWidth: Math.min(Style.space(380), Screen.width - 2 * Style.gapsOut)
+// NotificationCard.qml -- 0 leaves the card at its natural width
+property real maxWidth: 0
+implicitWidth: maxWidth > 0 ? Math.min(Style.space(380), maxWidth) : Style.space(380)
+
+// Service.qml -- the container knows how much room it has
+maxWidth: popupWindow.width
+          - popupWindow.popupPlacement.margins.left
+          - popupWindow.popupPlacement.margins.right
 ```
+
+The margins come from `popupPlacement`, which the container already computes, so
+there is no magic factor — and it stays correct when the bar is on the right
+edge, where `margins.right` becomes the bar clearance rather than the gap.
+
+Measured in the VM at both ends: at 360 logical the card clamps to 350 and wraps;
+at 1920×1080 `maxWidth` is 1910, `Math.min` returns 380, and the toast is
+byte-identical to upstream's.
 
 Patches apply with `--fuzz=0` and no offset, so a moved upstream fails the build
 and names the hunk rather than landing a change where it was never aimed — the

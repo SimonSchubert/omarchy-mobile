@@ -1,16 +1,43 @@
---- a/shell/plugins/notifications/components/NotificationCard.qml	2026-09-09 21:26:56
-+++ b/shell/plugins/notifications/components/NotificationCard.qml	2026-09-09 21:26:56
-@@ -63,7 +63,12 @@
+--- a/shell/plugins/notifications/components/NotificationCard.qml	2026-09-09 21:34:56
++++ b/shell/plugins/notifications/components/NotificationCard.qml	2026-09-09 21:34:56
+@@ -30,6 +30,13 @@
+   // System monospace font injected by the container.
+   property string fontFamily: ""
+ 
++  // Upper bound on the card's width, injected by the container. 0 leaves the
++  // card at its natural width. The container is what knows how much room it
++  // actually has -- the popup column knows its own screen-edge margins, and a
++  // panel would know its content width -- so the limit arrives from there
++  // rather than the card reaching out to Screen.
++  property real maxWidth: 0
++
+   readonly property bool hovered: hoverTracker.hovered
+ 
+   signal closeRequested()
+@@ -63,7 +70,11 @@
      return Quickshell.iconPath(value, true)
    }
  
 -  implicitWidth: Style.space(380)
-+  // 380 is wider than the screen on a small display, so the card overflows the
-+  // right edge and the icon slot is clipped away at x=0. Clamp to the screen,
-+  // inset by the shell's own screen-edge gap on both sides. Screen is the
-+  // card's own output -- there is one popup PanelWindow per screen -- and on
-+  // anything wider than ~390 this returns Style.space(380) unchanged.
-+  implicitWidth: Math.min(Style.space(380), Screen.width - 2 * Style.gapsOut)
++  // 380 is a comfortable desktop card. On a screen narrower than that it is
++  // wider than the screen itself, and because the popup column is anchored
++  // right the overflow lands on the LEFT edge -- taking the card's border and
++  // the first character of every line with it.
++  implicitWidth: maxWidth > 0 ? Math.min(Style.space(380), maxWidth) : Style.space(380)
    // Add vertical border insets so mainColumn (inset by border on top/left/right)
    // doesn't push content under the bottom edge.
    implicitHeight: mainColumn.implicitHeight + borderTop + borderBottom
+--- a/shell/plugins/notifications/Service.qml	2026-09-09 21:34:56
++++ b/shell/plugins/notifications/Service.qml	2026-09-09 21:34:56
+@@ -1041,6 +1041,11 @@
+             NotificationCard {
+               id: card
+               anchors.right: parent.right
++              // The column is inset from both screen edges by the placement
++              // margins, so that is exactly the room a card has.
++              maxWidth: popupWindow.width
++                        - popupWindow.popupPlacement.margins.left
++                        - popupWindow.popupPlacement.margins.right
+               app: cardSlot.app
+               appIcon: cardSlot.appIcon
+               summary: cardSlot.summary
