@@ -1,0 +1,16 @@
+--- a/shell/plugins/notifications/components/NotificationCard.qml	2026-09-09 21:26:56
++++ b/shell/plugins/notifications/components/NotificationCard.qml	2026-09-09 21:26:56
+@@ -63,7 +63,12 @@
+     return Quickshell.iconPath(value, true)
+   }
+ 
+-  implicitWidth: Style.space(380)
++  // 380 is wider than the screen on a small display, so the card overflows the
++  // right edge and the icon slot is clipped away at x=0. Clamp to the screen,
++  // inset by the shell's own screen-edge gap on both sides. Screen is the
++  // card's own output -- there is one popup PanelWindow per screen -- and on
++  // anything wider than ~390 this returns Style.space(380) unchanged.
++  implicitWidth: Math.min(Style.space(380), Screen.width - 2 * Style.gapsOut)
+   // Add vertical border insets so mainColumn (inset by border on top/left/right)
+   // doesn't push content under the bottom edge.
+   implicitHeight: mainColumn.implicitHeight + borderTop + borderBottom

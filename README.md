@@ -147,7 +147,38 @@ version and `[pkg.hyprland]` can simply be deleted.
 
 ## Where this deliberately differs from upstream Omarchy
 
-Two changes, both about a phone rather than about aarch64:
+### Patches
+
+`patches/` holds mobile fixes to the vendored upstream. There is one so far:
+
+**`notification-card-max-width.patch`** — `NotificationCard.qml` sets
+`implicitWidth: Style.space(380)`, a fixed desktop width. On a 360-logical-wide
+screen the card is *wider than the screen*, and since the toast column is
+anchored right, 20 pixels hang off the **left** edge — taking the border and the
+first character of every line with them.
+
+<p align="center">
+  <img src="docs/screenshots/notifications-before.png" width="38%" alt="Before: cards overflow the left edge, clipping the border and the first characters">
+  <img src="docs/screenshots/notifications-after.png" width="38%" alt="After: cards clamped to the screen with symmetric insets">
+</p>
+
+The fix is one expression, and it is a no-op on any screen wider than about 390
+logical pixels:
+
+```qml
+implicitWidth: Math.min(Style.space(380), Screen.width - 2 * Style.gapsOut)
+```
+
+Patches apply with `--fuzz=0` and no offset, so a moved upstream fails the build
+and names the hunk rather than landing a change where it was never aimed — the
+rule moarchy holds `port-4x.patch` to, for the same reason.
+
+This one is a candidate for upstream rather than a permanent fork: it is a
+narrow-screen robustness fix, not an aarch64 or a mobile-only concern.
+
+### Two deliberate divergences
+
+Both about a phone rather than about aarch64:
 
 **No display manager.** Upstream enables `sddm`. A phone shows no login screen,
 and on a software-rendered VM sddm is one more graphical thing that can fail
@@ -175,6 +206,7 @@ not in moarchy.
 | `vm/configure.sh` | Runs in the rootfs under `arch-chroot`: identity, fstab, initramfs, user, session |
 | `vm/packages/` | The package set, in three files, with every omission explained |
 | `default/` | This project's own overlay, copied onto the rootfs |
+| `patches/` | Mobile fixes to the vendored upstream. Applied with `--fuzz=0`, so a moved upstream fails the build |
 | `scripts/vm-*.sh` | Build, run, ssh, screenshot |
 | `docs/build-log.md` | The chronological account, including the dead ends |
 

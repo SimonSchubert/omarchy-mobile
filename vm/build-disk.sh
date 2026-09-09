@@ -164,6 +164,24 @@ curl -fsSL "$OMARCHY_URL/archive/$OMARCHY_REF.tar.gz" -o "$WORK/omarchy.tar.gz" 
   || die "could not fetch omarchy $OMARCHY_REF"
 mkdir -p "$WORK/omarchy"
 tar xzf "$WORK/omarchy.tar.gz" -C "$WORK/omarchy" --strip-components=1
+
+# Patches, if any. The project's premise is that Omarchy's Hyprland coupling
+# needs no porting -- these are MOBILE fixes, not architecture ones, and each
+# is small enough to be a candidate for upstream rather than a fork.
+#
+# --fuzz=0 and no offset: a patch that no longer applies cleanly fails the
+# build and names the hunk, rather than landing somewhere it was never aimed
+# at. That is moarchy's rule for port-4x.patch and it is here for the same
+# reason -- a silently mis-applied hunk is a shell that looks fine until the
+# one screen the hunk was about.
+if compgen -G "$REPO/patches/*.patch" >/dev/null; then
+  for p in "$REPO"/patches/*.patch; do
+    info "patch $(basename "$p")"
+    patch -d "$WORK/omarchy" -p1 --fuzz=0 --no-backup-if-mismatch <"$p" \
+      || die "$(basename "$p") does not apply to omarchy $OMARCHY_REF"
+  done
+fi
+
 install -d "$ROOTDIR/usr/share/omarchy"
 # /usr/share/omarchy is the path upstream hardcodes: three scripts and their
 # acceptance test all say OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}".
