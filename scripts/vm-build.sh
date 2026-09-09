@@ -34,6 +34,18 @@ die() { printf '\033[31m!! %s\033[0m\n' "$*" >&2; exit 1; }
 command -v docker >/dev/null || die "docker not found -- Docker Desktop must be running"
 docker info >/dev/null 2>&1 || die "the docker daemon is not responding -- start Docker Desktop"
 
+# The pacman download cache is a NAMED VOLUME, not a bind mount into the repo.
+# A bind mount is the obvious choice and it does not work: Docker Desktop's
+# VirtioFS fails pacman's download-to-.part-then-rename with
+#
+#   error: could not rename /var/cache/pacman/pkg/libxau-1.0.12-1-aarch64.pkg.tar.xz.part
+#          to .../libxau-1.0.12-1-aarch64.pkg.tar.xz (No such file or directory)
+#
+# on a file it had just written. A named volume lives inside Docker's own VM
+# with ordinary Linux semantics, caches just as well between runs, and is
+# thrown away with `docker volume rm omarchy-mobile-pkgcache`.
+docker volume create omarchy-mobile-pkgcache >/dev/null
+
 if [ "$USE_SSH_KEY" = 1 ] && [ -z "$SSH_KEY" ]; then
   for k in ~/.ssh/id_ed25519.pub ~/.ssh/id_rsa.pub ~/.ssh/id_ecdsa.pub; do
     [ -f "$k" ] && { SSH_KEY="$k"; break; }
@@ -57,14 +69,36 @@ say "builder image"
 docker build --platform linux/arm64 -f vm/Dockerfile -t omarchy-mobile-builder . \
   || die "docker build failed"
 
+say "packages"
+# Anything Arch Linux ARM is behind on, built from Arch's packaging repo at the
+# commit manifest.toml pins. Cached on that commit, so this is a no-op on every
+# run where the pin has not moved -- which is nearly all of them.
+# /pkgs is a named volume for the same reason the cache is: makepkg's output
+# and pacman's downloads both want ordinary Linux filesystem semantics. The
+# built packages are copied out to vm/out/packages afterwards so they are
+# visible from the host without being built there.
+docker volume create omarchy-mobile-packages >/dev/null
+docker run --rm \
+  --platform linux/arm64 \
+  --entrypoint /usr/local/bin/build-packages \
+  -v omarchy-mobile-packages:/pkgs \
+  -v omarchy-mobile-pkgcache:/var/cache/pacman/pkg \
+  omarchy-mobile-builder || die "the package build failed"
+
+mkdir -p vm/out/packages
+docker run --rm --platform linux/arm64 \
+  --entrypoint /bin/bash \
+  -v omarchy-mobile-packages:/pkgs -v "$REPO_ROOT/vm/out/packages:/copy" \
+  omarchy-mobile-builder -c 'cp -f /pkgs/*.pkg.tar.* /copy/ 2>/dev/null || true'
+
 say "disk image"
 mkdir -p vm/out
 # --privileged: arch-chroot bind-mounts /proc, /sys and /dev to run mkinitcpio.
-mkdir -p .cache/pacman
 docker run --rm --privileged \
   --platform linux/arm64 \
   -v "$REPO_ROOT/vm/out:/out" \
-  -v "$REPO_ROOT/.cache/pacman:/var/cache/pacman/pkg" \
+  -v omarchy-mobile-pkgcache:/var/cache/pacman/pkg \
+  -v omarchy-mobile-packages:/pkgs \
   -e SESSION_ONLY="$SESSION_ONLY" \
   -e COMMIT="$COMMIT" -e DIRTY="$DIRTY" \
   -e SSH_PUBKEY="$PUBKEY" \

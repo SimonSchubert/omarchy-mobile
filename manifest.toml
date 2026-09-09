@@ -39,6 +39,36 @@ version = "v4.0.3"
 version = "0.1.0"
 
 # ---------------------------------------------------------------------------
+# Packages Arch Linux ARM is behind on, built here from Arch's own packaging
+# repo so the versions match what the rest of the repo expects.
+#
+# hyprland is the whole reason this section exists. ALARM's aarch64 [extra]
+# carries hyprland 0.56.1-3, built 2026-08-01 against libaquamarine.so=13. It
+# then rebuilt aquamarine to 0.15.0-2 on 2026-09-04, which provides
+# libaquamarine.so=14 -- and never rebuilt hyprland. pacstrap says so plainly:
+#
+#   :: unable to satisfy dependency 'libaquamarine.so=13-64' required by hyprland
+#
+# Every other dependency lines up (hyprutils .so=13, hyprlang .so=2,
+# hyprgraphics .so=4, hyprcursor .so=0, hyprwire .so=3), so exactly one package
+# is stale. Arch x86_64 already shipped the answer: hyprland 0.56.2-2 depends on
+# libaquamarine.so=14-64. Building that tag for aarch64 is the fix.
+#
+# Building hyprland rather than pinning aquamarine back to 0.14 is deliberate.
+# An old aquamarine would need an IgnorePkg forever and would break again on
+# the guest's first `pacman -Syu`; a newer hyprland is what ALARM is heading
+# towards anyway, so when it catches up its package supersedes ours and this
+# section can be deleted.
+#
+# `ref` is the commit the tag points at, not the tag, so a moved tag cannot
+# quietly change what gets built.
+# ---------------------------------------------------------------------------
+[pkg.hyprland]
+url     = "https://gitlab.archlinux.org/archlinux/packaging/packages/hyprland.git"
+tag     = "0.56.2-2"
+ref     = "b8035f2fd4540f4f88c747846388027dce715d5d"
+
+# ---------------------------------------------------------------------------
 # The aarch64 container everything is built in. Pinned by digest rather than
 # by the `base-devel` tag: a floating tag is a clone at HEAD by another name.
 #

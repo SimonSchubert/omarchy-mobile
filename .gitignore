@@ -2,8 +2,8 @@
 # is not something git should ever have seen.
 vm/out/
 
-# The pacman download cache, bind-mounted into the builder so a second build
-# does not re-fetch 3 GB.
+# The pacman download cache lives in a Docker named volume
+# (omarchy-mobile-pkgcache), not here -- see the note in scripts/vm-build.sh.
 .cache/
 
 .DS_Store

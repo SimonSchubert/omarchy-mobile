@@ -30,8 +30,14 @@ RUN pacman-key --init && pacman-key --populate archlinuxarm && \
 # self-contained: `docker run` needs no bind mount to know what to build.
 COPY manifest.toml scripts/manifest.sh /usr/local/share/omarchy-mobile/
 
-COPY vm/build-disk.sh /usr/local/bin/build-disk
-COPY vm/configure.sh  /usr/local/share/omarchy-mobile/configure.sh
+# makepkg refuses to run as root, so vm/build-packages.sh runs as `builder`.
+# It needs passwordless sudo because makepkg -s installs build dependencies.
+RUN useradd -m builder && \
+    echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+
+COPY vm/build-disk.sh     /usr/local/bin/build-disk
+COPY vm/build-packages.sh /usr/local/bin/build-packages
+COPY vm/configure.sh      /usr/local/share/omarchy-mobile/configure.sh
 
 # The repo itself, last: it changes on every commit and everything above it
 # does not, so the expensive pacman layer survives an edit.

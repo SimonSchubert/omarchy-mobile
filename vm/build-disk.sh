@@ -20,6 +20,7 @@ OUT=${OUT:-/out}
 REPO=${REPO:-/repo}
 SHARE=${SHARE:-/usr/local/share/omarchy-mobile}
 WORK=${WORK:-$OUT/work}
+PKGS=${PKGS:-/pkgs}
 
 say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
@@ -69,14 +70,31 @@ pkglist() {
   # comments and blank lines. An inline comment is why this is not `grep -v`.
   sed -e 's/#.*$//' -e 's/[[:space:]]*$//' "$1" | grep -v '^$' || true
 }
-PKGS=$(pkglist "$REPO/vm/packages/session")
-[ -n "$PKGS" ] || die "vm/packages/session is empty"
+PKGLIST=$(pkglist "$REPO/vm/packages/session")
+[ -n "$PKGLIST" ] || die "vm/packages/session is empty"
 if [ "$SESSION_ONLY" = 1 ]; then
-  info "session tier only ($(echo "$PKGS" | wc -l) packages) -- SESSION_ONLY=1"
+  info "session tier only ($(echo "$PKGLIST" | wc -l) packages) -- SESSION_ONLY=1"
 else
-  PKGS="$PKGS
+  PKGLIST="$PKGLIST
 $(pkglist "$REPO/vm/packages/apps")"
-  info "session + apps ($(echo "$PKGS" | wc -l) packages)"
+  info "session + apps ($(echo "$PKGLIST" | wc -l) packages)"
+fi
+
+# Packages this project built because Arch Linux ARM is behind on them. They go
+# in a file:// repo listed AHEAD of core and extra, so pacman prefers ours only
+# where the version is actually newer -- when ALARM catches up, its package wins
+# on version and this repo quietly stops mattering.
+LOCALREPO=""
+if compgen -G "$PKGS/*.pkg.tar.*" >/dev/null; then
+  say "local packages"
+  mkdir -p "$WORK/repo"
+  cp "$PKGS"/*.pkg.tar.* "$WORK/repo/"
+  repo-add --quiet "$WORK/repo/omarchy-mobile.db.tar.gz" "$WORK/repo"/*.pkg.tar.* >/dev/null
+  ls -1 "$WORK/repo"/*.pkg.tar.* | sed 's|.*/|    |'
+  LOCALREPO=$'[omarchy-mobile]\nSigLevel = Never\nServer = file://'"$WORK/repo"
+  # Our own builds are unsigned, which is why this repo says Never and the
+  # upstream ones do not. It is a file:// path inside a container built from a
+  # pinned commit, not something fetched over a network.
 fi
 
 cat >"$WORK/pacman.conf" <<EOF
@@ -91,6 +109,7 @@ DisableSandbox
 DisableDownloadTimeout
 SigLevel = Required DatabaseOptional
 LocalFileSigLevel = Optional
+$LOCALREPO
 [core]
 Server = http://mirror.archlinuxarm.org/\$arch/\$repo
 [extra]
@@ -102,7 +121,7 @@ say "pacstrap"
 mkdir -p "$ROOTDIR"
 # -K gives the target its own keyring rather than copying the builder's.
 attempt=0
-until pacstrap -C "$WORK/pacman.conf" -K "$ROOTDIR" $PKGS; do
+until pacstrap -C "$WORK/pacman.conf" -K "$ROOTDIR" $PKGLIST; do
   attempt=$(( attempt + 1 ))
   [ "$attempt" -ge 3 ] && die "pacstrap failed $attempt times"
   info "pacstrap failed (attempt $attempt) -- retrying"

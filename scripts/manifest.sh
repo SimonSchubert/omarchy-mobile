@@ -149,3 +149,36 @@ manifest_aur_packages() {
 
   printf '%s\n' "$_manifest_pkgs"
 }
+
+# manifest_pkgs -- the names under [pkg.*], one per line, in file order.
+#
+# The packages this project builds itself because Arch Linux ARM is behind on
+# them. Derived rather than listed, for the same reason manifest_components is:
+# a package could be pinned here and simply never built, and the way you would
+# find out is a missing dependency forty minutes into a pacstrap.
+manifest_pkgs() {
+  if [ ! -f "$MANIFEST_FILE" ]; then
+    echo "manifest: no such file: $MANIFEST_FILE" >&2
+    return 1
+  fi
+
+  _manifest_pkgs_list=$(awk '
+    /^[ \t]*#/ { next }
+    /^[ \t]*\[pkg\./ {
+      sec = $0
+      sub(/^[ \t]*\[pkg\./, "", sec)
+      sub(/\][ \t]*$/, "", sec)
+      print sec
+    }
+  ' "$MANIFEST_FILE")
+
+  # Empty means the manifest was unreadable or its shape moved, never that
+  # there is nothing to build -- so say so rather than looping zero times and
+  # reporting success.
+  if [ -z "$_manifest_pkgs_list" ]; then
+    echo "manifest: no [pkg.*] sections found in $MANIFEST_FILE" >&2
+    return 1
+  fi
+
+  printf '%s\n' "$_manifest_pkgs_list"
+}
