@@ -219,9 +219,11 @@ different disguises.
 
 - The gesture layer, recents carousel, app drawer, shade and on-screen keyboard
   — all of phase 2.
-- `pkgbuilds/` is an empty directory. The four AUR packages moarchy already
-  builds for aarch64 (`yay`, `xdg-terminal-exec`, `ttf-ia-writer`, `mise-bin`)
-  are omitted rather than blocked; wiring them in is phase 1b.
+- The four AUR packages moarchy already builds for aarch64 (`yay`,
+  `xdg-terminal-exec`, `ttf-ia-writer`, `mise-bin`) are omitted rather than
+  blocked. `vm/build-packages.sh` is already the loop that would build them —
+  it takes any `[pkg.*]` section in the manifest — so wiring them in is a pin
+  and a PKGBUILD source, not new machinery.
 - Nothing verifies an image after it is built. moarchy has
   `scripts/verify-image.sh` and 93 checks; this has none.
 - Touch input is a `usb-tablet`, which is a mouse that reports absolute
