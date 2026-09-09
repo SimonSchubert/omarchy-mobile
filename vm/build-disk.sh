@@ -19,8 +19,28 @@ set -euo pipefail
 OUT=${OUT:-/out}
 REPO=${REPO:-/repo}
 SHARE=${SHARE:-/usr/local/share/omarchy-mobile}
-WORK=${WORK:-$OUT/work}
 PKGS=${PKGS:-/pkgs}
+
+# /work is a Docker VOLUME, and /out is the host bind mount. The rootfs is
+# built in the volume and only the finished image is copied out, because a
+# rootfs cannot be built on Docker Desktop's VirtioFS at all:
+#
+#   $ systemd-sysusers --root=/out/t
+#   Creating group 'wheel' with GID 999.
+#   Failed to flush /out/t/etc/.#group5b567ce2a2a0917e: No such file or directory
+#   $ cat /out/t/etc/group
+#   root:x:0:root
+#
+# It reports success and writes nothing. The write-to-temp-then-rename pattern
+# that every careful program uses -- systemd-sysusers, pacman's .part
+# downloads, useradd -- silently loses the file. The same test against a
+# container-internal path creates the groups correctly.
+#
+# This cost three separate failures that each looked like something else: a
+# pacman "could not rename ... (No such file or directory)" on a file it had
+# just written, a useradd that could not find any group, and a systemd-sysusers
+# that printed "Creating group 'wheel'" and created nothing.
+WORK=${WORK:-/work}
 
 say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
@@ -32,6 +52,9 @@ GUEST_USER=$(manifest_get guest user)          || die "no guest user"
 GUEST_HOST=$(manifest_get guest hostname)      || die "no guest hostname"
 OMARCHY_REF=$(manifest_get omarchy ref)        || die "no omarchy ref"
 OMARCHY_URL=$(manifest_get omarchy url)        || die "no omarchy url"
+VM_WIDTH=$(manifest_get vm width)              || die "no vm width"
+VM_HEIGHT=$(manifest_get vm height)            || die "no vm height"
+VM_SCALE=$(manifest_get vm scale)              || die "no vm scale"
 
 SESSION_ONLY=${SESSION_ONLY:-0}
 
@@ -53,7 +76,10 @@ IMG="$WORK/$NAME.img"
 ROOTDIR="$WORK/rootfs"
 BOOTSTAGE="$WORK/boot"
 
-rm -rf "$WORK"; mkdir -p "$WORK" "$OUT"
+# The CONTENTS of $WORK, not $WORK itself: it is a volume mount point now, and
+# `rm -rf /work` on one fails with "Device or resource busy".
+mkdir -p "$WORK" "$OUT"
+find "$WORK" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
 # --- provenance ------------------------------------------------------------
 # A disk that corresponds to no commit cannot be rebuilt or bisected. /repo
@@ -173,12 +199,21 @@ fi
 
 # ---------------------------------------------------------------------------
 say "configure"
-install -Dm755 "$SHARE/configure.sh" "$ROOTDIR/tmp/configure.sh"
+# /root, not /tmp. arch-chroot mounts a FRESH TMPFS over the target's /tmp
+# before it chroots, so a script staged there is hidden by the time it runs and
+# the failure reads as though the file was never written:
+#
+#   chroot: failed to run command '/tmp/configure.sh': No such file or directory
+#
+# which is a confusing thing to be told about a file that is plainly sitting on
+# disk one directory up.
+install -Dm755 "$SHARE/configure.sh" "$ROOTDIR/root/configure.sh"
 GUEST_USER="$GUEST_USER" GUEST_HOST="$GUEST_HOST" ROOT_UUID="$ROOT_UUID" \
 ESP_UUID="$ESP_UUID" VERSION="$VERSION" COMMIT="$COMMIT" \
+VM_WIDTH="$VM_WIDTH" VM_HEIGHT="$VM_HEIGHT" VM_SCALE="$VM_SCALE" \
 SSH_PUBKEY="${SSH_PUBKEY:-}" \
-  arch-chroot "$ROOTDIR" /tmp/configure.sh
-rm -f "$ROOTDIR/tmp/configure.sh"
+  arch-chroot "$ROOTDIR" /root/configure.sh
+rm -f "$ROOTDIR/root/configure.sh"
 
 # ---------------------------------------------------------------------------
 say "split /boot onto the ESP"
@@ -267,7 +302,11 @@ arch-chroot "$ROOTDIR" pacman -Q >"$OUT/$NAME.packages" 2>/dev/null || true
   echo "tier     $([ "$SESSION_ONLY" = 1 ] && echo session || echo session+apps)"
 } >"$OUT/$NAME.provenance"
 
-mv "$IMG" "$OUT/$NAME.img"
+# cp --sparse=always, not mv: /work and /out are different filesystems, so this
+# is a copy either way, and the image is mostly empty slack that would cost
+# gigabytes on the host if the holes were filled in.
+cp --sparse=always "$IMG" "$OUT/$NAME.img"
+rm -f "$IMG"
 rm -rf "$ROOTDIR" "$BOOTSTAGE" "$WORK/omarchy" "$WORK/omarchy.tar.gz"
 
 say "done"

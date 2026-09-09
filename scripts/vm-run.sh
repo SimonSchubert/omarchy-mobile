@@ -6,10 +6,20 @@
 #   ./scripts/vm-run.sh --geometry 1080x2340
 #
 # Both modes serve VNC on the forwarded port, so `open vnc://127.0.0.1:PORT`
-# works either way. The difference is what the guest sees: with a display it
-# gets a virtio-gpu and Hyprland drives a real DRM device the way it would on a
-# phone; headless it gets no GPU at all, aquamarine finds no DRM node and falls
-# back to its headless backend.
+# works either way, and the GUEST IS IDENTICAL in both -- it always gets a
+# virtio-gpu, always has a DRM device, and Hyprland always drives it the way it
+# would on a phone. --headless only withholds the window on the Mac.
+#
+# It did originally mean what it says: no display device at all, so aquamarine
+# would find no DRM node and fall back to its headless backend. That gives a
+# guest with no /dev/dri and no tty1, and with no tty1 there is no autologin
+# and therefore no session at all -- `systemctl status getty@tty1` reported
+#
+#   Active: failed (Result: start-limit-hit)
+#
+# because agetty exits immediately on a VT that does not exist. Keeping the GPU
+# and hiding the window is one guest code path instead of two, and the panel
+# geometry is still set here rather than in the guest's config.
 #
 # -cpu host with -accel hvf: the guest runs aarch64 instructions natively on
 # the M-series core. Nothing here is emulated except the devices.
@@ -85,21 +95,19 @@ args=(
 # 130-package build to get back is twenty minutes you did not plan for.
 [ "$SNAPSHOT" = 1 ] && args+=(-snapshot)
 
+# The GPU and its input devices are unconditional; see the note at the top.
+args+=(
+  -device "virtio-gpu-pci,xres=$W,yres=$H"
+  -device qemu-xhci
+  -device usb-kbd
+  -device usb-tablet
+)
+
 if [ "$HEADLESS" = 1 ]; then
-  # No GPU device at all. Giving the guest a virtio-gpu and then hiding the
-  # window would leave Hyprland driving a DRM device nobody can see, and
-  # wayvnc would mirror a display at the QEMU window's geometry rather than
-  # the one asked for here.
   args+=(-display none)
-  echo "==> headless: Hyprland on its headless backend"
+  echo "==> headless: ${W}x${H}, no window -- watch it over VNC"
 else
-  args+=(
-    -device "virtio-gpu-pci,xres=$W,yres=$H"
-    -device qemu-xhci
-    -device usb-kbd
-    -device usb-tablet
-    -display cocoa,show-cursor=on
-  )
+  args+=(-display cocoa,show-cursor=on)
   echo "==> window: ${W}x${H}, Hyprland on virtio-gpu DRM"
 fi
 

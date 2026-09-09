@@ -1,0 +1,16 @@
+# The build context is `.` so the builder can reach vm/packages/ and default/,
+# and without this it also sweeps up vm/out/ -- which after a failed run holds a
+# root-owned, partially built rootfs. Docker cannot even read it:
+#
+#   ERROR: error from sender: failed to xattr
+#          vm/out/work/rootfs/usr/lib/dbus-daemon-launch-helper: permission denied
+#
+# and on a successful run it would be a multi-gigabyte context transfer for
+# files the builder produces rather than consumes.
+vm/out/
+.cache/
+.git/
+docs/screenshots/
+*.img
+*.img.xz
+.DS_Store

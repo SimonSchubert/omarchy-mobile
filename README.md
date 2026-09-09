@@ -3,6 +3,12 @@
 Omarchy on **Hyprland**, unmodified, on an aarch64 VM — with the mobile UI
 built on top rather than instead of it.
 
+<p align="center">
+  <img src="docs/screenshots/first-boot-720x1440.png" width="31%" alt="First boot: Omarchy's quickshell bar and notification toasts at 720x1440">
+  <img src="docs/screenshots/foot-tiled.png" width="31%" alt="A themed foot terminal, tiled, with Hyprland's focus border and rounded corners">
+  <img src="docs/screenshots/scale2-360x720.png" width="31%" alt="The same session at scale 2 -- 360x720 logical, the PinePhone's geometry">
+</p>
+
 This is the sibling of [moarchy](https://github.com/SimonSchubert/moarchy),
 which puts Omarchy's look, keybindings and theming on an original PinePhone. It
 exists because that phone's hardware forces one substitution moarchy could not
@@ -181,5 +187,35 @@ click-outside-to-dismiss) rather than losing one.
 
 ## Status
 
-Early. See [`docs/build-log.md`](docs/build-log.md) for what has actually been
-run, as opposed to what is designed.
+**Phase 1 is up.** Omarchy 4.0.3's quickshell shell runs on Hyprland 0.56.2 on
+aarch64, unpatched, and the screenshots above are off the VM rather than
+mocked. The cheapest proof that the shell is not merely running but talking to
+the compositor:
+
+```
+$ ./scripts/vm-ssh.sh hyprctl monitors
+Monitor Virtual-1 (ID 0):
+        720x1440@74.99900 at 0x0
+        reserved: 0 26 0 0
+```
+
+`reserved` is the bar's exclusive zone — claimed through `Quickshell.Hyprland`,
+the import moarchy has to rewrite, with no patch applied.
+
+[`docs/build-log.md`](docs/build-log.md) is the chronological account, including
+the five failures on the way there — four of which turned out to be one bug
+(Docker Desktop's VirtioFS silently discarding the write-to-temp-then-rename
+that pacman, `useradd` and `systemd-sysusers` all rely on) wearing four
+different disguises.
+
+### Not done yet
+
+- The gesture layer, recents carousel, app drawer, shade and on-screen keyboard
+  — all of phase 2.
+- `pkgbuilds/` is an empty directory. The four AUR packages moarchy already
+  builds for aarch64 (`yay`, `xdg-terminal-exec`, `ttf-ia-writer`, `mise-bin`)
+  are omitted rather than blocked; wiring them in is phase 1b.
+- Nothing verifies an image after it is built. moarchy has
+  `scripts/verify-image.sh` and 93 checks; this has none.
+- Touch input is a `usb-tablet`, which is a mouse that reports absolute
+  coordinates. Real multi-touch gestures will need something else.

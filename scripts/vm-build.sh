@@ -78,6 +78,10 @@ say "packages"
 # built packages are copied out to vm/out/packages afterwards so they are
 # visible from the host without being built there.
 docker volume create omarchy-mobile-packages >/dev/null
+# /work likewise: the rootfs is assembled there, not on the bind mount. See the
+# note at the top of vm/build-disk.sh -- a rootfs built on VirtioFS silently
+# loses every file written through a temp-and-rename.
+docker volume create omarchy-mobile-work >/dev/null
 docker run --rm \
   --platform linux/arm64 \
   --entrypoint /usr/local/bin/build-packages \
@@ -99,6 +103,7 @@ docker run --rm --privileged \
   -v "$REPO_ROOT/vm/out:/out" \
   -v omarchy-mobile-pkgcache:/var/cache/pacman/pkg \
   -v omarchy-mobile-packages:/pkgs \
+  -v omarchy-mobile-work:/work \
   -e SESSION_ONLY="$SESSION_ONLY" \
   -e COMMIT="$COMMIT" -e DIRTY="$DIRTY" \
   -e SSH_PUBKEY="$PUBKEY" \
