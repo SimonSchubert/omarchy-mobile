@@ -252,6 +252,18 @@ options  root=PARTUUID=$ROOT_UUID rw rootwait console=tty0 console=ttyAMA0,11520
 EOF
 
 # ---------------------------------------------------------------------------
+say "manifest"
+# What actually landed, beside the image. `pacman -Q` in the built rootfs, not
+# the list we asked for: the answer to "what is in this image" has to come from
+# the image.
+#
+# Before the filesystems, not after: the rootfs is deleted the moment its
+# contents are inside the disk image, so anything that has to read it has to
+# read it first. See the space note below.
+arch-chroot "$ROOTDIR" pacman -Q >"$OUT/$NAME.packages" 2>/dev/null || true
+info "$(wc -l <"$OUT/$NAME.packages") packages"
+
+# ---------------------------------------------------------------------------
 say "filesystems"
 ESP_IMG="$WORK/esp.img"
 rm -f "$ESP_IMG"
@@ -260,15 +272,10 @@ mkfs.fat -F32 -n OMARCHYESP "$ESP_IMG" >/dev/null
 # mcopy writes into the FAT image without mounting it.
 (cd "$BOOTSTAGE" && mcopy -s -i "$ESP_IMG" ./* ::)
 info "ESP ${ESP_MIB}M, $(du -sh "$BOOTSTAGE" | cut -f1) used"
+rm -rf "$BOOTSTAGE"
 
 ROOT_USED_MIB=$(du -sm --apparent-size "$ROOTDIR" | cut -f1)
 ROOT_MIB=$(( ROOT_USED_MIB + ROOT_SLACK_MIB ))
-ROOT_IMG="$WORK/root.img"
-rm -f "$ROOT_IMG"
-truncate -s "${ROOT_MIB}M" "$ROOT_IMG"
-# -d populates from a directory with no mount; -F because the target is a file.
-mkfs.ext4 -q -F -L omarchy-root -d "$ROOTDIR" "$ROOT_IMG"
-info "root ${ROOT_MIB}M ($ROOT_USED_MIB MiB used + $ROOT_SLACK_MIB MiB slack)"
 
 # ---------------------------------------------------------------------------
 say "assemble"
@@ -279,20 +286,35 @@ sgdisk -Z -o \
   -n "1:$ESP_LBA:+${ESP_MIB}M"  -t 1:ef00 -c 1:ESP  -u "1:$ESP_UUID" \
   -n "2:$ROOT_LBA:+${ROOT_MIB}M" -t 2:8304 -c 2:root -u "2:$ROOT_UUID" \
   "$IMG" >/dev/null
+
+# mke2fs writes the root filesystem STRAIGHT INTO the disk image at the
+# partition's byte offset. Building a separate root.img and dd-ing it in is the
+# obvious way and it needs the rootfs, a full-size root.img and the disk image
+# to exist at once -- 8.8 + 8.6 + 15 GB for the full package set, which filled
+# Docker Desktop's 59 GB VM disk exactly here:
+#
+#   dd: error writing '/work/omarchy-mobile-0.1.0.img': No space left on device
+#
+# -E offset= removes one whole copy, and deleting the rootfs immediately
+# afterwards removes the other, so the peak is one rootfs plus one sparse image
+# rather than three copies of the same bytes.
+#
+# The size is given in explicit 4 KiB blocks rather than as a suffixed string,
+# because without a size mke2fs takes the whole file and the offset stops
+# meaning anything.
+mkfs.ext4 -q -F -b 4096 -E offset=$(( ROOT_LBA * SECTOR )) \
+  -L omarchy-root -d "$ROOTDIR" "$IMG" $(( ROOT_MIB * 1024 * 1024 / 4096 ))
+info "root ${ROOT_MIB}M ($ROOT_USED_MIB MiB used + $ROOT_SLACK_MIB MiB slack)"
+rm -rf "$ROOTDIR"
+
 # conv=sparse keeps the holes: the image is mostly empty slack and writing it
-# out solid would cost gigabytes through a VirtioFS bind mount for nothing.
-dd if="$ESP_IMG"  of="$IMG" bs=1M seek=$(( ESP_LBA * SECTOR / 1024 / 1024 )) \
+# out solid would cost gigabytes for nothing.
+dd if="$ESP_IMG" of="$IMG" bs=1M seek=$(( ESP_LBA * SECTOR / 1024 / 1024 )) \
    conv=notrunc,sparse status=none
-dd if="$ROOT_IMG" of="$IMG" bs=1M seek=$(( ROOT_LBA * SECTOR / 1024 / 1024 )) \
-   conv=notrunc,sparse status=none
-rm -f "$ESP_IMG" "$ROOT_IMG"
+rm -f "$ESP_IMG"
 
 # ---------------------------------------------------------------------------
-say "manifest"
-# What actually landed, beside the image. `pacman -Q` in the built rootfs, not
-# the list we asked for: the answer to "what is in this image" has to come from
-# the image.
-arch-chroot "$ROOTDIR" pacman -Q >"$OUT/$NAME.packages" 2>/dev/null || true
+say "provenance"
 {
   echo "version  $VERSION"
   echo "commit   $COMMIT${DIRTY:+ (dirty)}"
@@ -307,7 +329,7 @@ arch-chroot "$ROOTDIR" pacman -Q >"$OUT/$NAME.packages" 2>/dev/null || true
 # gigabytes on the host if the holes were filled in.
 cp --sparse=always "$IMG" "$OUT/$NAME.img"
 rm -f "$IMG"
-rm -rf "$ROOTDIR" "$BOOTSTAGE" "$WORK/omarchy" "$WORK/omarchy.tar.gz"
+rm -rf "$WORK/omarchy" "$WORK/omarchy.tar.gz" "$WORK/repo"
 
 say "done"
 info "$OUT/$NAME.img  ($(du -h "$OUT/$NAME.img" | cut -f1) on disk, $(( TOTAL_SECTORS * SECTOR / 1024 / 1024 )) MiB apparent)"

@@ -4,10 +4,17 @@ Omarchy on **Hyprland**, unmodified, on an aarch64 VM — with the mobile UI
 built on top rather than instead of it.
 
 <p align="center">
-  <img src="docs/screenshots/first-boot-720x1440.png" width="31%" alt="First boot: Omarchy's quickshell bar and notification toasts at 720x1440">
-  <img src="docs/screenshots/foot-tiled.png" width="31%" alt="A themed foot terminal, tiled, with Hyprland's focus border and rounded corners">
-  <img src="docs/screenshots/scale2-360x720.png" width="31%" alt="The same session at scale 2 -- 360x720 logical, the PinePhone's geometry">
+  <img src="docs/screenshots/full-boot-scale2.png" width="24%" alt="Omarchy's shell and themed wallpaper at 720x1440, scale 2">
+  <img src="docs/screenshots/omarchy-menu.png" width="24%" alt="omarchy-menu: Apps, Learn, Trigger, Style, Setup, Install, Remove, Update">
+  <img src="docs/screenshots/foot-tiled.png" width="24%" alt="A themed foot terminal, tiled, with Hyprland's focus border and rounded corners">
+  <img src="docs/screenshots/first-boot-720x1440.png" width="24%" alt="The same session at scale 1, which is what upstream's scale=auto resolves to">
 </p>
+
+<sub>Straight off the VM, not mocked. Left to right: the shell with its themed
+wallpaper, <code>omarchy-menu</code>, a tiled terminal with Hyprland's focus
+border and rounded corners, and — for contrast — the same session at the
+<code>scale = "auto"</code> upstream ships, which on a 720x1440 panel resolves
+to 1.</sub>
 
 This is the sibling of [moarchy](https://github.com/SimonSchubert/moarchy),
 which puts Omarchy's look, keybindings and theming on an original PinePhone. It

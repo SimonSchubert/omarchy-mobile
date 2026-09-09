@@ -5,9 +5,19 @@
 #   ./scripts/vm-ssh.sh hyprctl monitors      # one command
 #   ./scripts/vm-ssh.sh --wait                # block until it answers
 #
-# The guest's host key changes every time the image is rebuilt, so this uses a
-# known_hosts file of its own rather than poisoning ~/.ssh/known_hosts with an
-# entry for 127.0.0.1 that will be wrong tomorrow.
+# The guest's host key is regenerated on every image build, and the address is
+# always 127.0.0.1 on a forwarded port -- so a known_hosts entry is guaranteed
+# to be stale by the next build and warns about it in the loudest possible
+# terms:
+#
+#   Offending ED25519 key in vm/out/known_hosts:1
+#   Password authentication is disabled to avoid man-in-the-middle attacks.
+#
+# Host key checking is therefore off entirely and the file is /dev/null. There
+# is nothing to protect: the port is bound to loopback by the QEMU we started,
+# and the key belongs to an image this repo built ten minutes ago. What it does
+# protect is ~/.ssh/known_hosts, which never gets an entry for a 127.0.0.1 that
+# means something different tomorrow.
 set -euo pipefail
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -16,12 +26,9 @@ cd "$REPO_ROOT"
 
 USER_NAME=$(manifest_get guest user)  || exit 1
 PORT=$(manifest_get vm ssh_port)      || exit 1
-KNOWN="vm/out/known_hosts"
-mkdir -p vm/out
-
 SSH_OPTS=(
   -p "$PORT"
-  -o UserKnownHostsFile="$KNOWN"
+  -o UserKnownHostsFile=/dev/null
   -o StrictHostKeyChecking=no
   -o LogLevel=ERROR
   -o ConnectTimeout=5

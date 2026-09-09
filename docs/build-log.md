@@ -276,3 +276,77 @@ own defaults (`require("hypr.monitors")`), so the geometry changes with nothing
 patched. It is the same move moarchy makes with its Sway theme template — add a
 file to a directory the upstream engine already reads — and it is the mechanism
 the rest of the mobile overlay should be built on.
+
+---
+
+## 2026-09-09 -- the full package set, and Docker's disk
+
+`--session-only` is 546 packages. The full set is **853**, and building it hit
+the one remaining resource limit:
+
+```
+==> assemble
+dd: error writing '/work/omarchy-mobile-0.1.0.img': No space left on device
+```
+
+Docker Desktop's VM disk is 59 GB. The build was holding three copies of the
+same bytes at once — the rootfs (8.8 GB), a full-size `root.img` (8.6 GB) and
+the disk image being assembled from it (15 GB apparent). Fixed by writing the
+root filesystem straight into the disk image at the partition's byte offset:
+
+```bash
+mkfs.ext4 -q -F -b 4096 -E offset=$(( ROOT_LBA * SECTOR )) \
+  -L omarchy-root -d "$ROOTDIR" "$IMG" $(( ROOT_MIB * 1024 * 1024 / 4096 ))
+rm -rf "$ROOTDIR"
+```
+
+`-E offset=` removes one copy and deleting the rootfs immediately afterwards
+removes the other, so the peak is one rootfs plus one sparse image. The
+explicit block count matters: without a size argument mke2fs takes the whole
+file and the offset stops meaning anything. The package manifest
+(`arch-chroot pacman -Q`) moved earlier in the script for the same reason —
+anything that has to read the rootfs now has to read it before it is deleted.
+
+### Verified end to end
+
+```
+$ cat /etc/omarchy-mobile/release
+VERSION=0.1.0
+COMMIT=716aeb55c2f302d7f956b6c23a79455df043efc1
+
+$ hyprctl monitors
+        720x1440@74.99900 at 0x0
+        reserved: 0 26 0 0
+        scale: 2
+
+$ hyprctl layers
+        namespace: omarchy-background,    xywh: 0 0 360 720
+        namespace: omarchy-bar,           xywh: 0 0 360 26
+        namespace: omarchy-notifications, xywh: 0 0 360 720
+        namespace: omarchy-menu,          xywh: 0 0 360 720
+
+$ pacman -Q | wc -l
+853
+```
+
+Four layer surfaces, all at 360x720 logical, all from one pid — the quickshell
+shell. The background, the bar, the notification stack and `omarchy-menu` are
+each a layer surface rather than a window, which is why `hyprctl clients`
+reports "no open windows" while the menu is plainly on screen. Worth knowing
+before phase 2 starts adding layer surfaces of its own.
+
+### `known_hosts` is /dev/null now
+
+The guest's host key is regenerated on every image build and the address is
+always `127.0.0.1` on a forwarded port, so a `known_hosts` entry is stale by
+the next build and says so in the loudest possible terms:
+
+```
+Offending ED25519 key in vm/out/known_hosts:1
+Password authentication is disabled to avoid man-in-the-middle attacks.
+```
+
+There is nothing for it to protect — the port is bound to loopback by the QEMU
+this repo started, and the key belongs to an image this repo built minutes ago.
+What it *does* protect is `~/.ssh/known_hosts`, which never gets an entry for a
+`127.0.0.1` that will mean something different tomorrow.
