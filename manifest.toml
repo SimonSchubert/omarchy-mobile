@@ -1,0 +1,88 @@
+# manifest.toml -- the version pins.
+#
+# The only file in this project that says what version of anything is built.
+# Nothing clones at HEAD: every input this project does not itself version
+# names its upstream and an exact commit, so two builds of the same manifest
+# install the same bytes.
+#
+# Read it from bash with scripts/manifest.sh:
+#
+#   . scripts/manifest.sh
+#   ref=$(manifest_get omarchy ref) || exit 1
+#
+# A missing or empty pin is a hard error there, never an empty string -- an
+# unread pin that degrades to "" is a clone at HEAD wearing a disguise, which
+# is the exact failure these pins exist to prevent.
+
+# ---------------------------------------------------------------------------
+# Upstream Omarchy -- the configuration and theme layer we vendor.
+#
+# UNPATCHED, and that is the whole point of this project. moarchy carries
+# pkgbuilds/omarchy-config/port-4x.patch, 264 insertions that rewrite
+# Quickshell.Hyprland into Quickshell.I3 because a PinePhone's Mali-400 tops
+# out at GLES 2.0 and Hyprland's floor is 3.0. A VM has no such floor: Mesa's
+# llvmpipe advertises GLES 3.2 in software, so Hyprland runs and the patch is
+# not needed. Phase 1 is upstream Omarchy, byte for byte.
+#
+# Same commit moarchy pins, deliberately: two ports of one upstream that
+# disagree about which upstream are two projects.
+# ---------------------------------------------------------------------------
+[omarchy]
+url     = "https://github.com/basecamp/omarchy"
+ref     = "0534987009061cbe2dacdde4ad564092ab698d12"
+version = "v4.0.3"
+
+# ---------------------------------------------------------------------------
+# This project's own version.
+# ---------------------------------------------------------------------------
+[omarchy-mobile]
+version = "0.1.0"
+
+# ---------------------------------------------------------------------------
+# The aarch64 container everything is built in. Pinned by digest rather than
+# by the `base-devel` tag: a floating tag is a clone at HEAD by another name.
+#
+# Re-resolve the tag to a digest with:
+#   docker buildx imagetools inspect menci/archlinuxarm:base-devel
+#
+# Dockerfiles cannot read a file at FROM time, so this pin is written in two
+# places -- here and in vm/Dockerfile. Keep them in step when bumping.
+# ---------------------------------------------------------------------------
+[builder]
+image  = "menci/archlinuxarm"
+tag    = "base-devel"
+digest = "sha256:f7c6f64c0f246f41775e01793340c49f8e9abf3991141c25405361d56b100ccb"
+
+# ---------------------------------------------------------------------------
+# The VM. Not versions, but the numbers that define the target device -- they
+# live here for the same reason the pins do: one place that answers "what is
+# being built", so a geometry change is a diff and not an argument someone
+# remembered to pass.
+#
+# 720x1440 at scale 2 -> 360x720 logical is the original PinePhone's panel,
+# measured on the device in moarchy. Phase 1 keeps it because matching the
+# hardware moarchy already characterised is what makes the two comparable; a
+# taller modern panel is a `--geometry` away and changes nothing structural.
+# ---------------------------------------------------------------------------
+[vm]
+width   = "720"
+height  = "1440"
+scale   = "2"
+# Cores and RAM for the guest. The PinePhone has 4x Cortex-A53 and 2 GB; this
+# is deliberately NOT that. The VM exists to develop the UI without the
+# hardware's limits, and software rendering wants the headroom. Squeezing back
+# down to 2 GB is a test to run, not a default to live under.
+smp     = "4"
+memory  = "4096"
+# Host port forwarded to the guest's sshd, and to wayvnc in headless mode.
+ssh_port = "2222"
+vnc_port = "5901"
+
+# ---------------------------------------------------------------------------
+# The guest's user. No password: the account is locked and getty autologins on
+# tty1, the same arrangement moarchy ships. A VM reachable over a forwarded
+# port with a known password would be a worse idea than it looks.
+# ---------------------------------------------------------------------------
+[guest]
+user     = "omarchy"
+hostname = "omarchy-mobile"

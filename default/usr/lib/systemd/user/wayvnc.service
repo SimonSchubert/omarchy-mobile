@@ -1,0 +1,25 @@
+[Unit]
+# Serve the Hyprland session over VNC, in both display modes.
+#
+# scripts/vm-run.sh --headless gives the guest no virtio-gpu at all, so
+# aquamarine finds no DRM device and Hyprland comes up on its headless backend
+# -- this is then the only way to see anything. With a display it is still
+# useful: a VNC client on the Mac can sit at exactly 720x1440 while the QEMU
+# window is whatever size it wants to be, and `grim` over ssh takes the
+# screenshots that go in docs/.
+#
+# No authentication, and bound to every interface in the guest. That is only
+# safe because of where the port goes: vm-run.sh forwards it to 127.0.0.1 on
+# the host, so nothing outside this Mac can reach it.
+Description=wayvnc for the Omarchy Hyprland session
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/wayvnc 0.0.0.0 5900
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,9 @@
+# Build outputs. The image is 5-12 GB and is rebuilt from the manifest, so it
+# is not something git should ever have seen.
+vm/out/
+
+# The pacman download cache, bind-mounted into the builder so a second build
+# does not re-fetch 3 GB.
+.cache/
+
+.DS_Store

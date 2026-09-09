@@ -1,0 +1,77 @@
+# The apps tier: the rest of upstream's omarchy-base.packages that exists for
+# aarch64 and is not needed to bring the session up.
+#
+# Installed by default, because "get it running as Omarchy is" means Omarchy's
+# applications and not just its compositor. Skipped by
+# `./scripts/vm-build.sh --session-only`, which is the flag to reach for while
+# iterating on the session: chromium, libreoffice-fresh and kdenlive alone are
+# most of the download, and none of them decide whether Hyprland starts.
+chromium
+nautilus
+nautilus-python
+sushi
+gnome-disk-utility
+evince
+imv
+mpv
+mpv-mpris
+xournalpp
+libreoffice-fresh
+kdenlive
+moonlight-qt
+gpu-screen-recorder
+libvips
+ffmpegthumbnailer
+qrencode
+zbar
+yt-dlp
+tesseract
+tesseract-data-eng
+# tesseract is here, and it is worth saying why: moarchy dropped Omarchy's OCR
+# capture outright on the grounds that tesseract "has no aarch64 build". It has
+# one now -- so OCR is a feature this port keeps and that one does not.
+
+# --- shells, editors, dev -------------------------------------------------
+tmux
+lazygit
+lazydocker
+docker
+docker-buildx
+docker-compose
+clang
+llvm
+ruby
+python-gobject
+python-poetry-core
+fakeroot
+dua-cli
+tldr
+whois
+inxi
+usage
+libyaml
+mariadb-libs
+postgresql-libs
+
+# --- desktop services -----------------------------------------------------
+bluez
+bluez-tools
+bluez-utils
+avahi
+nss-mdns
+cups
+cups-filters
+cups-pk-helper
+system-config-printer
+gvfs-mtp
+gvfs-nfs
+gvfs-smb
+exfatprogs
+ddcutil
+bolt
+ufw
+wireless-regdb
+kernel-modules-hook
+fcitx5
+fcitx5-gtk
+fcitx5-qt

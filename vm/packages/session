@@ -1,0 +1,123 @@
+# The session tier: what an Omarchy Hyprland session actually needs to come up.
+#
+# Derived from upstream's install/omarchy-base.packages (pinned in
+# manifest.toml), reduced to the packages the session cannot start without,
+# plus the handful upstream keeps in omarchy-other.packages because its ISO
+# pacstraps them separately (base, pipewire, qt6-wayland, uwsm).
+#
+# Everything here was checked to exist in Arch Linux ARM's aarch64 repos --
+# see vm/packages/omitted for the ones that do not and why that is survivable.
+#
+# Lines are package names; # comments and blank lines are ignored.
+
+# --- base system ----------------------------------------------------------
+base
+base-devel
+linux-aarch64
+mkinitcpio
+sudo
+openssh
+networkmanager
+dosfstools
+e2fsprogs
+
+# --- the compositor -------------------------------------------------------
+# hyprland 0.56.1 is prebuilt for aarch64 in [extra]. This is the line moarchy
+# could not have: on a PinePhone Hyprland aborts at startup because Mali-400
+# cannot give it a GLES 3.x context. In a VM Mesa's llvmpipe advertises GLES
+# 3.2 in software, so the same binary runs.
+hyprland
+uwsm
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+hyprland-guiutils
+hyprpicker
+hyprsunset
+
+# --- the shell ------------------------------------------------------------
+# In 4.x the bar, launcher, notifications and OSD are one quickshell/QML shell
+# rather than waybar + walker + mako + swayosd. quickshell is architecture
+# neutral and 0.3.1 is in [extra].
+quickshell
+qt6-wayland
+qt6-imageformats
+
+# --- rendering ------------------------------------------------------------
+# llvmpipe (mesa) is what clears Hyprland's GLES floor with no host GPU
+# involved. vulkan-swrast is lavapipe, the fallback if anything asks for
+# Vulkan; neither is a passthrough and neither needs virgl on the macOS side.
+mesa
+vulkan-swrast
+
+# --- headless viewing -----------------------------------------------------
+# scripts/vm-run.sh --headless runs Hyprland on its headless backend and
+# serves the result over VNC; grim takes the screenshots that go in docs/.
+wayvnc
+grim
+slurp
+
+# --- session plumbing -----------------------------------------------------
+polkit
+gnome-keyring
+libsecret
+pipewire
+pipewire-pulse
+pipewire-alsa
+wireplumber
+pamixer
+alsa-utils
+brightnessctl
+power-profiles-daemon
+udiskie
+plocate
+inotify-tools
+socat
+wl-clipboard
+wtype
+
+# --- terminal and shell tools Omarchy's own bin/ scripts shell out to ------
+# foot is the terminal: upstream lists both foot and ghostty, and ghostty has
+# no aarch64 build (see omitted). Nothing else here is optional -- omarchy-menu
+# and the theme scripts call gum, jq and fzf directly, and a missing one is a
+# menu entry that dies with "command not found".
+foot
+bash-completion
+git
+jq
+gum
+fzf
+ripgrep
+fd
+bat
+eza
+zoxide
+starship
+fastfetch
+btop
+less
+man-db
+imagemagick
+unzip
+expac
+pacman-contrib
+inetutils
+tree-sitter-cli
+
+# --- lua ------------------------------------------------------------------
+# Omarchy 4.x configures Hyprland in Lua (config/hypr/hyprland.lua ->
+# default/hypr/*.lua), not in hyprland.conf.
+lua51
+luarocks
+
+# --- fonts ----------------------------------------------------------------
+fontconfig
+noto-fonts
+noto-fonts-emoji
+noto-fonts-cjk
+woff2-font-awesome
+gnome-themes-extra
+# Upstream names ttf-jetbrains-mono-nerd-basic, which is a package in Omarchy's
+# own x86_64 repo. Arch Linux ARM carries the full ttf-jetbrains-mono-nerd,
+# which is the same typeface with the complete glyph set -- a substitution, not
+# an omission, so it is not listed in vm/packages/omitted.
+ttf-jetbrains-mono-nerd

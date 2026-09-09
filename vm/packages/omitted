@@ -1,0 +1,73 @@
+# What upstream's omarchy-base.packages names that this image does not
+# install, and why. One line per package, every one accounted for.
+#
+# This file is documentation, not input -- nothing reads it. It exists because
+# a package set with silent holes is a package set nobody can audit, and
+# because the interesting question about an aarch64 port is exactly which 27
+# names did not survive.
+#
+# Checked against Arch Linux ARM's aarch64 core/extra with `pacman -Si`.
+
+# --- Omarchy's own repo, which is x86_64-only -----------------------------
+#   https://pkgs.omarchy.org/stable/x86_64/omarchy.db -> 200 (211 packages)
+#   https://pkgs.omarchy.org/stable/aarch64/omarchy.db -> 404
+# These are Basecamp's own packages. Each would have to be built from source
+# for aarch64; none of them decides whether the session starts, so phase 1
+# leaves them out and phase 2 can pick off whichever turn out to matter.
+aether          # Omarchy's mail client
+cliamp          # TUI music player
+herdr           # remote/agent bridge; NOT the shell (that is quickshell) and
+                # not closed source -- moarchy's docs/omarchy-4x-feasibility.md
+                # is the correction to the opposite claim
+omacalc         # calculator
+omacut          # snippet/shortcut tool
+omawrite        # writing app
+omarchy-nvim    # Omarchy's Neovim distribution
+tensaku         # text tooling
+tobi-try        # scratch runner
+ttfx            # font tool
+
+# --- in the AUR, not in Arch Linux ARM ------------------------------------
+# All four have PKGBUILDs that build cleanly for aarch64 -- moarchy already
+# builds every one of them in its own container. They are omitted here rather
+# than blocked: wiring pkgbuilds/ into the disk build is phase 1b, and until
+# then nothing in the session tier depends on them.
+mise-bin              # dev tool version manager
+ttf-ia-writer         # the theme fonts want it; noto covers the gap
+xdg-terminal-exec     # xdg terminal dispatch; foot is wired directly instead
+yay                   # AUR helper -- nothing to help with inside this image yet
+ufw-docker            # needs docker+ufw integration we are not exercising
+tzupdate              # geo timezone; the VM's clock comes from the host
+
+# --- exists under a different name in Arch ---------------------------------
+nvim                  # Omarchy's repo name for its Neovim; Arch has `neovim`,
+                      # which the apps tier does NOT install because Omarchy's
+                      # config for it lives in omarchy-nvim above. Left out
+                      # rather than half-installed.
+
+# --- x86_64-only upstreams -------------------------------------------------
+obsidian              # proprietary, no aarch64 build
+dotnet-runtime        # no aarch64 package in Arch Linux ARM
+localsend             # ships x86_64 binaries
+obs-studio            # in [extra] for x86_64 only
+pinta                 # depends on dotnet-runtime, above
+
+# --- hardware this VM does not have ----------------------------------------
+asdcontrol                      # Apple Studio Display brightness over USB
+hyprland-preview-share-picker   # screencast source picker; no aarch64 build,
+                                # and xdg-desktop-portal-hyprland still works
+qemu-user-static-binfmt         # cross-arch binfmt -- we ARE the other arch
+yaru-icon-theme                 # not in ALARM; gnome-themes-extra covers the
+                                # GTK side and Omarchy themes the rest
+
+# --- available for aarch64, left out on purpose ----------------------------
+plymouth                        # in ALARM, but deliberately not installed: it
+                                # hides the console on a VM whose console is
+                                # the main way in when a boot goes wrong
+sddm                            # in ALARM, and installed by the session tier's
+                                # dependencies is NOT what happens -- it is left
+                                # out entirely. A phone does not show a login
+                                # screen, and tty1 autologin into `uwsm start
+                                # hyprland` is both what moarchy ships and one
+                                # fewer graphical thing that can fail before
+                                # Hyprland gets a chance to.

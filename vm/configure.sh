@@ -1,0 +1,185 @@
+#!/bin/bash
+# Runs inside the freshly pacstrapped rootfs, under arch-chroot.
+#
+# Everything here is the part of "an installed system" that pacstrap does not
+# do: identity, fstab, initramfs, the user, and what starts the session.
+#
+# Environment in: GUEST_USER GUEST_HOST ROOT_UUID ESP_UUID VERSION COMMIT
+#                 SSH_PUBKEY (optional)
+set -euo pipefail
+
+say() { printf '    \033[1m%s\033[0m\n' "$*"; }
+
+# ---------------------------------------------------------------------------
+say "identity"
+echo "$GUEST_HOST" >/etc/hostname
+ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+# The guest's clock comes from the host through KVM/HVF, and tzupdate (which
+# upstream uses to set this from geolocation) has no aarch64 package.
+sed -i 's/^#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
+locale-gen >/dev/null
+echo 'LANG=en_US.UTF-8' >/etc/locale.conf
+echo 'KEYMAP=us' >/etc/vconsole.conf
+
+cat >/etc/hosts <<EOF
+127.0.0.1   localhost
+::1         localhost
+127.0.1.1   $GUEST_HOST.localdomain $GUEST_HOST
+EOF
+
+# ---------------------------------------------------------------------------
+say "fstab"
+# By PARTUUID, which build-disk.sh pins to a fixed value rather than letting
+# sgdisk generate one -- so this file is the same in every build and an image
+# rebuilt tomorrow boots the same way.
+#
+# The ESP is mounted at /boot, not /efi. That is what makes an in-guest
+# `pacman -Syu` that bumps linux-aarch64 write the new kernel somewhere the
+# firmware can read: pacman puts it in /boot/Image, mkinitcpio writes
+# /boot/initramfs-linux.img beside it, and systemd-boot's entry names both.
+# With /boot inside the ext4 root instead, a kernel upgrade would silently
+# leave the ESP holding the old one.
+cat >/etc/fstab <<EOF
+# <file system>                              <dir>  <type>  <options>                        <dump> <pass>
+PARTUUID=$ROOT_UUID  /      ext4    rw,relatime                      0      1
+PARTUUID=$ESP_UUID  /boot  vfat    rw,noatime,fmask=0137,dmask=0027  0      2
+EOF
+
+# ---------------------------------------------------------------------------
+say "initramfs"
+# `autodetect` is removed on purpose. It builds an initramfs containing only
+# the modules loaded on the machine doing the building -- which here is a
+# Docker container on a Mac, whose loaded modules have nothing to do with a
+# QEMU virt guest. The result boots to "device did not show up" every time.
+# Naming the virtio drivers explicitly costs a few MB and removes the whole
+# class of failure.
+cat >/etc/mkinitcpio.conf.d/omarchy-mobile.conf <<'EOF'
+MODULES=(virtio virtio_pci virtio_blk virtio_scsi virtio_net virtio_gpu virtio_input virtio_console)
+HOOKS=(base udev modconf kms block filesystems fsck)
+COMPRESSION="zstd"
+EOF
+mkinitcpio -P
+
+# ---------------------------------------------------------------------------
+say "shipped configs -> /etc/skel"
+# Omarchy 4.x seeds a new user's ~/.config from /etc/skel; its own package
+# builds that from config/. We vendor the source tarball rather than that
+# package, so the same seeding happens here.
+#
+# omarchy-provision-user's help text is the authority: "For shipped configs see
+# /etc/skel (new users) and omarchy-reinstall-configs (existing users)".
+install -d /etc/skel/.config
+cp -a /usr/share/omarchy/config/. /etc/skel/.config/
+install -d /etc/skel/.local/state /etc/skel/.local/share
+
+# ---------------------------------------------------------------------------
+say "user $GUEST_USER"
+useradd -m -G wheel,video,input,audio,storage -s /bin/bash "$GUEST_USER"
+# No password, and the account is locked rather than blank: the VM's sshd is on
+# a port forwarded from the host, and a known password on it would be worse
+# than it looks. tty1 autologin is how you get in without one; --ssh-key on the
+# build is how you get in over the network.
+passwd -l "$GUEST_USER" >/dev/null
+passwd -l root >/dev/null
+echo "%wheel ALL=(ALL:ALL) NOPASSWD: ALL" >/etc/sudoers.d/wheel-nopasswd
+chmod 440 /etc/sudoers.d/wheel-nopasswd
+
+if [ -n "${SSH_PUBKEY:-}" ]; then
+  say "authorising ssh key"
+  install -d -m700 -o "$GUEST_USER" -g "$GUEST_USER" "/home/$GUEST_USER/.ssh"
+  printf '%s\n' "$SSH_PUBKEY" >"/home/$GUEST_USER/.ssh/authorized_keys"
+  chmod 600 "/home/$GUEST_USER/.ssh/authorized_keys"
+  chown "$GUEST_USER:$GUEST_USER" "/home/$GUEST_USER/.ssh/authorized_keys"
+fi
+
+# ---------------------------------------------------------------------------
+say "services"
+systemctl enable systemd-timesyncd.service >/dev/null 2>&1 || true
+systemctl enable NetworkManager.service    >/dev/null 2>&1 || true
+# Nothing in the session needs to block on DHCP, and letting it hold up
+# graphical.target is upstream's own note in install/config/enable-services.sh.
+systemctl mask NetworkManager-wait-online.service >/dev/null 2>&1 || true
+systemctl enable sshd.service              >/dev/null 2>&1 || true
+systemctl enable systemd-oomd.service      >/dev/null 2>&1 || true
+systemctl enable power-profiles-daemon.service >/dev/null 2>&1 || true
+systemctl enable avahi-daemon.service      >/dev/null 2>&1 || true
+systemctl enable seatd.service             >/dev/null 2>&1 || true
+# --global, so the unit is wanted by every user's graphical-session.target
+# without having to reach into a $HOME that does not exist yet. The unit itself
+# comes from this project's default/ overlay, not from upstream.
+systemctl --global enable wayvnc.service   >/dev/null 2>&1 || true
+
+# sshd on a locked, passwordless account: keys only, and say so rather than
+# relying on the default.
+cat >/etc/ssh/sshd_config.d/10-omarchy-mobile.conf <<'EOF'
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+EOF
+
+# ---------------------------------------------------------------------------
+say "autologin -> hyprland"
+# No display manager. Upstream enables sddm; a phone does not show a login
+# screen, and on a software-rendered VM sddm is one more graphical thing that
+# can fail before Hyprland gets a chance to. vm/packages/omitted says so too.
+install -d /etc/systemd/system/getty@tty1.service.d
+cat >/etc/systemd/system/getty@tty1.service.d/autologin.conf <<EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin $GUEST_USER --noclear %I \$TERM
+EOF
+
+# uwsm is how Omarchy expects the session to be managed -- its autostart.lua
+# imports the environment into the user manager and every app launch goes
+# through uwsm-app. Starting bare Hyprland instead leaves those app scopes
+# unparented.
+#
+# `uwsm check may-start` is the guard that keeps this from firing on tty2 or
+# over ssh; without it every new login tries to start a second compositor.
+cat >"/home/$GUEST_USER/.bash_profile" <<'EOF'
+[[ -f ~/.bashrc ]] && . ~/.bashrc
+
+# Start the Hyprland session on tty1 only, and only if one is not running.
+if uwsm check may-start >/dev/null 2>&1; then
+  exec uwsm start -- hyprland-uwsm.desktop
+fi
+EOF
+chown "$GUEST_USER:$GUEST_USER" "/home/$GUEST_USER/.bash_profile"
+
+# ---------------------------------------------------------------------------
+say "theme bootstrap"
+# The whole shell reads its palette from ~/.local/state/omarchy/current/theme.
+# Until some theme has been applied that path does not exist, and a shell that
+# starts without it comes up unthemed. Upstream's installer applies one; we are
+# not running upstream's installer, so a one-shot user unit does it on first
+# login and then gets out of the way.
+install -d /etc/skel/.config/systemd/user/default.target.wants
+cat >/etc/skel/.config/systemd/user/omarchy-mobile-first-run.service <<'EOF'
+[Unit]
+Description=Apply a default Omarchy theme on first login
+ConditionPathExists=!%h/.local/state/omarchy/done/first-run
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/omarchy-theme-set tokyo-night
+ExecStart=/usr/bin/mkdir -p %h/.local/state/omarchy/done
+ExecStart=/usr/bin/touch %h/.local/state/omarchy/done/first-run
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target
+EOF
+ln -sf ../omarchy-mobile-first-run.service \
+  /etc/skel/.config/systemd/user/default.target.wants/omarchy-mobile-first-run.service
+# The user was created before this landed in skel, so copy it across too.
+cp -a /etc/skel/.config/systemd "/home/$GUEST_USER/.config/" 2>/dev/null || true
+chown -R "$GUEST_USER:$GUEST_USER" "/home/$GUEST_USER"
+
+# ---------------------------------------------------------------------------
+say "provenance"
+install -d /etc/omarchy-mobile
+cat >/etc/omarchy-mobile/release <<EOF
+VERSION=$VERSION
+COMMIT=$COMMIT
+BUILT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
