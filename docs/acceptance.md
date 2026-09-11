@@ -242,6 +242,7 @@ which is also what grants the shade its Do Not Disturb and media services.
 | --- | --- | --- |
 | A1–I4 | todo | No `scripts/style-check.sh` yet. The surfaces here follow moarchy's radii, roles, weights and 44px targets by hand, unchecked. I1a is the exception below |
 | I1a | holds | GNOME's apps read the palette through `~/.config/gtk-4.0/gtk.css`, rendered per theme from `themed/gtk.css.tpl`. Checked in the guest 2026-09-12 against tokyo-night, catppuccin-latte and osaka-jade: Calendar drew each theme's own ground, text and accent, and the `--gapplication-service` daemons were restarted by the hook. No `vm-selftest.sh` line yet |
+| I1a (GTK3) | holds | Geary reads `~/.config/gtk-3.0/gtk.css` from `themed/gtk3.css.tpl`, on top of `adw-gtk3`, which the hook selects by the theme's own mode. Checked the same day on the same three themes, with the control: on osaka-jade it drew #121d19 against the theme's #111c18, and #222226 -- adw-gtk3's stock grey -- with the rendered stylesheet moved aside. No `vm-selftest.sh` line yet |
 
 ## [settings.md](spec/settings.md)
 

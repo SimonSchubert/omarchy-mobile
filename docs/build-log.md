@@ -1557,6 +1557,72 @@ it. `scripts/vm-push.sh` carries the same three installs so that a push and a
 build agree; it is committed separately, rebuilt from `HEAD`'s copy so that
 another session's in-flight lease work stayed out of it.
 
+---
+
+## 2026-09-12 -- Geary too, which needed a different mechanism
+
+The entry above left Geary (46.0, libhandy, webkit2gtk-4.1) as the one window
+still in stock grey, because GTK3 does not work like GTK4 here: its built-in
+Adwaita has the colours baked in at build time, so the names a user stylesheet
+overrides are not the names its rules read. That is not a guess -- #7557
+measured it with an offscreen render, Adwaita drawing identically with and
+without the overrides.
+
+`adw-gtk-theme` is the way through: libadwaita's stylesheet ported to GTK3,
+whose rules read named colours. Counted in its own `gtk.css` (6.5, the aarch64
+package, before writing anything against it):
+
+| Name | Read by adw-gtk3 | Defined by it |
+| --- | --- | --- |
+| `@window_bg_color` | 243 times | yes |
+| `@accent_bg_color` | 164 times | yes |
+| `@headerbar_bg_color` | 42 times | yes |
+| `@theme_bg_color`, `@theme_fg_color`, `@theme_selected_bg_color`, `@borders` | **0 times** | yes, as aliases |
+
+That count changed the file before it was ever run. The first draft defined
+GTK3's classic `theme_*` names, an obvious-looking thing to do that nothing in
+the theme reads; worse, it also set `borders` and `insensitive_*`, which
+adw-gtk3 derives for itself --
+
+    @define-color theme_bg_color @window_bg_color;
+    @define-color borders mix(currentColor,@window_bg_color,0.85);
+
+-- so overriding them would have replaced the theme's own derivations with flat
+guesses, and an app asking for `@theme_bg_color` already gets our value through
+the alias. `themed/gtk3.css.tpl` now sets the names that are read and stops.
+
+It is a second file rather than the GTK4 one symlinked twice because that one
+opens with a `:root` block of CSS variables, and GTK3's parser has no custom
+properties. The hook picks the theme by the palette's own mode -- `adw-gtk3`
+for light, `adw-gtk3-dark` for dark -- and only when
+`/usr/share/themes/adw-gtk3` exists, because naming a theme that is not
+installed drops every GTK3 app to the fallback rather than leaving it on
+Adwaita, and a `--session-only` image has no apps tier.
+
+### Checked in the running guest
+
+`adw-gtk-theme 6.5-1` installed, pushed, then three themes. The control is the
+row that matters: the same theme with the rendered `gtk3.css` moved aside, so
+GTK3 fell back to adw-gtk3's own colours.
+
+| Geary | dialog body | headerbar | `gtk-theme` |
+| --- | --- | --- | --- |
+| tokyo-night | #1b1c26 (theme: #1a1b26) | #1b1c26 | `adw-gtk3-dark` |
+| catppuccin-latte | light ground, slate text | -- | `adw-gtk3` |
+| osaka-jade | #121d19 (theme: #111c18) | #121d19 | `adw-gtk3-dark` |
+| osaka-jade, palette removed | #222226 | #2e2e32 | `adw-gtk3-dark` |
+
+The last row is adw-gtk3's stock grey, which is what Geary would have shown if
+the stylesheet were doing nothing, and it is 17 luminance steps away from what
+the palette draws. The light row also proves the mode branch: `gtk-theme` came
+back `adw-gtk3`, not the dark one.
+
+Found on the way: Geary's account dialog maps at 600x365 on a 360px panel, so
+its right edge is off screen. That is a narrow-screen bug of the same family as
+the three in `patches/`, and it is not this change's -- the colours are right,
+the dialog is too wide either way.
+
+
 
 ## 2026-09-12 -- the browser is GNOME Web
 

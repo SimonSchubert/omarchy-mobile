@@ -44,6 +44,26 @@ for pid in $(pgrep -f -- '--gapplication-service' 2>/dev/null); do
   kill "$pid" 2>/dev/null
 done
 
+# ---------------------------------------------------------------------------
+# GTK3, which is Geary and the portal's file chooser
+#
+# Neither can take the palette the way the GTK4 apps do: GTK3's built-in
+# Adwaita has its colours baked in at build time, so the names a user
+# stylesheet overrides are not the ones its rules read (#7557 measured it).
+# adw-gtk3 is libadwaita's stylesheet ported to GTK3, and its rules DO read
+# named colours, so themed/gtk3.css.tpl can recolour it.
+#
+# This runs after upstream's omarchy-theme-set-gnome, which sets gtk-theme to
+# Adwaita or Adwaita-dark, so pointing it at adw-gtk3 here is the last word.
+# Only when the theme is installed, though: a --session-only image has no apps
+# tier and therefore no adw-gtk-theme, and naming a theme that is not there
+# would drop every GTK3 app to the fallback rather than leave it on Adwaita.
+if [ -d /usr/share/themes/adw-gtk3 ]; then
+  mode=$(omarchy-theme-color --file "$HOME/.local/state/omarchy/current/theme/colors.toml" mode 2>/dev/null)
+  if [ "$mode" = light ]; then gtk3_theme=adw-gtk3; else gtk3_theme=adw-gtk3-dark; fi
+  gsettings set org.gnome.desktop.interface gtk-theme "$gtk3_theme" 2>/dev/null
+fi
+
 # Never fail a theme switch over this. omarchy-hook prints "Hook failed:" and
 # carries on, but a non-zero exit here would say something is wrong when the
 # truthful answer is "there was nothing running to restart".

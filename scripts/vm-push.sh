@@ -102,17 +102,21 @@ done
 
 install -m644 "$STAGE/mobile.lua" ~/.config/hypr/mobile.lua
 
-# The GTK4 palette, in the three pieces the image build puts in skel: the
-# template upstream's own engine renders on every theme set, the hook that
-# restarts the app daemons afterwards, and the symlink GTK reads. The symlink
-# is made here rather than copied, and -n so that a second push replaces the
-# link instead of writing through it into the staged theme directory.
-install -d ~/.config/omarchy/themed ~/.config/omarchy/hooks/theme-set.d ~/.config/gtk-4.0
+# The palette, in the pieces the image build puts in skel: one template per
+# toolkit for upstream's own engine to render on every theme set, the hook that
+# switches GTK3's theme and restarts the app daemons afterwards, and the two
+# symlinks GTK reads. The symlinks are made here rather than copied, and -n so
+# that a second push replaces the link instead of writing through it into the
+# staged theme directory.
+install -d ~/.config/omarchy/themed ~/.config/omarchy/hooks/theme-set.d \
+  ~/.config/gtk-4.0 ~/.config/gtk-3.0
 install -m644 "$STAGE/themed/gtk.css.tpl" ~/.config/omarchy/themed/gtk.css.tpl
+install -m644 "$STAGE/themed/gtk3.css.tpl" ~/.config/omarchy/themed/gtk3.css.tpl
 install -m755 "$STAGE/hooks/theme-set.d/50-gtk-apps.sh" \
   ~/.config/omarchy/hooks/theme-set.d/50-gtk-apps.sh
 ln -sfn ../../.local/state/omarchy/current/theme/gtk.css ~/.config/gtk-4.0/gtk.css
-echo "pushed the GTK4 palette template, hook and symlink"
+ln -sfn ../../.local/state/omarchy/current/theme/gtk3.css ~/.config/gtk-3.0/gtk.css
+echo "pushed the GTK4 and GTK3 palette templates, hook and symlinks"
 
 # The drawer entries for the shell's own screens, and their icons.
 [ -d "$STAGE/.local" ] && cp -r "$STAGE/.local/." ~/.local/ && echo "pushed ~/.local entries"

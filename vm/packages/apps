@@ -157,6 +157,18 @@ amberol
 gnome-sound-recorder
 showtime
 
+# --- GTK3 ------------------------------------------------------------------
+# Geary is the one GTK3 app here (46.0, on libhandy and webkit2gtk-4.1), and
+# GTK3 cannot take the theme palette the way GTK4 does: its built-in Adwaita
+# has the colours baked in, so a user stylesheet's @define-color never reaches
+# the rules that draw. adw-gtk3 is libadwaita's stylesheet ported to GTK3, and
+# its rules read named colours, so themed/gtk3.css.tpl recolours it and Geary
+# stops being the one window still in stock grey. The gtk-theme switch that
+# selects it lives in hooks/theme-set.d/50-gtk-apps.sh.
+#
+# 127 KB, arch=any, and ALARM's aarch64 mirror carries it.
+adw-gtk-theme
+
 # --- icons -----------------------------------------------------------------
 # Breeze answers icon names nothing else here draws. The App Store asks for
 # `system-software-install`, which otherwise only HighContrast has, as a

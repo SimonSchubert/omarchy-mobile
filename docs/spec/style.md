@@ -403,6 +403,7 @@ switch is picked up with no knowledge of where themes are installed.
 | keyboard | [`moarchy-keyboard`](https://github.com/SimonSchubert/moarchy-keyboard) | Qt / QML, standalone | its own theme load; `scripts/fetch-themes.sh` |
 | store | [`moarchy-store`](https://github.com/SimonSchubert/moarchy-store) | Python / GTK4 / libadwaita | `moarchy_store/theme.py` reads `colors.toml` and injects a stylesheet |
 | GNOME's apps | upstream GNOME, unmodified | GTK4 / libadwaita | `~/.config/gtk-4.0/gtk.css`, a symlink to the `gtk.css` this repo's `themed/gtk.css.tpl` renders per theme |
+| Geary | upstream GNOME, unmodified | GTK3 / libhandy | `~/.config/gtk-3.0/gtk.css` from `themed/gtk3.css.tpl`, on top of `adw-gtk3` — GTK3's own Adwaita bakes its colours in and ignores the file |
 
 **I1a** That last row is the only one that reads the palette without being
 written to. Calendar, Contacts, Maps and the rest are stock packages: the

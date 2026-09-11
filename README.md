@@ -142,8 +142,11 @@ a phone image rather than from aarch64:
   with two unreviewed PRs). Here a user template renders the active theme's
   `colors.toml` into `~/.config/gtk-4.0/gtk.css` on every `omarchy-theme-set`,
   and a hook restarts the app daemons that parse it once at startup, so the
-  GNOME apps take the theme's background, text and accent. Geary is GTK3, which
-  cannot be recoloured this way, and keeps Adwaita.
+  GNOME apps take the theme's background, text and accent. Geary is GTK3, where
+  that does not work -- GTK3's built-in Adwaita has its colours baked in, so a
+  user stylesheet never reaches the rules that draw -- so it gets `adw-gtk3`,
+  libadwaita's stylesheet ported to GTK3, whose rules do read named colours,
+  and a second template recolours that.
 
 ## The mobile UI
 
