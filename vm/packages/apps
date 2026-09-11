@@ -82,3 +82,16 @@ fcitx5-qt
 # ahead of ALARM's. Every terminal Omarchy opens goes through it, which is most
 # of what Settings' bridged rows do.
 xdg-terminal-exec
+
+# --- moarchy's default apps -----------------------------------------------
+# Notes (moarchy-keep) and the App Store (moarchy-store), built by
+# vm/build-packages.sh from [pkg.moarchy-keep] and [pkg.moarchy-store-git] and
+# found in the same local repo. Everything they depend on the image already
+# installs.
+#
+# The store installs through pkexec, which cannot authenticate an account the
+# image locks: default/usr/share/polkit-1/rules.d/49-moarchy-store.rules is what
+# lets it. And what it installs has to verify, which is archlinuxarm-keyring in
+# the session tier.
+moarchy-keep
+moarchy-store-git

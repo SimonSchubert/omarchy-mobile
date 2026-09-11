@@ -183,6 +183,34 @@ Item {
     function open(): string { root.open(); return "ok" }
 
     function close(): string { root.dismiss(); return "ok" }
+
+    // The store's Open (windows.md L9, L9a). moarchy-store hands the launch to
+    // the shell -- `omarchy-shell drawer launch <bare id>` -- rather than
+    // starting the app itself, so that installing something and opening it
+    // goes down the path a tap on the grid does. Without this function the
+    // call fails and the store falls back to Gio, which starts the app as the
+    // store's own child and tells the shell nothing.
+    //
+    // That makes this a contract with a consumer outside this repo: renaming
+    // it breaks Open in the store. "ok" when the id is an entry the grid
+    // lists; "no-entry" when it is not, after launching it through the
+    // library anyway, as moarchy's drawer does.
+    function launch(desktopId: string): string {
+      var id = String(desktopId || "").replace(/\.desktop$/, "")
+      if (!id) return "no id"
+      if (!root.apps) return "no shell"
+      // Rows, not entries: sortedEntries returns {entry, ...} wrappers.
+      var rows = root.apps.sortedEntries("") || []
+      for (var i = 0; i < rows.length; i++) {
+        var entry = rows[i] && rows[i].entry
+        if (entry && String(entry.id).replace(/\.desktop$/, "") === id) {
+          root.launch(entry)
+          return "ok"
+        }
+      }
+      root.apps.launch(id, id)
+      return "no-entry"
+    }
   }
 
   // ---------------------------------------------------------------- the apps

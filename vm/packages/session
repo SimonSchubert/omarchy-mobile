@@ -20,6 +20,16 @@ openssh
 networkmanager
 dosfstools
 e2fsprogs
+# Without it pacman in the guest trusts none of ALARM's signatures. The build
+# verifies against the builder's keyring, so the image comes out whole, and then
+# every install inside it fails:
+#
+#   error: cowsay: signature from "Arch Linux ARM Build System
+#          <builder@archlinuxarm.org>" is unknown trust
+#
+# pacstrap -K initialises the target's keyring before it installs anything, so
+# this package's own post_install populates it.
+archlinuxarm-keyring
 
 # --- the compositor -------------------------------------------------------
 # hyprland 0.56.1 is prebuilt for aarch64 in [extra]. This is the line moarchy

@@ -171,6 +171,13 @@ it on.
   types into apps whether or not they speak a text input protocol, and
   recolours with the theme. Going home and closing the drawer put it away;
   Super+I forces it up or down.
+- **Notes and the App Store** are moarchy's two default apps,
+  [moarchy-keep](https://github.com/SimonSchubert/moarchy-keep) and
+  [moarchy-store](https://github.com/SimonSchubert/moarchy-store), built from
+  their pins like the keyboard and in the drawer from first boot. The store
+  installs from its curated catalogue by touch with no password: the image
+  locks the account, so a polkit rule grants the store's one action to wheel,
+  as moarchy's does. Its Open goes through `omarchy-shell drawer launch`.
 
 The criteria are moarchy's, copied into [`docs/spec/`](docs/spec/) with their
 ids unchanged. [`docs/acceptance.md`](docs/acceptance.md) says which of them hold
@@ -246,12 +253,15 @@ account, dead ends included.
   J). Settings already keeps the page stack a back gesture would walk, and the
   keyboard can leave the left edge's column to it (`--back-edge-inset`, 0 by
   default).
-- An image built before the keyboard landed has no keyboard. `pacman -U` the
-  one `vm-build.sh` leaves in `vm/out/packages/`, with `layer-shell-qt`. That
-  guest cannot fetch `layer-shell-qt` itself: no image carries
-  `archlinuxarm-keyring`, so pacman in the guest trusts none of ALARM's
-  signatures. The image build is unaffected, since it verifies against the
-  builder's keyring.
+- An image built before the keyboard, Notes and the App Store landed has none
+  of them, and no `archlinuxarm-keyring` either, so pacman in that guest trusts
+  none of ALARM's signatures and can fetch nothing, the store's installs
+  included. Install the keyring first, as a local file from the builder's
+  pacman cache; then `pacman -U` `moarchy-keyboard`, `moarchy-keep` and
+  `moarchy-store-git` from `vm/out/packages/`, and copy
+  `default/usr/share/polkit-1/rules.d/49-moarchy-store.rules` to the same path
+  in the guest. Or rebuild. The image build itself was never affected, since it
+  verifies against the builder's keyring.
 - Settings search from the drawer (settings.md O) and the coding-agent tile
   (P). The drawer also has no long-press or uninstall, which want a detail
   sheet this shell does not have yet.

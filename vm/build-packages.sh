@@ -12,7 +12,8 @@
 # is written as a loop over [pkg.*] because ALARM falling behind on a package,
 # or never carrying it, is a recurring hazard for an aarch64 port, not a
 # one-off. xdg-terminal-exec, from the AUR, was the second, and
-# moarchy-keyboard, from its own repo, the third.
+# moarchy-keyboard, from its own repo, the third; moarchy-keep and
+# moarchy-store-git followed it.
 set -euo pipefail
 
 PKGS=${PKGS:-/pkgs}
@@ -81,8 +82,21 @@ for name in $(manifest_pkgs); do
     makepkg -s --noconfirm --nocheck --needed" \
     || die "makepkg failed for $name"
 
+  # A VCS package clones its code again inside makepkg, whatever `ref` checked
+  # out above, so its pin holds only if the version it computed names that
+  # commit. pkgver() puts the short hash there (moarchy-store-git:
+  # 0.1.0.r22.c08a073), and a build that does not carry it is the drift the
+  # manifest exists to prevent -- refused, not stamped.
+  built=$(ls -1 "$PKGS/$name"-*.pkg.tar.* | tail -1 | xargs basename)
+  case $name in
+    *-git) [[ $built == *"${ref:0:7}"* ]] || {
+             rm -f "$PKGS/$name"-*.pkg.tar.*
+             die "$name built $built, not the pinned ${ref:0:7}: its main has moved, so bump the pin"
+           } ;;
+  esac
+
   printf '%s\n' "$ref" >"$stamp"
-  info "built $(ls -1 "$PKGS/$name"-*.pkg.tar.* | tail -1 | xargs basename)"
+  info "built $built"
   cd /
   rm -rf "$WORK/$name"
 done

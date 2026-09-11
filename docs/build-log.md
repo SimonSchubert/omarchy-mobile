@@ -1315,7 +1315,8 @@ signature, "unknown trust". No image carries `archlinuxarm-keyring`: the build
 pacstraps against the builder's keyring, so every package in the image was
 verified, and pacman in the guest trusts none of ALARM's signatures afterwards.
 `layer-shell-qt` went in from the builder's pacman cache as a local file
-instead. The keyring is left for its own change.
+instead. The keyring is left for its own change, which came with the App Store
+("Notes and the App Store", below).
 
 ### The hide comes before the raise
 
@@ -1361,3 +1362,57 @@ passed both, and failed I1a on the home screen and I5d (6 of 6 up), the timed
 hide losing its race. `retreatKeyboard` is the answer to both and is the one
 part of this change no check has run: the last run, W to S, passed its 44
 checks and was stopped before the settings and keyboard sections.
+
+## 2026-09-11 -- Notes and the App Store
+
+moarchy ships two apps of its own as defaults rather than as things to install:
+[moarchy-keep](https://github.com/SimonSchubert/moarchy-keep), notes and
+checklists, and [moarchy-store](https://github.com/SimonSchubert/moarchy-store),
+a curated catalogue that installs by touch. Both come across the way the
+keyboard did: pinned in `manifest.toml` at the commits moarchy pins, built by
+`vm/build-packages.sh` from the PKGBUILD each repo carries, and installed with
+the apps tier. Everything they depend on the image already installs.
+
+### Keep pins its code, the store does not
+
+Keep's PKGBUILD, under `aur/moarchy-keep` (`pkgbuilddir`), sources a release
+tarball by sha256, so its `ref` names the code as well as the recipe. The
+store's builds `moarchy-store-git` from `git+$url.git`: makepkg clones main
+again inside the build, whatever the pin checked out. moarchy records the same
+gap as an open question and leaves the fix to the store's own recipe.
+
+This side can refuse to build the wrong code quietly. `pkgver()` puts the short
+hash in the version, and the loop now fails a `-git` build whose version does
+not carry the pinned commit. Today it built `0.1.0.r22.c08a073-1` at
+`c08a073` and passed. The day the store's main moves, this build stops until
+the pin is bumped.
+
+### The store could install nothing
+
+Two things stood between the store and an install, and neither is the store's.
+
+- **polkit.** The image locks the account, and the store's action is
+  `auth_self_keep`, so pkexec can never be authenticated. moarchy's answer is a
+  rule that grants `org.moarchy.store.manage` to wheel, bounded by the helper's
+  catalogue allowlist and by the sudo that wheel already has. It is
+  `default/usr/share/polkit-1/rules.d/49-moarchy-store.rules` here.
+- **The keyring,** the same "unknown trust" the keyboard met in "The guest
+  could not install it" above. Measured in the guest:
+
+  ```
+  error: cowsay: signature from "Arch Linux ARM Build System
+         <builder@archlinuxarm.org>" is unknown trust
+  ```
+
+  `archlinuxarm-keyring` is in the session tier now. `pacstrap -K` initialises
+  the target's keyring before it installs anything, and the package's own
+  `post_install` runs `pacman-key --populate archlinuxarm` into it.
+
+### Open goes through the shell
+
+The store's Open calls `omarchy-shell drawer launch <bare id>` and falls back
+to `Gio.DesktopAppInfo.launch()` when that fails (windows.md L9, L9a). This
+drawer had no `launch`, so every Open was the fallback. It has moarchy's now:
+find the grid's entry for the id and launch it the way a tap does, or launch
+the id through the library and answer `no-entry`. There is no splash here yet
+(L1-L8), so L9 holds only as the hand-off.

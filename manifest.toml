@@ -117,6 +117,43 @@ ref         = "f1f2dda18f96c5ae087336410bc4178f405cba6f"
 pkgbuilddir = "packaging"
 
 # ---------------------------------------------------------------------------
+# Notes and the App Store: moarchy's two default apps, at the commits moarchy
+# pins, for the reason [pkg.moarchy-keyboard] gives. Default rather than
+# installable, as there: a phone with no way to write a note down, or to add an
+# app by touch, is missing something a phone is for. Both are pure Python on
+# GTK4 and libadwaita, which the image already carries, so each costs it about
+# 100 KB installed (84 and 111 at these pins).
+#
+# Keep is pinned twice over. `ref` pins the packaging, and the PKGBUILD under
+# aur/ -- the AUR's recipe, kept in the app's own repo -- sources a release
+# tarball by sha256, so the pin names the exact code as well.
+# ---------------------------------------------------------------------------
+[pkg.moarchy-keep]
+url         = "https://github.com/SimonSchubert/moarchy-keep"
+tag         = "0.1.0-1"
+ref         = "ddc7dcad790e16b32c043a7632a810c6076d70d6"
+pkgbuilddir = "aur/moarchy-keep"
+
+# The store is not, and it is the one entry in this file that clones at HEAD.
+# Its PKGBUILD builds `moarchy-store-git` from `source=(git+$url.git)`, a VCS
+# package: `ref` pins the PKGBUILD, and makepkg then clones the code again at
+# whatever main is. moarchy records the same gap and leaves the fix where the
+# recipe lives -- `#commit=` in that source array, or a release tarball as Keep
+# has -- rather than editing someone else's recipe from here.
+#
+# What this side can do is refuse to build the wrong code quietly. pkgver()
+# puts the short hash in the version, and vm/build-packages.sh fails when it is
+# not this ref's. So when the store's main moves, this build stops, and the fix
+# is a pin bump rather than an image that names one commit and holds another.
+#
+# Named for the package, not the repo, so the loop's "$name-*" glob and its
+# stamp find what makepkg wrote.
+[pkg.moarchy-store-git]
+url     = "https://github.com/SimonSchubert/moarchy-store"
+tag     = "0.1.0.r22.c08a073-1"
+ref     = "c08a07379171bb0a4998cb94f07f4bfb2370c78f"
+
+# ---------------------------------------------------------------------------
 # The aarch64 container everything is built in. Pinned by digest rather than
 # by the `base-devel` tag: a floating tag is a clone at HEAD by another name.
 #

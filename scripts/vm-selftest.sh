@@ -2,7 +2,7 @@
 # Check the mobile shell against its acceptance criteria, in the running VM.
 #
 #   ./scripts/vm-selftest.sh              every section
-#   ./scripts/vm-selftest.sh A E S        only those (W A B C D E H S K settings keyboard)
+#   ./scripts/vm-selftest.sh A E S        only those (W A B C D E H S K settings keyboard apps)
 #
 # Every line of output names the AC it proves, from docs/spec/gestures.md,
 # shade.md, windows.md and settings.md, so an AC with no check here is visible
@@ -1142,8 +1142,50 @@ section_keyboard() {
   g osk_set false
 }
 
+section_apps() {
+  echo "-- apps: moarchy-keep and moarchy-store"
+  reset_session
+
+  local pkg
+  for pkg in moarchy-keep moarchy-store-git; do
+    check apps "$pkg is installed" g sh "pacman -Q $pkg >/dev/null"
+  done
+
+  # L9a. Each opens the way the store's Open opens what it installs: by bare
+  # desktop id, through the drawer, which must find its own entry for it and
+  # then map the app's window. Only a window this call opened is closed after
+  # -- one already up is somebody's notes, and the check skips rather than
+  # touch it.
+  local id i
+  for id in org.moarchy.Keep org.moarchy.Store; do
+    if [ -n "$(g pids "$id")" ]; then
+      skip L9a "$id is already open, and not this suite's to close"; continue
+    fi
+    check L9a "drawer launch $id finds the drawer's entry for the bare id" \
+      is "$(ipc drawer launch "$id")" ok
+    for i in $(seq 1 50); do [ -n "$(g pids "$id")" ] && break; sleep 0.2; done
+    check apps "$id maps a window from that launch" test -n "$(g pids "$id")"
+    g kill_pids $(g pids "$id")
+    wait_for "g pids $id" ""
+  done
+
+  # L9, the half that is not the splash (L1-L8 are todo): the installed store
+  # hands Open to the shell rather than starting the entry through Gio.
+  check L9 "the installed store's launcher.py calls 'omarchy-shell drawer launch'" \
+    g sh 'grep -qF "\"drawer\", \"launch\"" "$(pacman -Qlq moarchy-store-git | grep "/launcher\.py$")"'
+
+  # The store installs through pkexec, which cannot authenticate an account the
+  # image locks. pkcheck asks polkit what pkexec will, as this user and from a
+  # session with no seat, which the rule is written not to care about.
+  check store "polkit grants the store's install action with no password" \
+    g sh 'pkcheck --action-id org.moarchy.store.manage --process $$ >/dev/null 2>&1'
+  # And what it installs has to verify: archlinuxarm-keyring, populated.
+  check store "pacman in the guest trusts ALARM's build key" \
+    g sh 'sudo pacman-key --list-keys builder@archlinuxarm.org 2>/dev/null | grep -q "\[ *full *\]"'
+}
+
 SECTIONS=("$@")
-[ ${#SECTIONS[@]} -gt 0 ] || SECTIONS=(W A B C D E H S K settings keyboard)
+[ ${#SECTIONS[@]} -gt 0 ] || SECTIONS=(W A B C D E H S K settings keyboard apps)
 for s in "${SECTIONS[@]}"; do
   "section_$s"
 done
