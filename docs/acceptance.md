@@ -246,6 +246,7 @@ command. The helpers moarchy calls `bin/moarchy-*` are `omarchy-mobile-*` in
 | A5 | holds | open() sets the page and defers every read to `Qt.callLater`. Not checked against slow readers |
 | A6 | pass | |
 | A7 | pass | From another app's workspace, at `appearance.bar`: focus comes back, the page is kept, one card |
+| A8 | pass | **Added here**, not moarchy's. A real tap on the drawer's Settings tile, found with `drawer cellTarget`: `omarchy-mobile-settings.desktop`, running `omarchy-shell settings open`. Settings opens at the root, and the drawer is put away |
 | B1 | pass | A real tap on a row, aimed with `settings rowTarget` |
 | B2 | pass | The chevron by tap, and `back` walking up from the power glyph's deep link to `closed` |
 | B3, B5 | todo | Need the back gesture (gestures.md G). `goBack()` is there for it to call |

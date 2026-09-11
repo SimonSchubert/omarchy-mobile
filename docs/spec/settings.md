@@ -1,7 +1,8 @@
 # Settings — specification
 
 > **Copied from moarchy** — `docs/settings.md` at `d0e5dd2` (2026-09-09), with
-> every AC id and every line of text unchanged. It is implemented here as a
+> every AC id and every line of text unchanged, plus one criterion of this
+> port's own: A8, the drawer tile. It is implemented here as a
 > screen of `mobile.shell` (`SettingsScreen.qml`, `Pages.js`), and
 > [`../acceptance.md`](../acceptance.md) says which criteria hold and where this
 > port changes the mechanism or the answer. Where the text names a moarchy file
@@ -144,6 +145,18 @@ still the root.
 → from another workspace and from `appearance.bar`, `settings open` leaves the
 focused workspace holding the Settings window, `settings page` still
 `appearance.bar`, and `recents list` with exactly one `moarchy.settings` line
+
+**A8** The app drawer carries a Settings tile, and tapping it is a summon like
+the gear's: from closed it lands on the root, and a Settings already running
+comes back on the page it was on (A7).
+
+Settings is an app (`gestures.md` K), and the drawer is where a phone keeps its
+apps. The gear is behind a pull-down, and nothing on a home screen points at
+it. A7 and `gestures.md` K12 both count the drawer among the ways in, and until
+this criterion nothing said that way existed.
+→ with Settings closed, `drawer open`, then a real tap on the cell whose
+`drawer cellTarget` names `Settings`, leaves `settings state` == `open`,
+`settings page` == `root` and `drawer state` == `closed`
 
 ## B. The page stack and back
 

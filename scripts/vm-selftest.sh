@@ -658,6 +658,24 @@ section_settings() {
     is "$(st back) $(st back) $(st back)" "system root closed"
   sleep 0.6
 
+  # A real tap on the drawer's tile, found by name as H4 finds Foot's. Exact,
+  # so "Print Settings" is not it.
+  ipc drawer open >/dev/null; sleep 0.5
+  local i t target=""
+  for i in $(seq 0 40); do
+    t=$(ipc drawer cellTarget "$i")
+    [ "$t" = none ] && break
+    [ "${t#* * }" = Settings ] && { target=$t; break; }
+  done
+  if [ -n "$target" ]; then
+    read -r x y _ <<<"$target"; tap "$x" "$y"
+    wait_for "ipc settings state" open
+  fi
+  check s.A8 "the drawer has a Settings tile, and a tap on it opens Settings at the root" \
+    is "$([ -n "$target" ] && echo tile || echo no-tile) $(st state) $(st page) $(ipc drawer state)" \
+       "tile open root closed"
+  st quit >/dev/null; sleep 0.6
+
   ipc drawer open >/dev/null; sleep 0.5
   st open >/dev/null; sleep 1
   check s.A2 "opening Settings puts the drawer away" \
