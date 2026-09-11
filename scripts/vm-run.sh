@@ -94,6 +94,13 @@ if [ -n "$holder" ]; then
   esac
 fi
 
+# A rebuild copies the new image over this one in place (build-disk.sh's
+# cp --sparse=always), so a VM booted from it now would write into the new
+# image while it lands.
+if builder=$(pgrep -f 'scripts/vm-build\.sh' | head -n1) && [ -n "$builder" ]; then
+  die "vm-build.sh is running (pid $builder) and rewrites $IMG -- start the VM once it has finished"
+fi
+
 QEMU=$(command -v qemu-system-aarch64) || die "qemu-system-aarch64 not found -- brew install qemu"
 FW_DIR=$(dirname "$QEMU")/../share/qemu
 CODE="$FW_DIR/edk2-aarch64-code.fd"
