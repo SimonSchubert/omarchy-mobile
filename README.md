@@ -129,9 +129,9 @@ a phone image rather than from aarch64:
   because this image is a local development VM and is never published.
 - **A phone's app set.** Upstream's LibreOffice, Kdenlive, Moonlight,
   Xournal++ and Evince are left out, and so is sushi, which depends on Evince.
-  GNOME's Calculator, Calendar, Contacts, Maps, Clocks, Weather, Text Editor
-  and Geary are added: the apps a phone is expected to have, and libadwaita
-  apps that fit a 360px screen.
+  GNOME's Calculator, Calendar, Contacts, Maps, Clocks, Weather, Text Editor,
+  Geary, Camera, Music and Sound Recorder are added: the apps a phone is
+  expected to have, and libadwaita apps that fit a 360px screen.
 
 ## The mobile UI
 

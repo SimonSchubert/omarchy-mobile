@@ -97,13 +97,18 @@ moarchy-store-git
 # reason [pkg.moarchy-keep] gives for Notes. All are libadwaita, so they reflow
 # to the 360px panel, and all are in ALARM's aarch64 [extra].
 #
-# Each fills a gap rather than doubling a tile. Nothing here duplicates
-# chromium, nautilus, foot, imv or mpv, which stay upstream's handlers. Geary is
-# the mail client that upstream's aether would have been (omitted: x86_64-only).
+# Each fills a gap rather than doubling a tile. chromium, nautilus, foot, imv
+# and mpv stay upstream's handlers: Music is a library to browse rather than a
+# player for one file, and claims no MimeType, so mpv still opens what it did.
+# Geary is the mail client that upstream's aether would have been (omitted:
+# x86_64-only). Camera is for the phone this image stands in for; the VM has no
+# /dev/video, so there it stops at the portal's permission prompt.
 #
-# About 130 MB of download, against the 400 MB the six omitted packages cost.
+# About 140 MB of download, against the 400 MB the six omitted packages cost.
 # Most of it is two WebKits that evolution-data-server brings for Calendar and
 # Contacts, and Geary uses webkit2gtk-4.1 too, so it costs only 3 MB more.
+# Camera, Music and Sound Recorder share their GStreamer plugins: 13 MB for the
+# three.
 gnome-calculator
 gnome-calendar
 gnome-contacts
@@ -112,3 +117,6 @@ gnome-clocks
 gnome-weather
 gnome-text-editor
 geary
+snapshot
+gnome-music
+gnome-sound-recorder
