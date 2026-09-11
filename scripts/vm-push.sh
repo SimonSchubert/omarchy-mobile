@@ -39,7 +39,8 @@ ssh "${SSH_OPTS[@]}" -p "$PORT" "$USER_NAME@127.0.0.1" \
 # that is not there on this Mac. The guest makes its own, below.
 scp "${SSH_OPTS[@]}" -P "$PORT" -rq \
   "$SKEL/omarchy/plugins" "$SKEL/hypr/mobile.lua" "$SKEL/omarchy/themed" \
-  "$SKEL/omarchy/hooks" default/etc/skel/.local patches \
+  "$SKEL/omarchy/hooks" "$SKEL/mimeapps.list" default/etc/skel/.local \
+  default/usr/local patches \
   "$USER_NAME@127.0.0.1:.cache/omarchy-mobile-push/"
 
 ssh "${SSH_OPTS[@]}" -p "$PORT" "$USER_NAME@127.0.0.1" bash -s <<'GUEST'
@@ -115,6 +116,20 @@ echo "pushed the GTK4 palette template, hook and symlink"
 
 # The drawer entries for the shell's own screens, and their icons.
 [ -d "$STAGE/.local" ] && cp -r "$STAGE/.local/." ~/.local/ && echo "pushed ~/.local entries"
+
+# The default handlers. Overwritten rather than merged: this file is the
+# image's answer to "which browser", and a push that left a stale
+# chromium.desktop in place would be testing the old one.
+install -m644 "$STAGE/mimeapps.list" ~/.config/mimeapps.list
+echo "pushed mimeapps.list"
+
+# The /usr/local/bin shadows of upstream's chromium-only scripts. Root-owned
+# and outside the home, so sudo, as the patches above already use.
+if [ -d "$STAGE/local/bin" ]; then
+  sudo install -d /usr/local/bin
+  sudo install -m755 "$STAGE"/local/bin/* /usr/local/bin/
+  echo "pushed $(ls "$STAGE"/local/bin | tr '\n' ' ')to /usr/local/bin"
+fi
 grep -qF 'require("hypr.mobile")' ~/.config/hypr/hyprland.lua \
   || printf '\n-- omarchy-mobile: one app per workspace, filling it.\nrequire("hypr.mobile")\n' \
        >>~/.config/hypr/hyprland.lua

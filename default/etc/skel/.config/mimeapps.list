@@ -1,0 +1,33 @@
+# The default handlers this image ships, named rather than inherited.
+#
+# Upstream's own list is /usr/share/omarchy/default/applications/mimeapps.list
+# and it says `x-scheme-handler/http=chromium.desktop`. Nothing in this build
+# ever copies that file into a home, so until now the http handler was whatever
+# the mimeinfo cache happened to answer -- which was chromium.desktop, because
+# chromium was the only thing installed that claimed the type. Epiphany would
+# win the same way now that chromium is gone (vm/packages/omitted), but winning
+# a cache lookup by being the last one standing is not the same as being the
+# default, and Settings' Browser page reads `xdg-settings get
+# default-web-browser`, which reads this file. Without it the page has a reader
+# whose answer depends on cache order, and settings.md D1 -- exactly one row
+# ticked -- would be true by luck.
+#
+# vm/build-disk.sh copies default/ into the image before vm/configure.sh seeds
+# /etc/skel from upstream's config/, and upstream's config/ has no
+# mimeapps.list, so nothing overwrites this. The user is created after both.
+#
+# application/pdf is upstream's own choice, kept: evince is in the apps tier
+# now precisely so that this line resolves.
+[Default Applications]
+x-scheme-handler/http=org.gnome.Epiphany.desktop
+x-scheme-handler/https=org.gnome.Epiphany.desktop
+text/html=org.gnome.Epiphany.desktop
+application/xhtml+xml=org.gnome.Epiphany.desktop
+application/pdf=org.gnome.Evince.desktop
+
+[Added Associations]
+x-scheme-handler/http=org.gnome.Epiphany.desktop;
+x-scheme-handler/https=org.gnome.Epiphany.desktop;
+text/html=org.gnome.Epiphany.desktop;
+application/xhtml+xml=org.gnome.Epiphany.desktop;
+application/pdf=org.gnome.Evince.desktop;

@@ -1556,3 +1556,199 @@ copying the symlink into a new user's home as a symlink rather than following
 it. `scripts/vm-push.sh` carries the same three installs so that a push and a
 build agree; it is committed separately, rebuilt from `HEAD`'s copy so that
 another session's in-flight lease work stayed out of it.
+
+
+## 2026-09-12 -- the browser is GNOME Web
+
+Chromium is upstream's browser and it does not work on a phone-shaped screen.
+That was the report, and checking it on the running guest at 360x674 found two
+separate faults rather than the one expected.
+
+### What chromium actually does at 360px
+
+The first window it maps is its own first-run Terms dialog, and that dialog is
+a fixed-width desktop window: the body text runs off the right edge of the
+panel and no accept button is on screen. There is no narrow layout to fall
+back to -- Chromium on Linux has one UI, the desktop one, and a 360px viewport
+just clips it.
+
+Behind that, it never got as far as a browser window at all. With
+`--no-first-run` the process exits without mapping anything, and again with
+`--disable-gpu`:
+
+```
+ERROR:gpu/ipc/client/command_buffer_proxy_impl.cc:285] ContextResult::kTransientFailure:
+  Failed to send GpuControl.CreateCommandBuffer.
+```
+
+That is the VM's missing hardware EGL, the same thing `vm/packages/apps`
+already records for mpv, so on real phone hardware chromium would likely start.
+Worth separating the two: the GPU half is this VM, the layout half is
+chromium, and only the second one is the reason to replace it.
+
+### Epiphany, and why not the others
+
+Epiphany reflows on its own at that width -- URL bar at the bottom of the
+screen, back/forward/tabs/library as a bottom toolbar under it, everything
+inside thumb reach. No flag, no configuration, no user-agent override; it
+loaded a real Wikipedia article at 360x674 on the first try.
+
+The cost is the part that settled it. Every one of epiphany's 23 dependencies
+was already installed -- `webkitgtk-6.0`, `gtk4` and `libadwaita` came in for
+Calendar, Contacts and Geary on 2026-09-11 -- so `pacman -S epiphany` on the
+built image pulled in nothing else:
+
+| | download | installed | new deps |
+| --- | --- | --- | --- |
+| epiphany | **3.59 MiB** | **17.59 MiB** | **0** |
+| chromium (what it replaces) | 117.28 MiB | 434.36 MiB | -- |
+| angelfish | ~91 MiB | ~341 MiB | 15 |
+| firefox | 66.87 MiB | 272.85 MiB | -- |
+
+Angelfish is the only other browser in ALARM's aarch64 `[extra]` that is
+mobile-first by design, and it was measured rather than dismissed: 15 of its 17
+dependencies are missing here, `qt6-webengine` alone being 81.27 MiB. That is
+the KDE Frameworks cascade this image already refused when it dropped kdenlive.
+Firefox has no adaptive UI on desktop Linux, and qutebrowser is keyboard-driven,
+which is the wrong shape for a device with no keyboard.
+
+### The three things that broke, which were not the browser
+
+Removing a package from a set upstream assumes is present is where the work
+was.
+
+**Web apps would have failed silently.** `omarchy-launch-webapp` ends with a
+case statement that rewrites every browser outside the Chrome family --
+Epiphany and Firefox both -- to `chromium.desktop`, then greps that desktop
+file for its `Exec`. With chromium gone the grep finds no file, the command
+substitution is empty, and the line execs `uwsm-app -- --app=https://...` with
+no program in it. Every web app tile upstream ships and every one
+`omarchy-webapp-install` adds would have done nothing, with no error anywhere.
+`default/usr/local/bin/omarchy-launch-webapp` shadows it: `/usr/local/bin`
+comes before `/usr/bin` in the guest's PATH, so the vendored tree stays
+unpatched, which is this project's whole premise. Upstream's Chrome-family path
+is kept verbatim inside it, so installing Chromium or Brave restores upstream's
+behaviour with no further edit. Epiphany's own `--application-mode` is the
+equivalent of `--app=`, and it takes a `--profile` directory per web app --
+without one the instance is private and every launch would start logged out,
+and with one shared between them every web app would arrive as the same window
+id and the recents carousel would collapse them into a single card.
+
+**PDFs lost their handler by accident.** Upstream's `mimeapps.list` names
+`org.gnome.Evince.desktop` for `application/pdf`, and `vm/packages/omitted` left
+evince out on the grounds that "chromium is the default for PDFs already".
+That was true only because `chromium.desktop` was the one installed thing
+claiming the type in the mimeinfo cache -- upstream's own file never said
+chromium. WebKitGTK has no PDF viewer, so removing chromium would have left the
+type with nothing at all. evince is in the apps tier now: 2 MB, and it makes
+upstream's own line resolve for the first time.
+
+**The default browser was never actually named.** Nothing in this build copies
+upstream's `default/applications/mimeapps.list` into a home, so the http handler
+has always been whatever the mimeinfo cache answered. Epiphany would win that
+lookup now by being the last one standing, but winning a cache lookup is not the
+same as being the default, and Settings' Browser page reads `xdg-settings get
+default-web-browser`, which reads the file. `default/etc/skel/.config/mimeapps.list`
+names it, so settings.md D1 -- exactly one row ticked -- is true on purpose
+rather than by luck. `vm/build-disk.sh` copies `default/` before
+`vm/configure.sh` seeds `/etc/skel` from upstream's `config/`, and upstream's
+`config/` has no `mimeapps.list`, so nothing overwrites it; the user is created
+after both.
+
+Two more were checked and left alone. Upstream's `hypr/apps/browser.lua` and
+`pip.lua` tag chromium-family windows for opacity and Meet's picture-in-picture;
+those rules now match nothing, which is cosmetic, and they are vendored config
+this project does not patch. And `install/user/chromium.sh` sets up the copy-url
+and yt-dlp native messaging hosts -- this image never runs upstream's installer,
+so they were never set up here and nothing was lost.
+
+### The Settings row was already there
+
+`Pages.js` has carried an `epiphany` row on `apps.default.browser` since the
+settings port, guarded on `omarchy-cmd-present epiphany` and therefore never
+drawn. It is the row that D3 -- read-value and write-value are separate fields
+-- is asserted on, because `omarchy-default-browser` has no name for Epiphany
+and falls through to printing the raw `org.gnome.Epiphany.desktop`, which is
+the row's `readValue`, while its `write` goes around that script to
+`xdg-settings`. Installing the package turns that from a mechanism that exists
+into the one the image uses. The row moved to the top of the page and is
+labelled GNOME Web; Chromium and Firefox keep their rows behind their guards,
+so `pacman -S chromium` brings the old default back as a choice.
+
+### What Epiphany's web app mode actually needs
+
+`--application-mode` took four attempts to satisfy, and every failure was
+fatal rather than degraded, so the sequence is worth keeping:
+
+1. On its own it runs a private instance whose data is discarded, so every
+   launch starts logged out. It needs `--profile`.
+2. The profile directory name is not free-form. Epiphany derives the web app's
+   GApplication id from the basename and aborts on anything else -- *"Profile
+   directory .../example-com does not begin with required web app prefix
+   org.gnome.Epiphany.WebApp_"*, exit 134, core dumped. Dots separate
+   GApplication id components, so the URL's dots have to become underscores.
+3. The prefix is necessary and not sufficient. A correctly named empty
+   directory still aborts with *"Epiphany is trying to access web app settings
+   outside web app mode ... See epiphany#713."* What it wants is a `.app`
+   keyfile inside the profile. Nothing documents that; `strings` on
+   `libephymisc.so` has `.app` sitting next to "Failed to create .app file",
+   and the keys around it are Name, Exec, Terminal, Type, StartupWMClass and
+   Icon.
+4. With `.app` in place the window opens -- and then dies two minutes later,
+   on the first question about whether a URL is inside the app's scope:
+   *"Required desktop file ... not available"* followed by
+   `ephy_web_application_is_uri_allowed: assertion failed: (webapp)`. The same
+   entry has to exist a second time under
+   `XDG_DATA_HOME/xdg-desktop-portal/applications`. Both files, or the web app
+   is a window that aborts on the first link.
+
+The launcher writes both, once, and leaves them alone afterwards. The window
+then arrives as class `org.gnome.Epiphany.WebApp_whatsapp_com` titled WhatsApp,
+which is the per-app id the recents carousel and drawer index on -- a shared
+profile would have collapsed every web app into one card.
+
+The app id, icon name and title all come from the host, because upstream's
+entries call `omarchy-launch-webapp <url>` with no name to pass on:
+`web.whatsapp.com` loses its `web.` and becomes `whatsapp_com` / `whatsapp` /
+Whatsapp. The icon guess is deliberate -- `omarchy-webapp-install` names icons
+after the same first label, so an upstream-installed web app finds its icon,
+and a name that resolves to nothing just falls back.
+
+### Checked in the running guest
+
+Chromium removed, epiphany and evince installed, `vm-push.sh` for the overlay:
+
+| | |
+| --- | --- |
+| `xdg-settings get default-web-browser` | `org.gnome.Epiphany.desktop` |
+| `omarchy-default-browser` (the page's reader) | `org.gnome.Epiphany.desktop` |
+| `xdg-mime query default` http / https / text/html | `org.gnome.Epiphany.desktop` |
+| `xdg-mime query default application/pdf` | `org.gnome.Evince.desktop` |
+| `command -v omarchy-launch-webapp` | `/usr/local/bin/omarchy-launch-webapp` |
+| `omarchy-cmd-present chromium` | fails, so the row hides |
+
+`./scripts/vm-selftest.sh settings`: 56 passed. Both new checks among them --
+s.B8 with the guards the other way round from before (GNOME Web drawn,
+Chromium and Firefox not) and a new s.D1 that ties the ticked row to the
+desktop id the image ships in `mimeapps.list`, which is one assertion over both
+the file landing and D3's `readValue` doing its job.
+
+The drawer shows Web and Document Viewer as tiles. `omarchy-launch-webapp
+https://web.whatsapp.com/` opened the QR login page in an app window with no
+URL bar and a bottom toolbar, and stayed up past the two-minute mark where the
+missing portal keyfile used to kill it.
+
+One failure, `I1a` ("on a home screen it is the wallpaper again"), is not this
+change: it compares a pixel on the strip's band against the theme fill, and no
+wallpaper daemon was running on the guest at the time -- another session was
+mid-way through theme work, with the theme left on Flexoki Light. Nothing in
+this change touches the band, the wallpaper or the shell's painting.
+
+Not checked: a disk built from this change. The measurements are from packages
+installed onto the running guest and the overlay pushed into it, so the
+inferred half is `default/etc/skel/.config/mimeapps.list` and
+`default/usr/local/bin/` landing through `vm/build-disk.sh`'s
+`cp -a "$REPO/default/." "$ROOTDIR/"` -- which runs before `vm/configure.sh`
+seeds `/etc/skel` from upstream's `config/`, and upstream's `config/` carries no
+`mimeapps.list`, so nothing overwrites it. `scripts/vm-push.sh` carries both so
+that a push and a build agree.

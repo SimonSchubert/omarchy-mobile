@@ -5,9 +5,30 @@
 # Installed by default, because "get it running as Omarchy is" means Omarchy's
 # applications and not just its compositor. Skipped by
 # `./scripts/vm-build.sh --session-only`, which is the flag to reach for while
-# iterating on the session: chromium alone is nearly a quarter of this tier's
-# download, and none of it decides whether Hyprland starts.
-chromium
+# iterating on the session: none of it decides whether Hyprland starts.
+#
+# The browser is the one place this tier contradicts upstream outright, and
+# vm/packages/omitted carries the measurements. Chromium has no narrow layout:
+# at the 360px panel its own first-run dialog is clipped off the right edge
+# with no reachable button, and behind that it never maps a browser window at
+# all -- `ContextResult::kTransientFailure: Failed to send
+# GpuControl.CreateCommandBuffer`, the same missing hardware EGL that makes mpv
+# abort below. Epiphany reflows to a phone layout on its own, with the URL bar
+# and the back/forward/tabs row moved to the bottom of the screen where a thumb
+# reaches them.
+#
+# It is also the cheapest package in this file. Every one of epiphany's 23
+# dependencies is already installed -- webkitgtk-6.0, gtk4 and libadwaita came
+# in for Calendar, Contacts and Geary -- so `pacman -S epiphany` on the built
+# image pulls in nothing else: 3.59 MiB of download against chromium's 117.28,
+# and 17.59 MiB installed against 434.36.
+epiphany
+# evince comes with it. Nothing else here draws a PDF: upstream's own
+# mimeapps.list already names org.gnome.Evince.desktop for application/pdf, and
+# the only reason this image could leave it out was that chromium.desktop
+# claimed the type in the mimeinfo cache. WebKitGTK has no PDF viewer, so
+# without evince the type would have no handler at all. 2 MB.
+evince
 nautilus
 nautilus-python
 imv
@@ -95,8 +116,8 @@ moarchy-store-git
 # reason [pkg.moarchy-keep] gives for Notes. All are libadwaita, so they reflow
 # to the 360px panel, and all are in ALARM's aarch64 [extra].
 #
-# Each fills a gap rather than doubling a tile. chromium, nautilus, foot and imv
-# stay upstream's handlers, and so does mpv, which upstream's screen recorder
+# Each fills a gap rather than doubling a tile. nautilus, foot and imv stay
+# upstream's handlers, and so does mpv, which upstream's screen recorder
 # and yt-dlp host also run. Its tile is what changes: in the VM mpv aborts at
 # startup (no hardware EGL, then an assertion in its X11 fallback), so the
 # drawer's player is Showtime, and mpv's entry is hidden by a copy of it in

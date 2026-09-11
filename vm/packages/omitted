@@ -77,22 +77,75 @@ sddm                            # in ALARM, and installed by the session tier's
                                 # Hyprland gets a chance to.
 #
 # Upstream's desktop apps that are not in a phone's default set, and the
-# previewer that would pull one of them back in. All eight install fine from
-# ALARM, and all left the apps tier on 2026-09-11: the first six took 141
-# packages and 400 MB off its download, and Print Settings and Disks, dropped
-# later that day, another 5 packages and 2.6 MB. GNOME's phone apps took their
-# place (vm/packages/apps). `pacman -S` brings any of them back.
+# previewer that would pull one of them back in. All seven install fine from
+# ALARM. They left the apps tier on 2026-09-11 together with evince, and those
+# six took 141 packages and 400 MB off its download; Print Settings and Disks,
+# dropped later that day, another 5 packages and 2.6 MB. GNOME's phone apps
+# took their place (vm/packages/apps). evince is the one that came back: on
+# 2026-09-12 chromium left, and with it the mimeinfo-cache entry that had been
+# answering application/pdf by accident. `pacman -S` brings any of the rest
+# back.
 libreoffice-fresh               # desktop office suite; 163 MB on its own
 kdenlive                        # desktop video editor; 183 MB with the KDE
                                 # Frameworks it pulls in
 moonlight-qt                    # game-streaming client
 xournalpp                       # stylus notebook; Notes (moarchy-keep) is the
                                 # note-taking app here
-evince                          # the document viewer; chromium is the
-                                # default for PDFs already
-sushi                           # Nautilus's spacebar previewer. It depends on
-                                # evince, so installing it brings the document
-                                # viewer back, and a phone has no spacebar
+sushi                           # Nautilus's spacebar previewer; a phone has no
+                                # spacebar. (Until 2026-09-12 this line also
+                                # said installing it drags evince back in --
+                                # evince is in the apps tier now, so that
+                                # objection is gone and only the spacebar one
+                                # is left.)
 system-config-printer           # Print Settings, a desktop's printer admin.
                                 # CUPS and its web interface stay
 gnome-disk-utility              # Disks; partitioning is not a phone's job
+
+# --- replaced, not merely dropped ------------------------------------------
+# The one package here that upstream's set names, that installs and runs fine
+# for aarch64, and that this image swaps for a different one rather than doing
+# without. Measured on the built image at the 360x674 panel, 2026-09-12:
+#
+#   - Chromium has no narrow mode. Its own first-run Terms dialog is a
+#     fixed-width desktop window: at 360px the text is clipped off the right
+#     edge and no accept button is reachable. It was also the only window
+#     chromium ever mapped -- with --no-first-run, and again with
+#     --disable-gpu, the browser window never appeared, and the log says
+#     `ContextResult::kTransientFailure: Failed to send
+#     GpuControl.CreateCommandBuffer`. That is the VM's missing hardware EGL,
+#     the same thing that makes mpv abort, so on real phone hardware chromium
+#     would probably start -- and would still have no narrow layout, which is
+#     the half of this that no GPU fixes.
+#   - Epiphany switches itself to a phone layout at that width: URL bar at the
+#     bottom, back/forward/tabs/library as a bottom toolbar. It loaded a real
+#     page at 360px with no argument or configuration.
+#   - Epiphany costs 3.59 MiB of download and 17.59 MiB installed, and adds no
+#     dependency the image did not already have. Chromium cost 117.28 and
+#     434.36 -- by itself nearly a quarter of the apps tier's download.
+#
+# Angelfish, the other genuinely mobile-first browser in ALARM's aarch64
+# [extra], was measured too and not taken: 15 of its 17 dependencies are
+# missing here, including qt6-webengine at 81.27 MiB, for ~91 MiB of download
+# and ~341 MiB installed. That is the KDE Frameworks cascade this file already
+# refused once, four lines up, when it dropped kdenlive. Firefox (66.87 MiB)
+# has no adaptive UI on desktop Linux at all, and qutebrowser is keyboard-driven.
+#
+# What this costs, and what pays it back:
+#   - upstream's mimeapps.list names chromium.desktop for http/https, so the
+#     image ships default/etc/skel/.config/mimeapps.list naming Epiphany.
+#   - omarchy-launch-webapp hardcodes a chromium.desktop fallback for every
+#     browser outside the chrome family, so every web app tile would exec
+#     nothing. default/usr/local/bin/omarchy-launch-webapp shadows it.
+#   - PDFs lose their accidental handler, which is why evince is in the apps
+#     tier now.
+#   - upstream's hypr/apps/browser.lua and pip.lua tag chromium-family windows
+#     for opacity and Meet's PiP. Those rules simply never match now. They are
+#     upstream config this project vendors unpatched, and cosmetic, so they
+#     stay as they are.
+#   - install/user/chromium.sh installs the copy-url and yt-dlp native
+#     messaging hosts. This image never runs upstream's installer, so those
+#     were never set up here and nothing is lost.
+#
+# `pacman -S chromium` brings it back, and the Settings Browser page has a
+# Chromium row waiting behind a guard for exactly that.
+chromium                        # upstream's browser; replaced by epiphany

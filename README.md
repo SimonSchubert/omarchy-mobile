@@ -61,9 +61,8 @@ tty1 straight into Hyprland, so there is nothing to type.
 ./scripts/vm-selftest.sh                   # the gestures, one line per acceptance criterion
 ```
 
-`./scripts/vm-build.sh --session-only` skips the application tier (chromium
-alone is nearly a quarter of its download) for fast iteration on the session
-itself.
+`./scripts/vm-build.sh --session-only` skips the application tier for fast
+iteration on the session itself.
 
 ## How the image is built
 
@@ -252,6 +251,8 @@ All measured, and the surface layout is shaped around them.
 | `default/etc/skel/.config/omarchy/themed/gtk.css.tpl` | The active theme's palette for GTK4 and libadwaita apps. Upstream's own template engine renders it on every theme set, because it sits in the user template directory it already reads; `~/.config/gtk-4.0/gtk.css` is a symlink to the result, and `hooks/theme-set.d/50-gtk-apps.sh` restarts the app daemons that parse it once at startup |
 | `default/etc/skel/.local/bin/` | `omarchy-mobile-*`, the helpers behind Settings' native pages: audio routing, reminders, time zone, plugins, About; and the keyboard toggle |
 | `default/etc/skel/.local/share/` | Desktop entries and icons for the Wi-Fi, Bluetooth and Settings screens. Only Settings shows in the drawer. Also a copy of mpv's entry that hides it from the drawer |
+| `default/etc/skel/.config/mimeapps.list` | The default handlers, named rather than left to the mimeinfo cache: GNOME Web for http/https, Evince for PDFs |
+| `default/usr/local/bin/` | Shadows of upstream `omarchy-*` scripts that assume a Chromium-family browser. `/usr/local/bin` comes before `/usr/bin` in the guest's PATH, so this overrides without patching the vendored tree |
 | `patches/` | Fixes to the vendored upstream. Applied with `--fuzz=0`, so a moved upstream fails the build |
 | `scripts/vm-*.sh` | Build, run, ssh, screenshot, drag, push the overlay into a running guest, selftest |
 | `docs/spec/` | moarchy's acceptance criteria, copied with their ids unchanged |

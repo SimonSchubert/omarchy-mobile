@@ -273,7 +273,7 @@ command. The helpers moarchy calls `bin/moarchy-*` are `omarchy-mobile-*` in
 | B4 | partial | The carousel rises over Settings with its card leading (the K6 check does exactly that); the home band leaving it running is not checked |
 | B6 | pass | |
 | B7 | holds | **Changed:** Theme is a page here, not a plugin, so it returns to where it was opened from by being popped |
-| B8 | pass | Firefox's row hidden with no Firefox; and Lock, below |
+| B8 | pass | Chromium's and Firefox's rows hidden with neither installed, GNOME Web's drawn; and Lock, below |
 | B9 | pass | |
 | C1 | pass | Stay awake against `omarchy-toggle-idle status` |
 | C2, C3 | pass | The battery flag, set and put back |
@@ -283,9 +283,9 @@ command. The helpers moarchy calls `bin/moarchy-*` are `omarchy-mobile-*` in
 | C7 | todo | The crash-capture unit is not checked |
 | C8 | pass | |
 | C9 | partial | Not activated for real, since it changes sshd; E6 shows a bridged terminal leaving Settings running |
-| D1 | pass | DNS, and Theme against `omarchy-theme-current` |
+| D1 | pass | DNS, Theme against `omarchy-theme-current`, and Browser against the desktop id the image ships in `mimeapps.list` |
 | D2 | holds | A choice ticks only on an exact match with the reader. Not checked with a stub |
-| D3 | holds | The Epiphany row, which needs Epiphany installed to be seen |
+| D3 | pass | **Changed:** the GNOME Web row is the image's default browser now, so the mechanism is exercised rather than merely present: `omarchy-default-browser` has no name for Epiphany and prints the raw `org.gnome.Epiphany.desktop`, which is the row's `readValue`, while its `write` goes around that script to `xdg-settings` |
 | D4 | pass | The default terminal, written as the one it already is. Choice writes re-read when the write exits, not when it starts |
 | D5, D6, D7 | pass | |
 | D8 | changed | AI agent is hidden: `omarchy-default-agent` installs through mise, which this image does not have. The rows are upstream's thirteen, writing upstream's `omarchy-default-agent <name>` |

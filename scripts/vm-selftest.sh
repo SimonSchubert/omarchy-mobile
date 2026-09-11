@@ -829,9 +829,16 @@ section_settings() {
     is "$(st stack | tr '\n' ' ')" "root appearance "
 
   st openAt apps.default.browser >/dev/null; sleep 1.5
-  check s.B8 "a row whose guard fails is not drawn: Chromium is, Firefox is not" \
-    is "$(st rows | awk -F'\t' '$1 == "chromium" || $1 == "firefox" { print $1 "=" $4 }' | tr '\n' ' ')" \
-       "chromium=1 firefox=0 "
+  check s.B8 "a row whose guard fails is not drawn: GNOME Web is, Chromium and Firefox are not" \
+    is "$(st rows | awk -F'\t' '$1 == "epiphany" || $1 == "chromium" || $1 == "firefox" { print $1 "=" $4 }' | tr '\n' ' ')" \
+       "epiphany=1 chromium=0 firefox=0 "
+  # The image ships Epiphany and names it in default/etc/skel/.config/mimeapps.list,
+  # so this is one check over both: the file landed, and D3's readValue matched a
+  # reader that answers a raw desktop id because omarchy-default-browser has no
+  # name for Epiphany to print.
+  check s.D1 "the ticked browser is the one the image ships, read through readValue" \
+    is "$(st value apps.default.browser) $(st rows | awk -F'\t' '$5 == 1 { print $1 }')" \
+       "org.gnome.Epiphany.desktop epiphany"
   st openAt system.power >/dev/null; sleep 1.5
   local pw; pw=$(g sh 'passwd -S "$USER" | cut -d" " -f2')
   check s.B8 "Lock is offered only with a password to unlock it (passwd -S says $pw)" \

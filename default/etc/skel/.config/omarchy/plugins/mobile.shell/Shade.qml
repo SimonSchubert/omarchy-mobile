@@ -761,7 +761,7 @@ Item {
 
   // The sender's window: its app id is the notification's app name, the tail
   // of a reverse-DNS one, or the id of the desktop entry the name matches --
-  // "Chromium" notifies, "chromium" is the window.
+  // "Web" notifies, "org.gnome.Epiphany" is the window.
   function windowFor(row) {
     var app = String((row && row.app) || "").toLowerCase()
     if (!app) return null

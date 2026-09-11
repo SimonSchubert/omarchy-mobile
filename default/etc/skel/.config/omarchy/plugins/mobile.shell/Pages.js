@@ -315,19 +315,25 @@ var PAGES = {
     detailCmd: "omarchy-default-agent", covers: { "setup.default.agent": "N" } }
 ]},
 
+// GNOME Web first: it is the browser this image installs (vm/packages/apps),
+// so on a base install it is the one row of the three that is drawn. The other
+// two are guarded on a browser that is not here until somebody installs one --
+// Firefox from More software, Chromium from `pacman -S chromium`.
+//
+// No upstream id: omarchy-default-browser has no name for Epiphany, so its
+// reader falls through to printing the raw desktop id, which is what readValue
+// is for (D3). Writing has to go around it for the same reason.
 "apps.default.browser": { title: "Browser", reader: "omarchy-default-browser", rows: [
+  { id: "epiphany", type: "choice", label: "GNOME Web", value: "epiphany",
+    readValue: "org.gnome.Epiphany.desktop",
+    when: "omarchy-cmd-present epiphany",
+    write: "env -u BROWSER xdg-settings set default-web-browser org.gnome.Epiphany.desktop" },
   { id: "chromium", type: "choice", label: "Chromium", value: "chromium",
     when: "omarchy-cmd-present chromium", write: "omarchy-default-browser chromium",
     covers: { "setup.default.browser.chromium": "B" } },
   { id: "firefox", type: "choice", label: "Firefox", value: "firefox",
     when: "omarchy-cmd-present firefox", write: "omarchy-default-browser firefox",
-    covers: { "setup.default.browser.firefox": "B" } },
-  // No upstream id: omarchy-default-browser has no name for Epiphany, so its
-  // reader prints the raw desktop id, which is what readValue is for (D3).
-  { id: "epiphany", type: "choice", label: "Epiphany", value: "epiphany",
-    readValue: "org.gnome.Epiphany.desktop",
-    when: "omarchy-cmd-present epiphany",
-    write: "env -u BROWSER xdg-settings set default-web-browser org.gnome.Epiphany.desktop" }
+    covers: { "setup.default.browser.firefox": "B" } }
 ]},
 
 // Each row is guarded on its terminal being installed, so installing kitty
