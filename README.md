@@ -161,7 +161,8 @@ it on.
   the media player, and your notifications, each led by its app's icon: tap
   one to open it, swipe it away to dismiss it. Nothing toasts over the screen:
   a bell in the status bar says something is waiting. Holding the Wi-Fi or
-  Bluetooth tile opens that radio's screen.
+  Bluetooth tile opens that radio's screen, which is the way to both: neither
+  is in the drawer.
 - **Screens are windows**, so each gets a workspace and a carousel card: Wi-Fi,
   Bluetooth and Settings. Settings is ten phone-style sections over upstream's
   Omarchy menu, opened from the shade's gear, its power glyph (straight to
@@ -237,7 +238,7 @@ All measured, and the surface layout is shaped around them.
 | `default/etc/skel/.config/omarchy/plugins/mobile.shell/` | The mobile UI -- status bar, shade, gestures, sheets and the Wi-Fi, Bluetooth and Settings screens -- as one Omarchy shell plugin. Settings' pages are data, in `Pages.js` |
 | `default/etc/skel/.config/hypr/mobile.lua` | One app per workspace, filling it, no layer animation on the shell's own sheets, and the on-screen keyboard started and bound to Super+I -- a user override loaded after upstream's defaults |
 | `default/etc/skel/.local/bin/` | `omarchy-mobile-*`, the helpers behind Settings' native pages: audio routing, reminders, time zone, plugins, About; and the keyboard toggle |
-| `default/etc/skel/.local/share/` | Drawer entries and icons for the Wi-Fi, Bluetooth and Settings screens |
+| `default/etc/skel/.local/share/` | Desktop entries and icons for the Wi-Fi, Bluetooth and Settings screens. Only Settings shows in the drawer |
 | `patches/` | Fixes to the vendored upstream. Applied with `--fuzz=0`, so a moved upstream fails the build |
 | `scripts/vm-*.sh` | Build, run, ssh, screenshot, drag, push the overlay into a running guest, selftest |
 | `docs/spec/` | moarchy's acceptance criteria, copied with their ids unchanged |

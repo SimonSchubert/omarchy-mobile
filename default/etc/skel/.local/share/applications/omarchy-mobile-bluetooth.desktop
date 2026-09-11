@@ -15,3 +15,9 @@ Icon=omarchy-mobile-bluetooth
 Terminal=false
 Categories=Settings;HardwareSettings;
 Keywords=bluetooth;pair;headset;headphones;speaker;keyboard;
+# Not in the drawer: the way to this screen is holding the shade's Bluetooth
+# tile (docs/spec/shade.md S6c), which opens it directly rather than through
+# this entry. NoDisplay keeps it out of DesktopEntries.applications, which the
+# drawer's grid is built from, and changes nothing else: the screen's carousel
+# card takes its name and glyph from the screen itself (Carousel.qml, K5).
+NoDisplay=true
