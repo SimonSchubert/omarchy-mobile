@@ -132,9 +132,10 @@ a phone image rather than from aarch64:
   Xournal++, Evince, Print Settings and Disks are left out, and so is sushi,
   which depends on Evince.
   GNOME's Calculator, Calendar, Contacts, Maps, Clocks, Weather, Text Editor,
-  Geary, Camera, Music, Sound Recorder and Showtime are added: the apps a phone
-  is expected to have, and libadwaita apps that fit a 360px screen. mpv stays
-  installed for upstream's scripts, but the drawer's video player is Showtime.
+  Geary, Camera, Sound Recorder and Showtime are added, with Amberol from GNOME
+  Circle as the music player: the apps a phone is expected to have, and
+  libadwaita apps that fit a 360px screen. mpv stays installed for upstream's
+  scripts, but the drawer's players are Showtime and Amberol.
 - **Those apps follow the theme.** Upstream themes a GTK app twice -- light or
   dark, and an icon theme -- so Calendar and Contacts would sit in stock Adwaita
   beside a shell drawn in the theme's own colours

@@ -100,17 +100,29 @@ moarchy-store-git
 # and yt-dlp host also run. Its tile is what changes: in the VM mpv aborts at
 # startup (no hardware EGL, then an assertion in its X11 fallback), so the
 # drawer's player is Showtime, and mpv's entry is hidden by a copy of it in
-# default/etc/skel/.local/share/applications. Music is a library to browse
-# rather than a player for one file, and claims no MimeType, so mpv still opens
-# what it did. Geary is the mail client that upstream's aether would have been
+# default/etc/skel/.local/share/applications. Audio is Amberol's, which claims the
+# audio types mpv claims, so audio/mpeg opens in Amberol -- the point being that
+# mpv is the one that does not start here. Geary is the mail client that upstream's aether would have been
 # (omitted: x86_64-only). Camera is for the phone this image stands in for; the
 # VM has no /dev/video, so there it stops at the portal's permission prompt.
 #
-# About 140 MB of download, against the 400 MB the six omitted packages cost.
+# About 135 MB of download, against the 400 MB the six omitted packages cost.
 # Most of it is two WebKits that evolution-data-server brings for Calendar and
 # Contacts, and Geary uses webkit2gtk-4.1 too, so it costs only 3 MB more.
-# Camera, Music and Sound Recorder share their GStreamer plugins: 13 MB for the
-# three, and Showtime plays through the same ones for 0.1 MB more.
+# Camera, Amberol and Sound Recorder share their GStreamer plugins, and Showtime
+# plays through the same ones; Amberol is 1.9 MB of that.
+#
+# Amberol and not GNOME Music, measured at the 360x674 panel on 2026-09-12.
+# Music has no narrow layout: no AdwBreakpoint anywhere in its UI files, a 220px
+# playlist sidebar and a 250px volume slider, so at 360 the window is laid out
+# wider than the surface it was given and the overflow is cut -- its welcome
+# text ends mid-word. That is not a label bug, and a label fix does not touch
+# it: adding wrap and a 30-character cap to those labels, rebuilding Music's
+# gresource and restarting it changed nothing, while the same widgets built
+# standalone in a 360px window wrap at 336px. Upstream tracks the window itself
+# as gnome-music#255. Amberol is GNOME Circle rather than core GNOME -- adaptive
+# is a rule of that programme -- and it renders correctly at this size. It costs
+# 1.9 MB where Music cost 7.4, and runs no localsearch indexer behind it.
 gnome-calculator
 gnome-calendar
 gnome-contacts
@@ -120,7 +132,7 @@ gnome-weather
 gnome-text-editor
 geary
 snapshot
-gnome-music
+amberol
 gnome-sound-recorder
 showtime
 
