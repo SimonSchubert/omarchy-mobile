@@ -290,11 +290,20 @@ cmd_info() {
     size="$(LC_ALL=C pacman -Qi "$PACKAGE" 2>/dev/null |
             sed -n 's/^Installed Size *: *//p' | head -1)"
     [[ -n $size ]] && kv size "$size"
+    # `protected` is whether there is an Uninstall button; `guard` is the
+    # sentence drawn in its place. Two rules lead here and they are not the
+    # same fact about the app, so one line for both would be wrong about one of
+    # them -- the phone's terminal is not part of omarchy-mobile.
+    #
     # An `if` and not `&&`, because this is the last statement in the function:
     # a short-circuited `&&` returns 1, and a script that exits non-zero for an
     # app that simply is not protected is a script whose exit code lies.
-    if is_ours "$PACKAGE" || { load_session && is_session "$PACKAGE"; }; then
+    if is_ours "$PACKAGE"; then
       kv protected 1
+      kv guard "Part of omarchy-mobile. The shell will not uninstall itself."
+    elif load_session && is_session "$PACKAGE"; then
+      kv protected 1
+      kv guard "The phone's session is made of $PACKAGE."
     fi
   fi
   return 0

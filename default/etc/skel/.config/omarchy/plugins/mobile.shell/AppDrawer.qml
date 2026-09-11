@@ -1196,10 +1196,16 @@ Item {
             }
 
             // --- L11, L12, said rather than left as a missing button --------
+            //
+            // In the script's words and not this file's, because the two rules
+            // that lead here are different facts about the app: the phone's
+            // terminal is protected without being part of omarchy-mobile, and
+            // one sentence for both would be wrong about one of them.
             Text {
               width: parent.width
               visible: root.detailStage === "info" && root.detailProtected
-              text: "Part of omarchy-mobile. The phone will not uninstall itself."
+              text: String(root.detailInfo["guard"] || "")
+                    || "This one cannot be removed."
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
               color: drawerWindow.cardSubdued

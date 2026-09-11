@@ -160,24 +160,27 @@ Settings.
 
 ### L. Long-press on an app
 
-Built, and `vm-selftest.sh L` is written against it; the run has not happened
-yet, so every row below is a check that exists rather than a check that passed.
-
 | AC | Status | Note |
 | --- | --- | --- |
-| L1 | todo | Checked: a real 900ms press on Foot's cell, aimed with `drawer cellTarget`, leaves `drawer detail` naming it |
-| L2 | todo | Checked: the click Qt delivers after the hold launches nothing. `holdFired` is cleared on the next press, as `sheetWasDrag` is |
-| L3 | todo | Checked: a 1.2s drag down from a cell closes the sheet and opens no card |
+| L1 | pass | A real 900ms press on Foot's cell, aimed with `drawer cellTarget`, leaves `drawer detail` naming it |
+| L2 | pass | The click Qt delivers after the hold launches nothing. `holdFired` is cleared on the next press, as `sheetWasDrag` is, and for the same reason |
+| L3 | pass | A 1.2s drag down from a cell closes the sheet, opens no card, and leaves 25+ drag samples |
 | L4 | holds | The grid fits its 20 apps, so it never scrolls here and the `onCanceled` path is unexercised -- the same gap H5 has |
-| L5 | todo | **Changed:** `drawer back`, not `gestures back` -- G is not built, so the drawer answers the walk itself (card, then grid, then closed) and the edge gesture will call the same `goBack()` |
-| L6 | todo | Checked: `drawer detail` prints `id`, `info.kind`, and for a package `info.package`, `info.version` and `info.size` |
-| L7 | todo | Checked: Uninstall arms a plan and never removes. Clocks answers a count and a size, the personal entry its `note` |
-| L8 | todo | Checked: Files is Nautilus and `nautilus-python` declares it, so `canRemove` is `no` and the card carries pacman's own line. The script's half is measured -- `plan org.gnome.Nautilus` answers `blocked removing nautilus breaks dependency 'nautilus' required by nautilus-python` |
-| L9 | todo | Checked against a launcher the suite wrote, never against a package: Remove deletes it and the card closes. The notification is the script's |
-| L10 | todo | Checked: the grid's app count drops by one with the drawer still open |
-| L11 | todo | Checked: Notes (`moarchy-keep`) answers `protected 1` and draws no Uninstall button. The script's half is measured |
-| L12 | todo | **Changed:** the rule is the same, the mechanism is not. This image pacstraps both tiers as explicit targets and has no meta package, so pacman objects to nothing and `pacman -Rs foot` would take the terminal every TUI and every bridged Settings row opens in. `vm/build-disk.sh` installs `vm/packages/session` at `/etc/omarchy-mobile/session-packages`, and the script refuses anything on it -- asked of the whole plan rather than of the target, because `-Rs` takes orphans and that is how `upower` went out with KWeather on moarchy. moarchy-meta's `--assume-installed` waiver has nothing to waive here and is not carried. The script's half is measured: `plan foot` answers `blocked The phone's session is made of foot.` |
+| L5 | pass | **Changed:** `drawer back`, not `gestures back` -- G is not built, so the drawer answers the walk itself (card, then grid, then closed) and the edge gesture will call the same `goBack()` when it lands. Escape walks the same levels |
+| L6 | pass | `drawer detail` prints `id`, `info.kind`, and for a package `info.package`, `info.version` and `info.size` -- `foot package foot`, `1.28.0-2`, `936.39 KiB`. The id carries no `.desktop`, which is what this library's entries hold |
+| L7 | pass | Uninstall arms a plan and never removes: Clocks answers `1, 3.5 MiB`, a personal entry its `note` |
+| L8 | pass | Files is Nautilus and `nautilus-python` declares it, so `canRemove` is `no` and the card carries pacman's own line -- `removing nautilus breaks dependency 'nautilus' required by nautilus-python` |
+| L9 | pass | Checked against a launcher the suite writes and then removes, never against a package: Remove deletes it and the card closes. The notification is the script's |
+| L10 | pass | The grid's app count drops by one with the drawer still open |
+| L11 | pass | Notes (`moarchy-keep`) answers `protected 1` and draws the reason in place of an Uninstall button |
+| L12 | pass | **Changed:** the rule is the same, the mechanism is not. This image pacstraps both tiers as explicit targets and has no meta package, so pacman objects to nothing and `pacman -Rs foot` would take the terminal every TUI and every bridged Settings row opens in. `vm/build-disk.sh` installs `vm/packages/session` at `/etc/omarchy-mobile/session-packages`, and the script refuses anything on it -- asked of the whole plan rather than of the target, because `-Rs` takes orphans and that is how `upower` went out with KWeather on moarchy. moarchy-meta's `--assume-installed` waiver has nothing to waive here and is not carried |
 | L13 | n/a | Nothing reinstalls what the card removes. L13 exists because every app is in `moarchy-meta`'s `depends` and a later upgrade resolves them; this image has no meta package, so a removed app stays removed across a `pacman -Syu` |
+
+19 checks, and they were run four times. One run lost L5 and L6 to a card that
+had closed between two of the suite's own ssh round trips, in a VM another
+session was driving at the same time -- the same interference the note at the
+top of this file records for S0. L6 reads the card in one round trip now
+rather than five, which is the half of that this file can fix.
 
 ### Constraints
 
@@ -247,8 +250,15 @@ which is also what grants the shade its Do Not Disturb and media services.
 | W4 | todo | Upstream's gaps toggle writes the same `hl.config` call, and `mobile.lua` loads after it, so the toggle is currently a no-op |
 | W5 | pass | And its typing half: a focused terminal raises the keyboard by itself, and a real tap on the keyboard's `q` types `q` into it |
 | W6 | pass | **Added here.** Settings' window is untagged and at opacity 1, and samples `#1a1b26` down its length, as the bar does |
-| L1–L8 | todo | The launch splash. Upstream's launch OSD still runs |
-| L9 | partial | The hand-off holds: the installed store's Open calls `omarchy-shell drawer launch`, and the drawer answers it. The splash it hands off to is L1–L8 |
+| L1 | pass | **Changed:** the state is the shell plugin's, not AppLibrary's -- an installed plugin is handed a seven-callback app-library facade with no launch feedback on it. `Shell.launchApp()` opens the splash in the same call that asks for the launch, and `splash state` reads `open` in the same round trip as the launch that opened it. Checked for `drawer launch` and for a real tap on the Calculator cell |
+| L2, L2a | pass | `splash geometry` reads `w=130 h=130 icon=96 layer=overlay`, and the compositor maps that surface at `115 295 130 130` -- centred on a 360x720 screen with no anchor asked for on either axis |
+| L3 | pass | Checked with a finger, not by reading the mask back: with the splash up, a drag from the status bar to y=400, straight through the icon, still opens the shade, and the splash is still up afterwards |
+| L4 | pass | `splash state` reads `closed` once the window has mapped, with the 160ms fade. The rule is a toplevel that was not there when the launch started; upstream's "any change of active toplevel" half is left out, and [build-log.md](build-log.md) has the measurement that says why it costs nothing |
+| L5 | pass | Settings' entry summons this shell rather than starting a process, so `Shell.openScreen()` ends the launch as it puts the screen up -- checked by launching `omarchy-mobile-settings` and reading `splash state` back to `closed` with no window having appeared for it |
+| L6 | pass | An id no entry answers to leaves the splash up and `splash state` reads `closed` 16s later |
+| L7 | pass | `splash drawn` reads `icon file:///usr/share/icons/hicolor/scalable/apps/foot.svg` for Foot, and `fallback` -- the outline -- for an id with no entry. Never `nothing` |
+| L8 | holds | The pulse is drawn and not read back, as Veil is. One transform on one textured quad |
+| L9 | pass | The hand-off holds: the installed store's Open calls `omarchy-shell drawer launch`, the drawer answers it, and it now goes down the same `launchApp()` path a tap on the grid does, splash included |
 | L9a | pass | `drawer launch` with a bare id finds the grid's entry for Keep and for the store, and each maps a window |
 
 ## [style.md](spec/style.md)
