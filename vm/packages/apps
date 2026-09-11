@@ -121,29 +121,36 @@ moarchy-store-git
 # and yt-dlp host also run. Its tile is what changes: in the VM mpv aborts at
 # startup (no hardware EGL, then an assertion in its X11 fallback), so the
 # drawer's player is Showtime, and mpv's entry is hidden by a copy of it in
-# default/etc/skel/.local/share/applications. Audio is Amberol's, which claims the
-# audio types mpv claims, so audio/mpeg opens in Amberol -- the point being that
-# mpv is the one that does not start here. Geary is the mail client that upstream's aether would have been
-# (omitted: x86_64-only). Camera is for the phone this image stands in for; the
-# VM has no /dev/video, so there it stops at the portal's permission prompt.
+# default/etc/skel/.local/share/applications. Geary is the mail client that
+# upstream's aether would have been (omitted: x86_64-only). Camera is for the
+# phone this image stands in for; the VM has no /dev/video, so there it stops at
+# the portal's permission prompt.
 #
-# About 135 MB of download, against the 400 MB the six omitted packages cost.
-# Most of it is two WebKits that evolution-data-server brings for Calendar and
-# Contacts, and Geary uses webkit2gtk-4.1 too, so it costs only 3 MB more.
-# Camera, Amberol and Sound Recorder share their GStreamer plugins, and Showtime
-# plays through the same ones; Amberol is 1.9 MB of that.
+# No audio player, and the gap has a cost worth naming rather than discovering.
+# Amberol was here until 2026-09-12 precisely because it claimed the audio types
+# mpv claims; without it they fall back to mpv, mimeapps.list names no handler
+# for them, and mpv is the one thing in this image that does not start in the VM.
+# So audio/mpeg now resolves to a player that aborts. On the phone this image
+# stands in for that association is correct and mpv plays; in the VM, opening a
+# song does nothing at all.
 #
-# Amberol and not GNOME Music, measured at the 360x674 panel on 2026-09-12.
-# Music has no narrow layout: no AdwBreakpoint anywhere in its UI files, a 220px
-# playlist sidebar and a 250px volume slider, so at 360 the window is laid out
-# wider than the surface it was given and the overflow is cut -- its welcome
-# text ends mid-word. That is not a label bug, and a label fix does not touch
-# it: adding wrap and a 30-character cap to those labels, rebuilding Music's
-# gresource and restarting it changed nothing, while the same widgets built
-# standalone in a 360px window wrap at 336px. Upstream tracks the window itself
-# as gnome-music#255. Amberol is GNOME Circle rather than core GNOME -- adaptive
-# is a rule of that programme -- and it renders correctly at this size. It costs
-# 1.9 MB where Music cost 7.4, and runs no localsearch indexer behind it.
+# GNOME Music is not the way to close it, measured at the 360x674 panel on
+# 2026-09-12. Music has no narrow layout: no AdwBreakpoint anywhere in its UI
+# files, a 220px playlist sidebar and a 250px volume slider, so at 360 the window
+# is laid out wider than the surface it was given and the overflow is cut -- its
+# welcome text ends mid-word. That is not a label bug and a label fix does not
+# touch it: adding wrap and a 30-character cap to those labels, rebuilding
+# Music's gresource and restarting it changed nothing, while the same widgets
+# built standalone in a 360px window wrap at 336px. Upstream tracks the window
+# itself as gnome-music#255. So the choice is a player that does not fit or no
+# player, and this list takes no player.
+#
+# About 95 MB of download for the eleven. Most of it is webkit2gtk-4.1 (39 MB)
+# for Calendar and Contacts through evolution-data-server, which Geary then
+# reuses for 2 MB more, and js140 (21 MB), the JavaScript engine behind the GJS
+# apps. Camera, Sound Recorder and Showtime share their GStreamer plugins: 7.8 MB
+# for the three. The 95 was measured while Amberol was still on this list, so it
+# now overstates by Amberol's share of the download.
 gnome-calculator
 gnome-calendar
 gnome-contacts
@@ -153,7 +160,6 @@ gnome-weather
 gnome-text-editor
 geary
 snapshot
-amberol
 gnome-sound-recorder
 showtime
 
