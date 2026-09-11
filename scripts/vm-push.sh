@@ -40,7 +40,7 @@ ssh "${SSH_OPTS[@]}" -p "$PORT" "$USER_NAME@127.0.0.1" \
 scp "${SSH_OPTS[@]}" -P "$PORT" -rq \
   "$SKEL/omarchy/plugins" "$SKEL/hypr/mobile.lua" "$SKEL/omarchy/themed" \
   "$SKEL/omarchy/hooks" "$SKEL/mimeapps.list" default/etc/skel/.local \
-  default/usr/local patches vm/packages/session \
+  default/usr/local patches \
   "$USER_NAME@127.0.0.1:.cache/omarchy-mobile-push/"
 
 ssh "${SSH_OPTS[@]}" -p "$PORT" "$USER_NAME@127.0.0.1" bash -s <<'GUEST'
@@ -134,15 +134,6 @@ if [ -d "$STAGE/local/bin" ]; then
   sudo install -m755 "$STAGE"/local/bin/* /usr/local/bin/
   echo "pushed $(ls "$STAGE"/local/bin | tr '\n' ' ')to /usr/local/bin"
 fi
-
-# The session tier, which the long-press card's removal script refuses to
-# remove anything from (gestures.md L12). vm/build-disk.sh installs the same
-# file at image build; a push carries it too, because the script that reads it
-# treats a missing list as "cannot tell" and blocks every package removal --
-# which is the right answer for a guest built before this landed, and the wrong
-# one for a guest that just had the script pushed to it.
-sudo install -Dm644 "$STAGE/session" /etc/omarchy-mobile/session-packages
-echo "pushed the session tier to /etc/omarchy-mobile/session-packages"
 grep -qF 'require("hypr.mobile")' ~/.config/hypr/hyprland.lua \
   || printf '\n-- omarchy-mobile: one app per workspace, filling it.\nrequire("hypr.mobile")\n' \
        >>~/.config/hypr/hyprland.lua

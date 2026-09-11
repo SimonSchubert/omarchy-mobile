@@ -220,7 +220,11 @@ Item {
           return "ok"
         }
       }
-      root.apps.launch(id, id)
+      // No entry, so no icon: the splash draws L7's outline rather than
+      // nothing at all, and the library is still asked, as moarchy's drawer
+      // asks it.
+      if (root.host) root.host.launchApp(null, id)
+      else root.apps.launch(id, id)
       return "no-entry"
     }
 
@@ -329,7 +333,9 @@ Item {
 
   function launch(entry): void {
     if (!entry || !root.apps) return
-    root.apps.launch(entry.id, root.apps.entryName(entry))
+    // Through the host, which puts the launching app's icon on the wallpaper
+    // as this sheet goes (windows.md L1) and owns the whole splash from there.
+    root.host.launchApp(entry, "")
     // A hand-off (I5d): the app being launched is the one that gets to say
     // whether it wants a keyboard.
     root.handingOff = true

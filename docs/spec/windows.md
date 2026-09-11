@@ -4,7 +4,15 @@
 > every AC id and every line of text unchanged. On Hyprland, W1-W5 are met by
 > `default/etc/skel/.config/hypr/mobile.lua` rather than by `pinephone.conf`,
 > and one-app-per-workspace is a window rule rather than moarchy's Python
-> daemon. [`../acceptance.md`](../acceptance.md) carries the status.
+> daemon. L1-L9 are `Splash.qml` inside `mobile.shell` rather than a plugin of
+> its own, and the launch state is the shell plugin's rather than AppLibrary's:
+> an installed plugin here is handed a seven-callback app-library facade with
+> no launch feedback on it at all, so `Shell.launchApp()` opens the splash in
+> the same call that asks for the launch and watches for the window itself.
+> What upstream is asked for is silence — the bar declares `launchOsd: false`
+> and `patches/launch-osd-bar-opt-out.patch` makes AppLibrary read it, the same
+> shape as the bar's opt-out from the notification toasts.
+> [`../acceptance.md`](../acceptance.md) carries the status.
 
 What an app gets when it opens: the whole workspace, and its own icon on the
 wallpaper while it is on its way there. Present tense, normative. The
@@ -176,7 +184,7 @@ deliberate. L7 cannot catch it: `fallback` is a pass there, by design.
 `omarchy-shell splash drawn` reading `icon <path>`, not `fallback`
 
 <p align="center">
-  <img src="screenshots/splash.png" width="40%" alt="the Calculator icon on the wallpaper while it launches">
+  <img src="../screenshots/splash.png" width="40%" alt="the Calculator icon on the wallpaper while it launches">
 </p>
 
 ### What the splash does not cover

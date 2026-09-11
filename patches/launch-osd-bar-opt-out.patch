@@ -1,0 +1,40 @@
+--- a/shell/services/AppLibrary.qml
++++ b/shell/services/AppLibrary.qml
+@@ -31,6 +31,13 @@
+   // down.
+   property bool launchOsdOpen: false
+   property string launchOsdMessage: ""
++
++  // A bar that shows launch feedback itself -- a phone shell that draws the
++  // launching app's own icon over the wallpaper, say -- declares
++  // `launchOsd: false`, and then this OSD stays down and the bar answers the
++  // tap. shell.qml binds this from the bar; a bar that says nothing keeps the
++  // OSD, so nothing changes for a desktop.
++  property bool launchOsdWanted: true
+ 
+   // Emitted whenever the visible application set may have changed: desktop
+   // entries appeared or vanished, or the hidden-entry filters reloaded.
+@@ -240,6 +247,7 @@
+     id: launchDelay
+     interval: 2000
+     onTriggered: {
++      if (!root.launchOsdWanted) return
+       if (root.toplevelCount() > root.launchToplevelCount || ToplevelManager.activeToplevel !== root.launchActiveToplevel) return
+       root.launchOsdOpen = true
+       Quickshell.execDetached(["omarchy-shell", "osd", "show", JSON.stringify({ icon: "󱓞", message: root.launchOsdMessage, duration: 0 })])
+--- a/shell/shell.qml
++++ b/shell/shell.qml
+@@ -18,7 +18,12 @@
+   // own empty copies.
+   property PluginRegistry pluginRegistry: PluginRegistry { }
+   property BarWidgetRegistry barWidgetRegistry: BarWidgetRegistry { }
+-  property AppLibrary appLibrary: AppLibrary { }
++  property AppLibrary appLibrary: AppLibrary {
++    // The bar's opt-out from the launch OSD, the same shape as the
++    // notification service's opt-out from the popups: a bar that answers a
++    // launch itself declares `launchOsd: false`, and the OSD stays down.
++    launchOsdWanted: !(shell.bar && shell.bar.launchOsd === false)
++  }
+ 
+   property string home: Quickshell.env("HOME")
+ 

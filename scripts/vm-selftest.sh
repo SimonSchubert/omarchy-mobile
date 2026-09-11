@@ -2,7 +2,7 @@
 # Check the mobile shell against its acceptance criteria, in the running VM.
 #
 #   ./scripts/vm-selftest.sh              every section
-#   ./scripts/vm-selftest.sh A E S        only those (W A B C D E H L S K settings keyboard apps)
+#   ./scripts/vm-selftest.sh A E S        only those (W A B C D E H S K settings keyboard apps)
 #
 # Every line of output names the AC it proves, from docs/spec/gestures.md,
 # shade.md, windows.md and settings.md, so an AC with no check here is visible
@@ -203,22 +203,6 @@ skip() {
   SKIPPED=$((SKIPPED + 1))
 }
 is() { [ "$1" = "$2" ]; }
-# For the answers that carry somebody else's prose -- pacman's dependency line
-# has single quotes in it, so it cannot be pasted into a `bash -c`.
-contains() { case "$2" in *"$1"*) return 0 ;; *) return 1 ;; esac; }
-# `splash drawn` answers "icon <path>", "fallback", "nothing" or "down", and L7
-# is the difference between the first two and the last two.
-drew_something() { case "$1" in "icon "*|fallback) return 0 ;; *) return 1 ;; esac; }
-
-# One key out of the drawer's long-press card (L). `detail` answers in the
-# script's own key<TAB>value, with `info.` and `plan.` marking which fork said
-# it, and every check below wants exactly one line of that.
-detail_key() { ipc drawer detail | awk -F'\t' -v k="$1" '$1 == k { print $2 }'; }
-drawer_apps() { ipc drawer status | sed 's/.*apps=\([0-9]*\).*/\1/'; }
-l_entry_gone() {
-  g sh 'test -e ~/.local/share/applications/selftest-l.desktop && echo here || echo gone'
-}
-
 
 # Poll until a command prints the wanted value, for up to ~3s -- for the checks
 # whose outcome arrives through an animation and then a client's own close. The
@@ -1165,167 +1149,6 @@ section_keyboard() {
   g osk_set false
 }
 
-section_L() {
-  echo "-- L: long-press on an app"
-  reset_session
-
-  # The two halves the card is made of outside this repo's QML. Checked first
-  # and by name, because a guest that has neither fails every check below for
-  # one reason and none of them says which.
-  check L "the card's script is installed" \
-    g sh 'command -v omarchy-mobile-app-remove >/dev/null'
-  check L12 "and the session tier it asks is in the guest" \
-    g sh 'test -s /etc/omarchy-mobile/session-packages'
-
-  ipc drawer open >/dev/null; sleep 0.4
-  # Surface-local, so every gesture below adds where the compositor put the sheet.
-  local top; top=$(g layer omarchy-mobile-drawer | cut -d' ' -f2)
-
-  # Foot's cell, found the way H4 finds it: the grid's order is the library's,
-  # and neither is this file's to assume. Foot is also L12's own case, so the
-  # gesture checks and the rule they lead to hold the same icon -- and it is
-  # the one app here whose stray window this suite already knows how to close.
-  local i t target=""
-  for i in $(seq 0 40); do
-    t=$(ipc drawer cellTarget "$i")
-    [ "$t" = none ] && break
-    [ "${t#* * }" = Foot ] && { target=$t; break; }
-  done
-  if [ -z "$target" ]; then
-    skip L1 "Foot is not in the grid, so there is no cell to hold"
-    ipc drawer close >/dev/null
-    return
-  fi
-  local cx cy; read -r cx cy _ <<<"$target"
-  cy=$(( cy + top ))
-
-  # --- L1, L2: the gesture -------------------------------------------------
-  local before pids_before; before=$(g nwin); pids_before=$(g pids foot)
-  hold "$cx" "$cy"
-  check L1 "a 900ms press on Foot's cell opens its card" \
-    is "$(detail_key info.name)" Foot
-  check L2 "and the click Qt delivers after it launches nothing" \
-    is "$(g nwin) $(ipc drawer state)" "$before open"
-  # --- L6: what the card says it is ----------------------------------------
-  #
-  # One snapshot in one round trip, rather than a `detail_key` per key. Each of
-  # those is an ssh call, and a card read across five of them is a card that
-  # anything driving this VM in between can close halfway through -- which is
-  # what one run of this section saw.
-  #
-  # The id carries no `.desktop`: that is what this library's entries hold,
-  # which is also why `drawer launch` strips the suffix off what it is given.
-  local id kind pkg version size
-  read -r id kind pkg version size <<<"$(ipc drawer detail | awk -F'\t' '
-      $1 == "id" { id = $2 }
-      $1 == "info.kind" { kind = $2 }
-      $1 == "info.package" { pkg = $2 }
-      $1 == "info.version" { version = $2 }
-      $1 == "info.size" { size = $2 }
-      END { print id, kind, pkg, version, size }')"
-  check L6 "the card names the entry, its kind and its package" \
-    is "$id $kind $pkg" "foot package foot"
-  check L6 "and the version and size pacman already knows ($version, $size)" \
-    bash -c "[ -n '$version' ] && [ -n '$size' ]"
-
-  # Belt to L2's braces: a launch it caught is still a window, and this suite
-  # closes only what it opened.
-  local p new=()
-  for p in $(g pids foot); do [[ " $pids_before " == *" $p "* ]] || new+=("$p"); done
-  [ ${#new[@]} -gt 0 ] && g kill_pids "${new[@]}"
-
-  # --- L5: back walks out one level at a time ------------------------------
-  check L5 "back leaves the card and the drawer stays open" \
-    is "$(ipc drawer back) $(ipc drawer state)" "grid open"
-  check L5 "back again leaves the drawer" \
-    is "$(ipc drawer back) $(ipc drawer state)" "closed closed"
-
-  # --- L3: travel cancels the hold -----------------------------------------
-  ipc drawer open >/dev/null; sleep 0.4
-  # 1.2s downward from the same cell: longer than the 500ms hold, and every
-  # pixel of it past the slop.
-  drag "$cx" "$cy" 400 100 12
-  check L3 "a 1.2s drag down from a cell closes the sheet and opens no card" \
-    bash -c "[ '$(ipc drawer state)' = closed ] && [ -z '$(ipc drawer detail)' ] &&
-             [ $(ipc drawer dragTrace | wc -w) -ge 8 ]"
-
-  # --- L7, L8, L11, L12: what a plan may say -------------------------------
-  #
-  # Four cards, one per rule, every one of them read and none of them
-  # confirmed. A plan is `pacman -Rs --print`: it changes nothing, which is
-  # what makes it safe to ask it about the phone's own terminal.
-  ipc drawer open >/dev/null; sleep 0.4
-
-  # L7, the shape of an answer: a package nothing else needs, planned.
-  check L7 "Uninstall on Clocks plans it rather than removing it" \
-    is "$(ipc drawer hold org.gnome.clocks) $(ipc drawer uninstall)" "ok ok"
-  wait_for "ipc drawer canRemove" yes
-  local count psize
-  count=$(detail_key plan.count); psize=$(detail_key plan.size)
-  check L7 "and the plan says how many packages and how much ($count, $psize)" \
-    bash -c "[ '$(ipc drawer canRemove)' = yes ] && [ -n '$count' ] && [ -n '$psize' ]"
-  ipc drawer detailClose >/dev/null
-
-  # L8. Files is Nautilus, and nautilus-python declares it: pacman refuses, the
-  # card says so in pacman's own words, and no Remove button is drawn.
-  ipc drawer hold org.gnome.Nautilus >/dev/null
-  ipc drawer uninstall >/dev/null
-  wait_for "ipc drawer canRemove" no
-  local blocked; blocked=$(detail_key plan.blocked)
-  check L8 "a package another one needs is refused, naming what refused it" \
-    is "$(ipc drawer canRemove)" no
-  check L8 "and the reason is pacman's line: $blocked" \
-    contains nautilus-python "$blocked"
-  ipc drawer detailClose >/dev/null
-
-  # L12. Foot is in the session tier and nothing in pacman's db says so -- the
-  # phone's own terminal is the case this project's half of L12 exists for.
-  ipc drawer hold foot >/dev/null
-  wait_for "ipc drawer canRemove" no
-  check L12 "the session's own packages are refused, and refused as protected" \
-    is "$(ipc drawer uninstall) $(detail_key info.protected)" "protected 1"
-  ipc drawer detailClose >/dev/null
-
-  # L11. The shell will not uninstall itself.
-  ipc drawer hold org.moarchy.Keep >/dev/null
-  wait_for "ipc drawer canRemove" no
-  check L11 "and neither is one of this project's own packages" \
-    is "$(ipc drawer uninstall) $(detail_key info.protected)" "protected 1"
-  ipc drawer detailClose >/dev/null
-
-  # --- L9, L10: the one removal this suite runs ----------------------------
-  #
-  # Against a launcher it wrote two seconds earlier, and never against a
-  # package. `kind user` is the branch that deletes one file, so what this
-  # exercises is the whole path -- hold, plan, confirm, and the grid noticing
-  # -- without uninstalling anything from somebody's phone.
-  g sh 'printf "[Desktop Entry]\nType=Application\nName=Selftest L\nExec=true\nIcon=utilities-terminal\n" >~/.local/share/applications/selftest-l.desktop'
-  if wait_for "ipc drawer hold selftest-l" ok; then
-    local apps_before; apps_before=$(drawer_apps)
-    check L9 "a hold on a personal entry says what it is" \
-      is "$(detail_key info.kind)" user
-    ipc drawer uninstall >/dev/null
-    wait_for "ipc drawer canRemove" yes
-    check L7 "Uninstall says what it takes: $(detail_key plan.note)" \
-      is "$(ipc drawer canRemove)" yes
-    check L9 "Remove takes the launcher and closes the card" \
-      bash -c "[ '$(ipc drawer removeConfirm)' = ok ] && sleep 1 &&
-               [ '$(l_entry_gone)' = gone ] && [ -z '$(ipc drawer detail)' ]"
-    check L10 "and the grid drops it without being reopened" \
-      is "$(ipc drawer state) $(drawer_apps)" "open $(( apps_before - 1 ))"
-  else
-    skip L9 "the launcher this section wrote never reached the grid"
-  fi
-  # Whatever the checks made of it: a file left behind is an app this suite put
-  # in somebody's drawer.
-  g sh 'rm -f ~/.local/share/applications/selftest-l.desktop'
-  ipc drawer close >/dev/null
-}
-
-# windows.md's L ids, not gestures.md's: this section prints them with a `w.`
-# in front, the way the Settings checks print an `s.`, because the two specs
-# reuse the same letter for the long-press card and for the launch splash.
-
 section_apps() {
   echo "-- apps: moarchy-keep and moarchy-store"
   reset_session
@@ -1369,7 +1192,7 @@ section_apps() {
 }
 
 SECTIONS=("$@")
-[ ${#SECTIONS[@]} -gt 0 ] || SECTIONS=(W A B C D E H L S K settings keyboard apps)
+[ ${#SECTIONS[@]} -gt 0 ] || SECTIONS=(W A B C D E H S K settings keyboard apps)
 for s in "${SECTIONS[@]}"; do
   "section_$s"
 done

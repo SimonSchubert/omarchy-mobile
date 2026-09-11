@@ -31,6 +31,7 @@
 //   EdgeGestures.qml  the strip, the home screen, and the gestures on both
 //   Carousel.qml      recent apps
 //   AppDrawer.qml     the app grid
+//   Splash.qml        the launching app's icon, from the tap to its window
 //   WifiScreen.qml, BluetoothScreen.qml, SettingsScreen.qml
 //                     screens that are windows (gestures.md K), each through
 //                     MobileAppWindow.qml. Settings' pages are data, in
@@ -58,9 +59,9 @@
 // ---------------------------------------------------------------------------
 // IPC targets
 // ---------------------------------------------------------------------------
-// `gestures`, `recents`, `drawer`, `shade`, `bar`, `wifi`, `bluetooth` and
-// `settings` -- moarchy's names, so every check moarchy's spec writes as
-// `omarchy-shell recents state` runs here verbatim.
+// `gestures`, `recents`, `drawer`, `splash`, `shade`, `bar`, `wifi`,
+// `bluetooth` and `settings` -- moarchy's names, so every check moarchy's spec
+// writes as `omarchy-shell recents state` runs here verbatim.
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
@@ -131,6 +132,29 @@ Item {
     if (!name) return null
     var e = root.entryIndex[String(name).toLowerCase()]
     return e === undefined ? null : e
+  }
+
+  // ------------------------------------------------------------- launching
+  //
+  // windows.md L1. Every launch this shell makes goes through here, so that
+  // every one of them gets the splash: the drawer's grid, its search field,
+  // its `launch` IPC -- which is the store's Open (L9) -- and a tap on a
+  // notification card from an app with no window (shade.md S27).
+  //
+  // The splash opens BEFORE the library is asked, not after: `launch` forks
+  // gtk-launch through uwsm-app, and the icon is meant to be on screen in the
+  // frame the tap produced rather than in the one the fork returns in.
+  //
+  // `entry` is the desktop entry when the caller has one, which is where both
+  // the icon and the name come from; `desktopId` is for the one caller that
+  // does not -- `drawer launch` with an id the grid lists no entry for, which
+  // the library is asked to launch anyway. That one gets L7's outline.
+  function launchApp(entry, desktopId): void {
+    if (!root.apps) return
+    var id = String((entry ? entry.id : desktopId) || "")
+    if (!id) return
+    splash.begin(entry ? root.apps.iconSource(entry.icon) : "", id)
+    root.apps.launch(id, entry ? root.apps.entryName(entry) : id)
   }
 
   // Deep enough to hit without looking, shallow enough that it rarely lands on
@@ -343,6 +367,11 @@ Item {
           : name === "bluetooth" ? bluetoothScreen
           : name === "settings" ? settingsScreen : null
     if (!s) return false
+    // L5. Settings is a .desktop entry whose Exec summons this shell rather
+    // than starting a process, so the launch that opened it is over now: its
+    // window may already be up and focused, in which case no toplevel moves
+    // and nothing else would ever take the splash down.
+    splash.finish()
     s.open(JSON.stringify({ returnTo: returnTo || "", page: page || "" }))
     return true
   }
@@ -374,6 +403,11 @@ Item {
 
   Shade {
     id: shade
+    host: root
+  }
+
+  Splash {
+    id: splash
     host: root
   }
 

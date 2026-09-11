@@ -110,11 +110,12 @@ here once it lands:
 | `weather-panel-fit.patch` | The weather panel's hero row overlaps itself and its forecast row clips in a narrow popup | [#11238](https://github.com/omacom/omarchy/pull/11238) |
 | `plugin-manifest-kinds.patch` | A plugin that declares `kind: "menu"` never gets the app library, because its manifest's `kinds` is not an `Array` after a `QVariant` round trip | not submitted yet |
 | `notification-popups-bar-opt-out.patch` | A bar that shows notifications itself cannot turn the toasts off, so they float over its shade and every app | not submitted yet |
+| `launch-osd-bar-opt-out.patch` | A bar that answers a launch itself cannot turn the launch OSD off, so a panel reading "Launching…" arrives over the app it announces | not submitted yet |
 
 The first three matter only on a narrow screen and change nothing at desktop
-width. The fourth is a plain bug. The fifth is a hook that does nothing unless
-a bar asks for it, so desktop Omarchy keeps its toasts. None of them is specific
-to aarch64 or to phones.
+width. The fourth is a plain bug. The last two are hooks that do nothing unless
+a bar asks for them, so desktop Omarchy keeps its toasts and its launch panel.
+None of them is specific to aarch64 or to phones.
 
 Three divergences are deliberate and will stay, because they come from building
 a phone image rather than from aarch64:
@@ -177,6 +178,15 @@ it on.
   a bell in the status bar says something is waiting. Holding the Wi-Fi or
   Bluetooth tile opens that radio's screen, which is the way to both: neither
   is in the drawer.
+- **Tap an app and its own icon comes up on the wallpaper**, centred, until its
+  window appears -- the phone's answer to "did that register" on a VM where an
+  app takes seconds to map. Upstream shows a rounded panel reading "Launching
+  Files..." two seconds after the tap instead, which is most of the way through
+  the launch it is announcing; the bar turns that off
+  (`launch-osd-bar-opt-out.patch`) and
+  [`Splash.qml`](default/etc/skel/.config/omarchy/plugins/mobile.shell/Splash.qml)
+  draws the icon. The surface is the size of the icon and its input region is
+  one pixel, so the pill, the back edge and the bar stay live underneath it.
 - **Screens are windows**, so each gets a workspace and a carousel card: Wi-Fi,
   Bluetooth and Settings. Settings is ten phone-style sections over upstream's
   Omarchy menu, opened from the shade's gear, its power glyph (straight to

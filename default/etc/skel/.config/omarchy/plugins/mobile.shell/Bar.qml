@@ -70,6 +70,10 @@ Item {
   //                                 every notification in the history the
   //                                 shade lists and toasts none of them
   //                                 (patches/notification-popups-bar-opt-out.patch)
+  //   launchOsd                     false, so services/AppLibrary.qml shows no
+  //                                 launch panel: this shell draws the app's
+  //                                 own icon instead (Splash.qml, windows.md
+  //                                 L1) -- (patches/launch-osd-bar-opt-out.patch)
   // Called behind a typeof guard, so a missing one is survivable:
   //   summonBarWidget / hideBarWidget / isBarWidgetOpen   shell.summon routing
   //   panelWidgetIdAt                                     togglePanelAt IPC
@@ -83,6 +87,12 @@ Item {
   // was an Overlay surface over the top 170px of every app and every sheet,
   // taking their touches until it expired.
   readonly property bool notificationPopups: false
+
+  // windows.md L1. No launch OSD either, for the same shape of reason: this
+  // shell answers a tap with the app's own icon, in the frame the tap
+  // produced, where upstream's panel arrives two seconds later and says
+  // "Launching Files..." over whatever is on screen.
+  readonly property bool launchOsd: false
 
   // This bar hosts no widgets, so every widget-routing call has one honest
   // answer. Returning false rather than omitting the function is what makes

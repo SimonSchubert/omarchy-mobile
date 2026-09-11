@@ -796,8 +796,9 @@ Item {
     } else if (kind === "focus") {
       root.host.focusToplevel(root.windowFor(row))
     } else {
-      var entry = root.host.entryFor(row.app)
-      root.host.apps.launch(entry.id, root.host.apps.entryName(entry))
+      // Through the host, so a card's launch gets the same splash a tap in
+      // the drawer gets (windows.md L1).
+      root.host.launchApp(root.host.entryFor(row.app), "")
     }
     root.close()
     root.dismissRow(row)

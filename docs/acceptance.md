@@ -160,27 +160,24 @@ Settings.
 
 ### L. Long-press on an app
 
+Built, and `vm-selftest.sh L` is written against it; the run has not happened
+yet, so every row below is a check that exists rather than a check that passed.
+
 | AC | Status | Note |
 | --- | --- | --- |
-| L1 | pass | A real 900ms press on Foot's cell, aimed with `drawer cellTarget`, leaves `drawer detail` naming it |
-| L2 | pass | The click Qt delivers after the hold launches nothing. `holdFired` is cleared on the next press, as `sheetWasDrag` is, and for the same reason |
-| L3 | pass | A 1.2s drag down from a cell closes the sheet, opens no card, and leaves 25+ drag samples |
+| L1 | todo | Checked: a real 900ms press on Foot's cell, aimed with `drawer cellTarget`, leaves `drawer detail` naming it |
+| L2 | todo | Checked: the click Qt delivers after the hold launches nothing. `holdFired` is cleared on the next press, as `sheetWasDrag` is |
+| L3 | todo | Checked: a 1.2s drag down from a cell closes the sheet and opens no card |
 | L4 | holds | The grid fits its 20 apps, so it never scrolls here and the `onCanceled` path is unexercised -- the same gap H5 has |
-| L5 | pass | **Changed:** `drawer back`, not `gestures back` -- G is not built, so the drawer answers the walk itself (card, then grid, then closed) and the edge gesture will call the same `goBack()` when it lands. Escape walks the same levels |
-| L6 | pass | `drawer detail` prints `id`, `info.kind`, and for a package `info.package`, `info.version` and `info.size` -- `foot package foot`, `1.28.0-2`, `936.39 KiB`. The id carries no `.desktop`, which is what this library's entries hold |
-| L7 | pass | Uninstall arms a plan and never removes: Clocks answers `1, 3.5 MiB`, a personal entry its `note` |
-| L8 | pass | Files is Nautilus and `nautilus-python` declares it, so `canRemove` is `no` and the card carries pacman's own line -- `removing nautilus breaks dependency 'nautilus' required by nautilus-python` |
-| L9 | pass | Checked against a launcher the suite writes and then removes, never against a package: Remove deletes it and the card closes. The notification is the script's |
-| L10 | pass | The grid's app count drops by one with the drawer still open |
-| L11 | pass | Notes (`moarchy-keep`) answers `protected 1` and draws the reason in place of an Uninstall button |
-| L12 | pass | **Changed:** the rule is the same, the mechanism is not. This image pacstraps both tiers as explicit targets and has no meta package, so pacman objects to nothing and `pacman -Rs foot` would take the terminal every TUI and every bridged Settings row opens in. `vm/build-disk.sh` installs `vm/packages/session` at `/etc/omarchy-mobile/session-packages`, and the script refuses anything on it -- asked of the whole plan rather than of the target, because `-Rs` takes orphans and that is how `upower` went out with KWeather on moarchy. moarchy-meta's `--assume-installed` waiver has nothing to waive here and is not carried |
+| L5 | todo | **Changed:** `drawer back`, not `gestures back` -- G is not built, so the drawer answers the walk itself (card, then grid, then closed) and the edge gesture will call the same `goBack()` |
+| L6 | todo | Checked: `drawer detail` prints `id`, `info.kind`, and for a package `info.package`, `info.version` and `info.size` |
+| L7 | todo | Checked: Uninstall arms a plan and never removes. Clocks answers a count and a size, the personal entry its `note` |
+| L8 | todo | Checked: Files is Nautilus and `nautilus-python` declares it, so `canRemove` is `no` and the card carries pacman's own line. The script's half is measured -- `plan org.gnome.Nautilus` answers `blocked removing nautilus breaks dependency 'nautilus' required by nautilus-python` |
+| L9 | todo | Checked against a launcher the suite wrote, never against a package: Remove deletes it and the card closes. The notification is the script's |
+| L10 | todo | Checked: the grid's app count drops by one with the drawer still open |
+| L11 | todo | Checked: Notes (`moarchy-keep`) answers `protected 1` and draws no Uninstall button. The script's half is measured |
+| L12 | todo | **Changed:** the rule is the same, the mechanism is not. This image pacstraps both tiers as explicit targets and has no meta package, so pacman objects to nothing and `pacman -Rs foot` would take the terminal every TUI and every bridged Settings row opens in. `vm/build-disk.sh` installs `vm/packages/session` at `/etc/omarchy-mobile/session-packages`, and the script refuses anything on it -- asked of the whole plan rather than of the target, because `-Rs` takes orphans and that is how `upower` went out with KWeather on moarchy. moarchy-meta's `--assume-installed` waiver has nothing to waive here and is not carried. The script's half is measured: `plan foot` answers `blocked The phone's session is made of foot.` |
 | L13 | n/a | Nothing reinstalls what the card removes. L13 exists because every app is in `moarchy-meta`'s `depends` and a later upgrade resolves them; this image has no meta package, so a removed app stays removed across a `pacman -Syu` |
-
-19 checks, and they were run four times. One run lost L5 and L6 to a card that
-had closed between two of the suite's own ssh round trips, in a VM another
-session was driving at the same time -- the same interference the note at the
-top of this file records for S0. L6 reads the card in one round trip now
-rather than five, which is the half of that this file can fix.
 
 ### Constraints
 

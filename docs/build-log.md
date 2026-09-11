@@ -1818,3 +1818,124 @@ inferred half is `default/etc/skel/.config/mimeapps.list` and
 seeds `/etc/skel` from upstream's `config/`, and upstream's `config/` carries no
 `mimeapps.list`, so nothing overwrites it. `scripts/vm-push.sh` carries both so
 that a push and a build agree.
+
+---
+
+## 2026-09-12 -- the launch splash, and what a sandboxed plugin cannot see
+
+Tap an app and nothing happens for a second or two. Upstream answers that with
+an OSD: `AppLibrary.launch()` arms a 2000ms timer, and if no toplevel has
+appeared by then it execs `omarchy-shell osd show` with a rocket glyph and
+"Launching Files…". Two seconds is most of a launch on this VM, so the panel
+arrives to announce a launch you have already given up on and stays over the
+window when it maps. moarchy replaced it with the app's own icon on the
+wallpaper, specified as windows.md L1-L9, and that spec was copied into
+`docs/spec/` here with the rest of them and left `todo`.
+
+### The mechanism could not be copied, only the surface
+
+moarchy draws the splash off AppLibrary's own launch state -- `launchOsdOpen`,
+`launchSerial`, `closeLaunchFeedback()` -- because `moarchy.splash` is a plugin
+inside a shell it patches anyway: `port-4x.patch` adds `launchIcon`, drops the
+delay to 0, deletes the two `osd` execs, and hands the plugin namespace the
+trusted host.
+
+An installed plugin here gets `services/PluginAppLibraryApi.qml` instead, which
+is seven callbacks -- `entryName`, `entrySubtext`, `sortedEntries`,
+`iconSource`, `refreshIcons`, `launch`, `remove` -- and no launch feedback of
+any kind. There is nothing to read and nothing to cancel. So the state is the
+shell plugin's: `Shell.launchApp()` is now the one place in `mobile.shell` that
+asks the library to launch anything, it opens `Splash.qml` in the same call,
+and `Splash.qml` decides when the launch is over.
+
+### What upstream is asked for is silence
+
+The one thing a plugin cannot do from outside is stop the OSD, so
+`patches/launch-osd-bar-opt-out.patch` gives the bar the same opt-out it
+already has from the notification toasts: `AppLibrary` grows a
+`launchOsdWanted`, `shell.qml` binds it to
+`!(shell.bar && shell.bar.launchOsd === false)`, and `Bar.qml` declares
+`launchOsd: false`. Seven lines in the shell, and a desktop whose bar says
+nothing keeps its OSD. It is the sixth patch in `patches/` and the second of
+that shape, which is the argument for it: a bar that answers something itself
+is the general case, and toasts were the first instance of it.
+
+`plugin-manifest-kinds.patch` touches `shell.qml` 1300 lines further down and
+now lands with a five-line offset. Both were applied to a pristine 4.0.3
+`shell.qml` in that order to check it, and both applied.
+
+### When a launch is over, and a hazard that turned out not to exist
+
+Upstream finishes on either a higher toplevel count or a changed
+`ToplevelManager.activeToplevel`, and the second half is left out here. The
+reason written first was the wrong one, and it is worth recording because it
+looked certain: the drawer takes the seat's keyboard on a tap (`inputFull`), so
+closing it ought to hand focus back to the window underneath, and upstream's
+rule would then end every launch made from a drawer opened over a running app
+-- the splash down again before the app it announces had mapped.
+
+Measured, that does not happen. With `sel-x` (foot) mapped and focused:
+
+| | `hyprctl activewindow` |
+| --- | --- |
+| window focused, nothing else up | `sel-x` |
+| drawer open over it | `sel-x` |
+| after a real tap on the sheet | `sel-x` |
+| drawer closed again | `sel-x` |
+
+A window keeps its activated state while a layer surface holds OnDemand
+keyboard focus, so there is no handback to be caught out by. The half is still
+left out, for the smaller reason: a focus change during a launch -- going home
+over it, a window closing underneath it -- is not the app arriving, and the two
+rules that say the app arrived already cover every way it can.
+
+So `Splash.qml` ends a launch on one of four events, each of them a thing that
+happened rather than a guess at how long an app takes:
+
+| | |
+| --- | --- |
+| a window that was not there when the launch started | L4 |
+| the active window's app id matching the id that was launched -- a second tap on an app already running, where no new window is ever going to map | |
+| one of the shell's own screens opening, since Settings' `Exec` summons this shell rather than starting a process | L5 |
+| fifteen seconds | L6 |
+
+The baseline is the list of toplevel objects, not a count: a second window of an
+app already running is a launch that finished, and counting per app id would
+miss it.
+
+### Checked in the running guest
+
+`vm-push.sh`, then `./scripts/vm-selftest.sh splash`: **13 passed**, first run.
+The new section prints windows.md's ids with a `w.` in front, the way the
+Settings checks print an `s.`, because gestures.md's `L` is the long-press card
+and windows.md's `L` is this.
+
+| | |
+| --- | --- |
+| `omarchy-shell splash geometry` | `w=130 h=130 icon=96 layer=overlay` |
+| the surface, off `hyprctl layers` | `115 295 130 130` -- centred on a 360x720 screen by the compositor, with no anchor asked for on either axis |
+| `splash drawn`, mid-launch | `icon file:///usr/share/icons/hicolor/scalable/apps/foot.svg` |
+| `splash drawn`, for an id no entry answers to | `fallback` |
+| `splash state` 16s after that | `closed` |
+
+L3 is checked with a finger rather than by reading the mask back: with the
+splash up for its full fifteen seconds, a drag from the status bar to y=400 --
+straight through the middle of the screen, where the icon is -- still opens the
+shade, and the splash is still up afterwards. On this compositor the pointer is
+not grabbed across a layer surface's edge, so a splash with an input region
+would have taken the rest of that gesture.
+
+A real tap on the Calculator cell, rather than the `drawer launch` IPC the
+section uses, puts up
+`icon file:///usr/share/icons/hicolor/scalable/apps/org.gnome.Calculator.svg`
+and takes it down when the window maps ~1s later. That is the screenshot in
+[spec/windows.md](spec/windows.md).
+
+### One bug, and it was a name
+
+The first push loaded nothing: `Splash.qml[82:3]: Cannot override FINAL
+property`, and then `Shell.qml[409:3]: Type Splash unavailable`. The property
+was called `baseline` -- which is one of `Item`'s anchor lines, and FINAL. The
+shell logs both lines and carries on, so the only symptom on the phone is that
+tapping an app goes back to having no feedback at all. Renamed
+`windowsAtLaunch`, with the reason in the file.
