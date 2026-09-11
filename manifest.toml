@@ -130,8 +130,8 @@ pkgbuilddir = "packaging"
 # ---------------------------------------------------------------------------
 [pkg.moarchy-keep]
 url         = "https://github.com/SimonSchubert/moarchy-keep"
-tag         = "0.1.0-1"
-ref         = "ddc7dcad790e16b32c043a7632a810c6076d70d6"
+tag         = "0.1.1-1"
+ref         = "4b05488eb37c11a3ab68860ccabbc9be110fd074"
 pkgbuilddir = "aur/moarchy-keep"
 
 # The store is not, and it is the one entry in this file that clones at HEAD.
