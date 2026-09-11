@@ -1440,3 +1440,119 @@ Not checked: a disk built from this change. The image in `vm/out/` is the one
 the shared VM runs from, so the pacstrap half is inferred, not seen: the
 keyring's `post_install` populating a fresh keyring, and the rule landing
 through `default/`.
+
+---
+
+## 2026-09-12 -- the GNOME apps follow the theme
+
+Eleven of this image's apps are GNOME's, and none of them followed the theme.
+Upstream's whole GTK story is `omarchy-theme-set-gnome`: light or dark, and an
+icon theme. Everything after that is stock Adwaita, so on tokyo-night Calendar
+sat in Adwaita grey with a stock blue accent beside a shell drawn in #1a1b26
+and #7aa2f7. On a desktop that is Nautilus and some dialogs; here it is the app
+tier.
+
+### Solved elsewhere first, which is worth saying
+
+This is not an unknown problem. basecamp/omarchy#7557 is open on exactly it,
+with the same root cause -- libadwaita ignores `gtk-theme`, and the only user
+lever is `~/.config/gtk-4.0/gtk.css`, which Omarchy never writes -- and names
+three earlier requests (#2356, #2789, #1425) closed as "COMPLETED" inside one
+25-minute window on 2026-02-01 with nothing implemented. Two PRs are open and
+unreviewed, both shipping a `default/themed/gtk.css.tpl` plus a
+`bin/omarchy-theme-set-gtk`: #8408 (+458, with a nautilus-python extension that
+reloads Files over D-Bus) and #8584 (+340, whose description says it was "100%
+vibe coded"). Outside the repo there is imbypass/omarchy-theme-hook (203 stars,
+a `theme-set.d` hooklet plus `adw-gtk3`), JJDizz1L/paint-omarchy-nautilus (in
+the AUR, live-reloading but Nautilus-only for the full palette) and
+oldjobobo/thpm (MIT, Textual TUI, its Nautilus palette default-disabled and
+labelled Experimental). omacom/aether went the other way: it now *retires* the
+GTK stylesheets its older versions installed.
+
+So the shape below -- a template rendered per theme -- is what upstream would
+land too. What this repo does differently is put it in the USER template
+directory, `~/.config/omarchy/themed/`, which `omarchy-theme-set-templates`
+reads before its own: no patch, and if upstream's PR ever lands, user templates
+still render first and this one is deleted deliberately rather than colliding.
+
+Three files, all in `default/etc/skel`: `omarchy/themed/gtk.css.tpl`, the
+symlink `gtk-4.0/gtk.css` -> `~/.local/state/omarchy/current/theme/gtk.css`, and
+`omarchy/hooks/theme-set.d/50-gtk-apps.sh`.
+
+### Measured, because sed cannot compute contrast
+
+The template substitutes colours; it cannot test them. Two choices were settled
+off the 22 stock themes' `colors.toml` before writing it:
+
+| Question | Answer | Worst case |
+| --- | --- | --- |
+| What is legible ON the accent? | the theme `background` | miasma, 90/255 luminance apart |
+| What is legible on the window? | `bright_foreground` | everforest, 147/255 apart |
+
+There is no stock theme where `foreground` beats `background` as the text on
+the accent, which is what makes a single sed-substitutable answer defensible.
+Upstream #8408 picked `background` too, by a luma-distance test at runtime.
+
+### Which syntax is load-bearing
+
+libadwaita's own documentation says the `@define-color` names are compatibility
+only and "don't pick up overridden colors", while every community solution
+still writes them. Rather than guess, the rendered file was cut down in the
+guest to one block at a time and Calendar relaunched against osaka-jade:
+
+| Rendered file | window ground | today's circle |
+| --- | --- | --- |
+| `@define-color` block only | #111e19 | #4f9575 |
+| `:root` variables only | #111e19 | #4f9575 |
+| theme's own values | #111c18 | #509475 |
+
+Identical. On libadwaita 1.9.3 either half carries the theme alone, and the
+gap against the theme's own hex is Hyprland's 0.985 window opacity, the same
+tint `hypr/mobile.lua` documents for the shell's screens. Both blocks are kept:
+variables are what the documentation supports going forward, compat names are
+what a plain GTK4 app that never linked libadwaita reads.
+
+### The daemons, and one pkill that was too wide
+
+GTK parses the user stylesheet once per process. A GNOME app is D-Bus
+activatable, so closing its window leaves a `--gapplication-service` daemon
+behind that repaints the old theme on next open -- which is why the hook exists.
+
+The first version was `pkill -f -- '--gapplication-service'`, and the first
+thing it matched was the ssh command looking for those daemons: the flag was
+inside the shell's own `-c` string. A theme switch that kills somebody's ssh
+session is worse than a stale palette, so the hook now walks
+`/proc/<pid>/cmdline` and requires the flag to be the LAST argument -- true of
+`gnome-calendar --gapplication-service` and of
+`python3 /usr/bin/gnome-music --gapplication-service`, never of a shell running
+a command string.
+
+### Checked in the running guest
+
+Pushed with `vm-push.sh`, then `omarchy-theme-set` across three themes:
+
+| | rendered | Calendar |
+| --- | --- | --- |
+| tokyo-night | #1a1b26 / #7aa2f7, no `{{` left | ground #1e1c27, text #bfc8f3, today #7aa0f5 |
+| catppuccin-latte (light) | #eff1f5 / #1e66f5, `prefer-light` | light ground, slate text, blue today |
+| osaka-jade | #111c18 / #509475 | ground #111e19, today #4f9575 |
+
+The hook's effect was checked the same way: `gnome-music` was running as a
+daemon before the switch and was gone after it, with no window closed.
+
+Not covered, deliberately. **Geary is GTK3** (46.0, libhandy, webkit2gtk-4.1)
+and cannot be recoloured this way -- `@define-color` in a user stylesheet is
+provider-scoped and never reaches the theme's own rules, which #7557 verified
+with an offscreen render. It needs `adw-gtk-theme` (127 KB, `any`, and ALARM's
+aarch64 mirror carries it) plus a `gtk-theme` override, which is its own
+change. And a window that is already mapped keeps its colours until it is
+reopened; retinting one in place needs a per-app extension, which is a lot of
+moving parts for a phone where reopening an app is one tap.
+
+Not checked: a disk built from this change. Everything above was pushed into
+the running guest, so what is inferred rather than seen is the overlay half --
+the three files landing in `/etc/skel` through `default/`, and `useradd -m`
+copying the symlink into a new user's home as a symlink rather than following
+it. `scripts/vm-push.sh` carries the same three installs so that a push and a
+build agree, but that edit sits on top of another session's in-flight lease
+work and is not part of this commit.

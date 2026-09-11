@@ -386,11 +386,13 @@ highlight `tapSlot − 10`, handing back the gap E4 moved inside them.
 
 ## I. Surfaces outside this repo
 
-Three programs draw this phone's UI and only one of them is here. They cannot
+Four surfaces draw this phone's UI and only one of them is here. Three cannot
 share code — one is a quickshell plugin set, one is a standalone Qt app, one is
-Python and GTK4 — so what they share is this file and the palette underneath it.
+Python and GTK4 — and the fourth is GNOME's own apps, written for a different
+desktop and told about this one only through a file. What they share is this
+file and the palette underneath it.
 
-**I1 One palette, three readers.** The source of truth is the active theme's
+**I1 One palette, four readers.** The source of truth is the active theme's
 `colors.toml`, staged by `omarchy-theme-set` at
 `~/.local/state/omarchy/current/theme/`. Following the staged copy means a theme
 switch is picked up with no knowledge of where themes are installed.
@@ -400,6 +402,15 @@ switch is picked up with no knowledge of where themes are installed.
 | shell plugins | this one | quickshell / QML | `qs.Commons` `Color.*`, per §C |
 | keyboard | [`moarchy-keyboard`](https://github.com/SimonSchubert/moarchy-keyboard) | Qt / QML, standalone | its own theme load; `scripts/fetch-themes.sh` |
 | store | [`moarchy-store`](https://github.com/SimonSchubert/moarchy-store) | Python / GTK4 / libadwaita | `moarchy_store/theme.py` reads `colors.toml` and injects a stylesheet |
+| GNOME's apps | upstream GNOME, unmodified | GTK4 / libadwaita | `~/.config/gtk-4.0/gtk.css`, a symlink to the `gtk.css` this repo's `themed/gtk.css.tpl` renders per theme |
+
+**I1a** That last row is the only one that reads the palette without being
+written to. Calendar, Contacts, Maps and the rest are stock packages: the
+stylesheet GTK already loads for every GTK4 process is the whole integration,
+which is why they are themed here and unthemed on upstream Omarchy, whose GNOME
+step (`omarchy-theme-set-gnome`) sets light or dark and an icon theme and stops.
+Upstream knows — basecamp/omarchy#7557, with two competing PRs open — so this
+is a gap being filled locally, not a disagreement with upstream's direction.
 
 **I2** Every surface degrades to its toolkit's own defaults when the palette is
 absent — a desktop with no Omarchy, a theme with no `colors.toml`, a malformed
