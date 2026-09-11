@@ -293,6 +293,18 @@ account, dead ends included.
 - An image built before 2026-09-11 has no xdg-terminal-exec, and on it every
   Settings row that opens a terminal shows nothing. Rebuild, or install the
   package.
+- An image built before 2026-09-12 has Chromium and neither GNOME Web nor
+  Evince, so the browser is the one that has no narrow layout and PDFs open in
+  it. Rebuild, or in the guest `pacman -S epiphany evince`, then
+  `./scripts/vm-push.sh` for the default handlers and the web app launcher that
+  go with them; `pacman -R chromium` last, since removing it before the
+  launcher is pushed leaves every web app tile execing nothing.
+- Choosing the browser does not make every site narrow. Epiphany's own chrome
+  adapts, and a site laid out with CSS media queries adapts with it, but one
+  that switches on the user agent gets the desktop layout WebKitGTK asks for --
+  WhatsApp Web in a web app window is clipped on the right. Chromium's `--app=`
+  behaved the same way. Whether Epiphany can be told to send a mobile user
+  agent is not investigated.
 - The Wi-Fi and Bluetooth screens are untested: the VM has neither device.
   `mac80211_hwsim` and `hci_vhci` are in its kernel, which is where testing
   them starts.
