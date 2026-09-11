@@ -1,24 +1,19 @@
 # The apps tier: the rest of upstream's omarchy-base.packages that exists for
-# aarch64 and is not needed to bring the session up.
+# aarch64 and is not needed to bring the session up, less the six
+# vm/packages/omitted leaves out on purpose, plus GNOME's phone apps at the end.
 #
 # Installed by default, because "get it running as Omarchy is" means Omarchy's
 # applications and not just its compositor. Skipped by
 # `./scripts/vm-build.sh --session-only`, which is the flag to reach for while
-# iterating on the session: chromium, libreoffice-fresh and kdenlive alone are
-# most of the download, and none of them decide whether Hyprland starts.
+# iterating on the session: chromium alone is nearly a quarter of this tier's
+# download, and none of it decides whether Hyprland starts.
 chromium
 nautilus
 nautilus-python
-sushi
 gnome-disk-utility
-evince
 imv
 mpv
 mpv-mpris
-xournalpp
-libreoffice-fresh
-kdenlive
-moonlight-qt
 gpu-screen-recorder
 libvips
 ffmpegthumbnailer
@@ -95,3 +90,25 @@ xdg-terminal-exec
 # the session tier.
 moarchy-keep
 moarchy-store-git
+
+# --- GNOME's phone apps ---------------------------------------------------
+# Not upstream's: Omarchy is a desktop and leaves calendars, contacts and maps
+# to a browser tab. A phone without them is missing what a phone is for, the
+# reason [pkg.moarchy-keep] gives for Notes. All are libadwaita, so they reflow
+# to the 360px panel, and all are in ALARM's aarch64 [extra].
+#
+# Each fills a gap rather than doubling a tile. Nothing here duplicates
+# chromium, nautilus, foot, imv or mpv, which stay upstream's handlers. Geary is
+# the mail client that upstream's aether would have been (omitted: x86_64-only).
+#
+# About 130 MB of download, against the 400 MB the six omitted packages cost.
+# Most of it is two WebKits that evolution-data-server brings for Calendar and
+# Contacts, and Geary uses webkit2gtk-4.1 too, so it costs only 3 MB more.
+gnome-calculator
+gnome-calendar
+gnome-contacts
+gnome-maps
+gnome-clocks
+gnome-weather
+gnome-text-editor
+geary

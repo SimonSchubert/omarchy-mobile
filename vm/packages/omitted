@@ -75,3 +75,20 @@ sddm                            # in ALARM, and installed by the session tier's
                                 # hyprland` is both what moarchy ships and one
                                 # fewer graphical thing that can fail before
                                 # Hyprland gets a chance to.
+#
+# Upstream's desktop apps that are not in a phone's default set, and the
+# previewer that would pull one of them back in. All six install fine from
+# ALARM. They left the apps tier on 2026-09-11, which took 141 packages and
+# 400 MB off its download, and GNOME's phone apps took their place
+# (vm/packages/apps). `pacman -S` brings any of them back.
+libreoffice-fresh               # desktop office suite; 163 MB on its own
+kdenlive                        # desktop video editor; 183 MB with the KDE
+                                # Frameworks it pulls in
+moonlight-qt                    # game-streaming client
+xournalpp                       # stylus notebook; Notes (moarchy-keep) is the
+                                # note-taking app here
+evince                          # the document viewer; chromium is the
+                                # default for PDFs already
+sushi                           # Nautilus's spacebar previewer. It depends on
+                                # evince, so installing it brings the document
+                                # viewer back, and a phone has no spacebar

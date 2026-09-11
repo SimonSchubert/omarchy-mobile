@@ -60,9 +60,9 @@ tty1 straight into Hyprland, so there is nothing to type.
 ./scripts/vm-selftest.sh                   # the gestures, one line per acceptance criterion
 ```
 
-`./scripts/vm-build.sh --session-only` skips the application tier (chromium,
-libreoffice and kdenlive are most of the download) for fast iteration on the
-session itself.
+`./scripts/vm-build.sh --session-only` skips the application tier (chromium
+alone is nearly a quarter of its download) for fast iteration on the session
+itself.
 
 ## How the image is built
 
@@ -79,9 +79,10 @@ session itself.
 - **The package set.** 120 of upstream's 147 base packages exist for aarch64 in
   Arch Linux ARM. Of the other 27, one is built here from the AUR:
   xdg-terminal-exec, which every terminal Omarchy opens goes through. The other
-  26 are listed with reasons in [`vm/packages/omitted`](vm/packages/omitted).
+  26 are listed with reasons in [`vm/packages/omitted`](vm/packages/omitted),
+  along with six that do exist and are left out on purpose.
   [`session`](vm/packages/session) is what Hyprland and the shell need to start;
-  [`apps`](vm/packages/apps) is the rest.
+  [`apps`](vm/packages/apps) is the rest, plus GNOME's phone apps.
 - **Hyprland is rebuilt.** ALARM moved `aquamarine` to `libaquamarine.so=14`
   without rebuilding `hyprland`, so a plain `pacstrap` fails. This project
   builds Arch's own `hyprland 0.56.2-2` packaging for aarch64 at a commit pinned
@@ -115,8 +116,8 @@ width. The fourth is a plain bug. The fifth is a hook that does nothing unless
 a bar asks for it, so desktop Omarchy keeps its toasts. None of them is specific
 to aarch64 or to phones.
 
-Two divergences are deliberate and will stay, because they come from building a
-phone image rather than from aarch64:
+Three divergences are deliberate and will stay, because they come from building
+a phone image rather than from aarch64:
 
 - **No display manager.** Upstream enables `sddm`. Here tty1 autologins into
   `uwsm start -- hyprland-uwsm.desktop`, because a phone shows no login screen,
@@ -126,6 +127,11 @@ phone image rather than from aarch64:
   moarchy's phone image. `vm-build.sh` authorises your ssh public key so that
   `vm-ssh.sh` can get in (`--no-ssh-key` opts out). That is acceptable only
   because this image is a local development VM and is never published.
+- **A phone's app set.** Upstream's LibreOffice, Kdenlive, Moonlight,
+  Xournal++ and Evince are left out, and so is sushi, which depends on Evince.
+  GNOME's Calculator, Calendar, Contacts, Maps, Clocks, Weather, Text Editor
+  and Geary are added: the apps a phone is expected to have, and libadwaita
+  apps that fit a 360px screen.
 
 ## The mobile UI
 
