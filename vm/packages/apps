@@ -176,9 +176,19 @@ showtime
 adw-gtk-theme
 
 # --- icons -----------------------------------------------------------------
-# Breeze answers icon names nothing else here draws. The App Store asks for
-# `system-software-install`, which otherwise only HighContrast has, as a
-# monochrome glyph the drawer shows as a black blot. The image had Breeze by
+# Breeze answers icon names nothing else here draws. The image had it by
 # accident until 2026-09-11, through kdenlive's kiconthemes; leaving kdenlive
 # out took it away, so it is named here now. 11 MB of download.
+#
+# The App Store used to be the whole reason. It asked for
+# `system-software-install`, which otherwise only HighContrast has, as a
+# monochrome glyph the drawer showed as a black blot. It ships its own icon
+# now, so that name no longer needs answering, and the tempting conclusion is
+# that 11 MB can go with it.
+#
+# It cannot. Four names on visible entries still resolve in Breeze and in
+# nothing else installed, checked against hicolor, Adwaita and
+# /usr/share/pixmaps on 2026-09-12: applications-system,
+# document-print-preview, network-wired and security-medium. Take Breeze out
+# and those four become the black blot the store used to be.
 breeze-icons
