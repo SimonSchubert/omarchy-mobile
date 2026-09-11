@@ -80,7 +80,7 @@ Hyprland 0.56.2 at 360x720 logical.
 | E1 | pass | A screen's card prints its id, `mobile.wifi` (K5, K9) |
 | E2 | pass | **Changed:** focus goes through Hyprland's dispatcher by window address. `Toplevel.activate()` works for other clients' windows and does nothing for the shell's own (K12) |
 | E3 | pass | A real 200px flick on card 0, aimed with `recents cardTarget`, only ever on a card the suite opened |
-| E4 | partial | The next card's left edge is at x=304 of 360, so it peeks in. Paging itself is not checked |
+| E4 | partial | The row runs right to left (E1), so the next card peeks in from the left: its right edge is at x=57 of 360. Paging itself is not checked |
 | E5 | pass | |
 | E6 | pass | SKIP while a window the suite did not open is up |
 | E7 | holds | No clear-all control exists |

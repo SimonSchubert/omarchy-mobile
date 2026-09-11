@@ -5,7 +5,7 @@ top of it rather than instead of it.
 
 <p align="center">
   <img src="docs/screenshots/full-boot-scale2.png" width="24%" alt="Omarchy's shell and themed wallpaper at 720x1440, scale 2">
-  <img src="docs/screenshots/carousel.png" width="24%" alt="The recents carousel over two open terminals, the next card peeking in at the right">
+  <img src="docs/screenshots/carousel.png" width="24%" alt="The recents carousel over two open terminals, the next card peeking in at the left">
   <img src="docs/screenshots/drawer-drag.png" width="24%" alt="The app drawer following a drag up from the wallpaper of a home screen">
   <img src="docs/screenshots/drawer-open.png" width="24%" alt="The app drawer open: a search field and a four-column app grid">
 </p>

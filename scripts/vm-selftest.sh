@@ -347,8 +347,8 @@ section_E() {
     is "$(ipc recents list | wc -l | tr -d ' ')" "$(g nwin)"
   check E1 "the app you just left leads" is "$(ipc recents list | head -1 | cut -d' ' -f1)" sel-b
   local next_card; next_card=$(ipc recents cardTarget 1)
-  check E4 "the next card peeks in at the edge (card 1 spans ${next_card#* * })" \
-    bash -c "[ $(awk '{print $3}' <<<"$next_card") -lt 360 ]"
+  check E4 "the next card peeks in at the left edge (card 1 spans ${next_card#* * })" \
+    bash -c "[ $(awk '{print $4}' <<<"$next_card") -gt 0 ]"
 
   tap $MID_X 650
   check E5 "tapping the scrim dismisses and changes no focus" \
@@ -356,11 +356,11 @@ section_E() {
 
   drag $MID_X $STRIP_Y -200
   local want; want=$(ipc recents list | sed -n 2p | cut -d' ' -f1)
-  # Card 1 is the one peeking in at the right, so its centre is off-screen.
+  # Card 1 is the one peeking in at the left, so its centre is off-screen.
   # Aim at the middle of the part that shows.
-  local l cx cy
-  read -r cx cy l _ <<<"$(ipc recents cardTarget 1)"
-  tap $(( (l + 359) / 2 )) "$cy"
+  local r cx cy
+  read -r cx cy _ r <<<"$(ipc recents cardTarget 1)"
+  tap $(( r / 2 )) "$cy"
   check E2 "tapping card 1 focuses $want and closes the carousel" \
     is "$(g active_class) $(ipc recents state)" "$want closed"
 

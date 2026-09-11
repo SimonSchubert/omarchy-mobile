@@ -417,6 +417,10 @@ Item {
         height: Math.round(recentsWindow.height * 0.56)
 
         orientation: ListView.Horizontal
+        // E1. Laid out from the right: card 0, the app you just left, sits at
+        // the right end and older apps queue up to its left. The model and
+        // every index read over IPC still count from the most recent.
+        layoutDirection: Qt.RightToLeft
         model: root.mru
         clip: false
         opacity: 1 - 0.55 * root.homeHint

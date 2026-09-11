@@ -171,9 +171,10 @@ workspace and the top edge still opens the shade.
 ## E. The carousel
 
 **E1** One card per open app, most recent first, with the app you just left
-leading and marked. A shell app — Settings, Wi-Fi, Bluetooth (K10) — is a window
-and has a card on exactly those terms, with no branch of its own anywhere in the
-carousel (K1).
+leading and marked. The row runs right to left: that card sits at the right
+end and older apps queue up to its left. A shell app — Settings, Wi-Fi,
+Bluetooth (K10) — is a window and has a card on exactly those terms, with no
+branch of its own anywhere in the carousel (K1).
 → `omarchy-shell recents list` has one line per open window, and a shell app's
 line names its plugin id
 
@@ -185,8 +186,8 @@ Settings card that is `xdg_toplevel.close` like any other, so the page stack
 resets with the window (K6).
 → `recents list` is one line shorter
 
-**E4** Swiping sideways pages the row. The next card is partly visible, so it is
-obvious the row can be paged.
+**E4** Swiping sideways pages the row. The next card is partly visible at the
+left edge, so it is obvious the row can be paged.
 
 **E5** Dismissing the carousel without picking anything returns you to whatever
 was on screen before it opened — the app you came from, or the home screen if
