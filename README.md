@@ -4,14 +4,14 @@ Upstream Omarchy on **Hyprland**, on an aarch64 VM, with a mobile UI built on
 top of it rather than instead of it.
 
 <p align="center">
-  <img src="docs/screenshots/full-boot-scale2.png" width="24%" alt="Omarchy's shell and themed wallpaper at 720x1440, scale 2">
-  <img src="docs/screenshots/carousel.png" width="24%" alt="The recents carousel over two open terminals, the next card peeking in at the left">
-  <img src="docs/screenshots/drawer-drag.png" width="24%" alt="The app drawer following a drag up from the wallpaper of a home screen">
+  <img src="docs/screenshots/home.png" width="24%" alt="The home screen: the phone bar, the themed wallpaper, and the home pill">
   <img src="docs/screenshots/drawer-open.png" width="24%" alt="The app drawer open: a search field and a four-column app grid">
+  <img src="docs/screenshots/shade.png" width="24%" alt="The shade pulled down: clock, quick-settings tiles, the volume slider, and three notifications">
+  <img src="docs/screenshots/carousel.png" width="24%" alt="The recents carousel over two open terminals, the next card peeking in at the left">
 </p>
 
-<sub>Straight off the VM, not mocked: the shell and its themed wallpaper, the
-recents carousel, the app drawer following a drag up, and the drawer open.</sub>
+<sub>Straight off the VM, not mocked: the home screen, the app drawer, the
+shade, and the recents carousel.</sub>
 
 This is the sibling of [moarchy](https://github.com/SimonSchubert/moarchy), which
 puts Omarchy on an original PinePhone. That phone's hardware forces moarchy to
