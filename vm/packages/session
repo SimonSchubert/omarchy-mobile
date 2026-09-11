@@ -42,6 +42,15 @@ quickshell
 qt6-wayland
 qt6-imageformats
 
+# --- the on-screen keyboard -----------------------------------------------
+# moarchy's, built by vm/build-packages.sh from [pkg.moarchy-keyboard] in
+# manifest.toml and found in the local repo vm/build-disk.sh lists ahead of
+# ALARM's. In this tier and not in apps, because a phone with no way to type
+# has not finished starting. layer-shell-qt, its one dependency the shell does
+# not already pull in, is in [extra] and comes with it. hypr/mobile.lua starts
+# it.
+moarchy-keyboard
+
 # --- rendering ------------------------------------------------------------
 # llvmpipe (mesa) is what clears Hyprland's GLES floor with no host GPU
 # involved. vulkan-swrast is lavapipe, the fallback if anything asks for

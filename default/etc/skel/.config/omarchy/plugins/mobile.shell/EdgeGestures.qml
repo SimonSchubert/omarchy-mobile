@@ -13,12 +13,16 @@
 //                pointer event, so nothing here asks for it.
 //
 // ---------------------------------------------------------------------------
-// The three surfaces
+// The four surfaces
 // ---------------------------------------------------------------------------
-//   strip   Overlay, bottom, 20px, exclusive, INPUT-TRANSPARENT.
+//   strip   Overlay, bottom, 20px, reserves nothing, INPUT-TRANSPARENT.
+//           Draws the pill, on the screen's last rows and over every sheet.
+//           It takes no input: it cannot grow without a resize.
+//   band    Bottom, bottom, 20px, exclusive, draws nothing, no input.
 //           Reserves the band off every window the way Android's navigation
-//           bar does, so an app is laid out above the pill, and draws the
-//           pill. It takes no input: it cannot grow without a resize.
+//           bar does, so an app is laid out above the pill. On Bottom so that
+//           it is arranged before the on-screen keyboard and keeps the screen
+//           edge (see the surface itself).
 //   edge    Overlay, full screen, reserves nothing. Owns the strip gesture.
 //           Its input region is the band at rest and the whole screen from
 //           press to release, so a drag that leaves the band keeps being
@@ -438,6 +442,7 @@ Item {
         // one pixel of the screen against what this surface says it painted.
         + " band=" + (root.bandFilled ? 1 : 0)
         + " fill=" + Color.background
+        + " kbd=" + (root.keyboardUp ? 1 : 0)
     }
   }
 
@@ -446,8 +451,9 @@ Item {
     id: strip
 
     // Anchoring left+right+bottom without `top` gives a full-width band whose
-    // height we set, and ExclusionMode.Auto reserves exactly that height off
-    // every window.
+    // height we set. It reserves nothing -- the band surface below does that --
+    // so Ignore places it against the whole output: on the screen's last rows,
+    // whatever else is reserving there.
     anchors { bottom: true; left: true; right: true }
     implicitHeight: root.stripHeight
     color: "transparent"
@@ -455,7 +461,7 @@ Item {
     WlrLayershell.namespace: "omarchy-mobile-strip"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-    exclusionMode: ExclusionMode.Auto
+    exclusionMode: ExclusionMode.Ignore
 
     // No input at all: an empty mask, so the press falls through to the edge
     // surface, which can grow.
@@ -491,6 +497,37 @@ Item {
       }
       Behavior on color { ColorAnimation { duration: 140 } }
     }
+  }
+
+  // ============================================================= the band
+  //
+  // The strip's reservation, split off the strip and put on Bottom.
+  //
+  // Hyprland resolves exclusive zones layer by layer from Background up to
+  // Overlay, the reverse of Sway, which starts at Overlay. On one edge the
+  // lowest layer gets the screen's edge and each one above is stacked on top
+  // of it. While the strip reserved from Overlay, the on-screen keyboard on
+  // Top was arranged first. Measured: the keys took y 520-720 and the strip
+  // landed at 500-520, between the app and the keys.
+  //
+  // moarchy settles the same contest by keeping the keyboard on Top, below the
+  // strip's Overlay, because Sway starts at Overlay. Here the keyboard runs
+  // exactly as moarchy ships it and the reservation moves under it instead.
+  // It draws nothing and takes no input: Bottom is below every window and
+  // every sheet, so the band is reserved from where nothing can be seen.
+  PanelWindow {
+    id: band
+
+    anchors { bottom: true; left: true; right: true }
+    implicitHeight: root.stripHeight
+    color: "transparent"
+
+    WlrLayershell.namespace: "omarchy-mobile-band"
+    WlrLayershell.layer: WlrLayer.Bottom
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Auto
+
+    mask: Region {}
   }
 
   // ======================================================= the edge surface
@@ -537,14 +574,24 @@ Item {
 
   // I1a. Whether the strip's band is the theme's background rather than the
   // wallpaper: whenever a window is focused. A window stops at the top of the
-  // strip -- the strip reserves the band off every window -- so without this
+  // strip -- the band surface reserves it off every window -- so without this
   // Settings, Wi-Fi and every app end in a stripe of wallpaper with the pill
   // drawn on it. An empty workspace keeps the wallpaper, because it is the
   // home screen. Asked the way the carousel's activeToplevel() asks it.
   //
-  // I1a's other clause, the wallpaper again while the on-screen keyboard is
-  // up, waits for a keyboard: this image has none (F3).
+  // I1a's other clause: the wallpaper again while the on-screen keyboard is up,
+  // when the band sits under the keyboard rather than under the app.
+  //
+  // Read off the home surface's own height, not from sm.puri.OSK0, which would
+  // be a DBus round trip and stale between asks. The home surface reserves
+  // nothing, so it is arranged into what every exclusive surface left and
+  // shrinks by the keyboard's zone when the keyboard comes up.
+  readonly property bool keyboardUp: !!home.screen
+    && home.height < home.screen.height
+                     - (root.host ? root.host.keyboardPanelHeight : 200) / 2
+
   readonly property bool bandFilled: {
+    if (root.keyboardUp) return false
     if (ToplevelManager.activeToplevel) return true
     var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
     for (var i = 0; i < list.length; i++) if (list[i] && list[i].activated) return true

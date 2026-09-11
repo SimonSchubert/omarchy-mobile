@@ -57,6 +57,23 @@ hl.window_rule({
   opacity = "1 1",
 })
 
+-- The on-screen keyboard: moarchy's, pinned in manifest.toml. It raises itself
+-- when a text field takes focus and retracts when focus leaves one -- no
+-- toggle, no gesture -- because Hyprland advertises
+-- zwp_input_method_manager_v2 and zwp_text_input_manager_v3 as Sway does, so
+-- an input method that binds them is sent activate and deactivate as apps
+-- focus text. It reads the theme's colors.toml itself and recolours on
+-- omarchy-theme-set.
+--
+-- Started through uwsm-app, like the rest of upstream's autostart. A second
+-- instance exits at once -- the protocol grants one input method per seat --
+-- so two can never fight over the keys.
+o.launch_on_start("moarchy-keyboard")
+
+-- For an app that never asks for a keyboard, or a hardware keyboard attached:
+-- force the soft one up or down. The key moarchy binds.
+o.bind("SUPER + I", "Toggle the on-screen keyboard", "omarchy-mobile-toggle-keyboard")
+
 -- W3. The border stays and costs nothing in the normal case: it is dropped on
 -- a workspace holding one tiled window, which one-app-per-workspace makes the
 -- normal case. Split a workspace and it comes back -- it is then the only thing

@@ -164,6 +164,13 @@ it on.
   terminal was the wrong shape: audio routing, reminders, time zone, plugins,
   and Theme, Wallpaper and Font. A row this image cannot run (Lock, AI agent,
   installing from the AUR) is hidden until it can.
+- **The on-screen keyboard** is moarchy's,
+  [moarchy-keyboard](https://github.com/SimonSchubert/moarchy-keyboard), built
+  from its pin in `manifest.toml` like any package ALARM lacks. It rises by
+  itself when a text field takes focus and retracts when focus leaves one,
+  types into apps whether or not they speak a text input protocol, and
+  recolours with the theme. Going home and closing the drawer put it away;
+  Super+I forces it up or down.
 
 The criteria are moarchy's, copied into [`docs/spec/`](docs/spec/) with their
 ids unchanged. [`docs/acceptance.md`](docs/acceptance.md) says which of them hold
@@ -192,6 +199,12 @@ All measured, and the surface layout is shaped around them.
 - **`Toplevel.activate()` focuses apps but ignores the shell's own windows.**
   Sway drops it for both. Every focus goes through Hyprland's dispatcher by
   window address.
+- **Exclusive zones are arranged from Background up, not from Overlay down.**
+  On one edge the lowest layer gets the screen's edge. The keyboard is on Top,
+  as moarchy ships it, and while the strip reserved its band from Overlay the
+  keyboard took the edge and the pill landed between the app and the keys. The
+  band is reserved from a Bottom surface instead, and the strip on Overlay only
+  draws the pill.
 - **The `empty` workspace selector** is where the window rule sends a new app
   and where the home gesture goes, so the two always agree on which workspace
   is free. moarchy computes that twice, and the two copies drifted.
@@ -208,8 +221,8 @@ All measured, and the surface layout is shaped around them.
 | `vm/packages/` | The package set, in three files, with every omission explained |
 | `default/` | This project's own overlay, copied onto the rootfs |
 | `default/etc/skel/.config/omarchy/plugins/mobile.shell/` | The mobile UI -- status bar, shade, gestures, sheets and the Wi-Fi, Bluetooth and Settings screens -- as one Omarchy shell plugin. Settings' pages are data, in `Pages.js` |
-| `default/etc/skel/.config/hypr/mobile.lua` | One app per workspace, filling it, and no layer animation on the shell's own sheets -- a user override loaded after upstream's defaults |
-| `default/etc/skel/.local/bin/` | `omarchy-mobile-*`, the helpers behind Settings' native pages: audio routing, reminders, time zone, plugins, About |
+| `default/etc/skel/.config/hypr/mobile.lua` | One app per workspace, filling it, no layer animation on the shell's own sheets, and the on-screen keyboard started and bound to Super+I -- a user override loaded after upstream's defaults |
+| `default/etc/skel/.local/bin/` | `omarchy-mobile-*`, the helpers behind Settings' native pages: audio routing, reminders, time zone, plugins, About; and the keyboard toggle |
 | `default/etc/skel/.local/share/` | Drawer entries and icons for the Wi-Fi, Bluetooth and Settings screens |
 | `patches/` | Fixes to the vendored upstream. Applied with `--fuzz=0`, so a moved upstream fails the build |
 | `scripts/vm-*.sh` | Build, run, ssh, screenshot, drag, push the overlay into a running guest, selftest |
@@ -222,16 +235,23 @@ All measured, and the surface layout is shaped around them.
 **Phase 1**, upstream Omarchy 4.0.3 on Hyprland 0.56.2 in a VM at phone
 geometry, is done. **Phase 2** ports moarchy's mobile UI back up from Sway to
 the Hyprland it was first written against. The bottom-edge gestures, the
-carousel, the home screen, the drawer, the status bar, the shade, and the Wi-Fi,
-Bluetooth and Settings screens are in (gestures.md A to F, H and K, shade.md,
-settings.md). [`docs/build-log.md`](docs/build-log.md) is the chronological
+carousel, the home screen, the drawer, the status bar, the shade, the Wi-Fi,
+Bluetooth and Settings screens, and the on-screen keyboard are in (gestures.md
+A to F, H, I and K, shade.md, settings.md). [`docs/build-log.md`](docs/build-log.md) is the chronological
 account, dead ends included.
 
 ### Not done yet
 
-- The back gesture, the on-screen keyboard, and the still of an app being put
-  away (gestures.md G and J). Settings already keeps the page stack a back
-  gesture would walk.
+- The back gesture and the still of an app being put away (gestures.md G and
+  J). Settings already keeps the page stack a back gesture would walk, and the
+  keyboard can leave the left edge's column to it (`--back-edge-inset`, 0 by
+  default).
+- An image built before the keyboard landed has no keyboard. `pacman -U` the
+  one `vm-build.sh` leaves in `vm/out/packages/`, with `layer-shell-qt`. That
+  guest cannot fetch `layer-shell-qt` itself: no image carries
+  `archlinuxarm-keyring`, so pacman in the guest trusts none of ALARM's
+  signatures. The image build is unaffected, since it verifies against the
+  builder's keyring.
 - Settings search from the drawer (settings.md O) and the coding-agent tile
   (P). The drawer also has no long-press or uninstall, which want a detail
   sheet this shell does not have yet.

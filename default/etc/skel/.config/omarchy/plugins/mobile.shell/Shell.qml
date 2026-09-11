@@ -229,9 +229,74 @@ Item {
   //
   // From a home screen it is a no-op -- the workspace you are on is the lowest
   // empty one -- so there is no "am I already home" test to get wrong.
+  //
+  // F3. The keyboard goes with the app: a home screen has nothing to type
+  // into. On Sway it failed to go *down* rather than popping up -- the app got
+  // its text-input leave, but an empty workspace has no window to take the
+  // input state over, so nothing lowered it. Here it does pop up: leaving one
+  // of this shell's own windows for an empty workspace activates a text input
+  // after the switch, so a hide sent before it is undone (see
+  // retreatKeyboard). Unconditional, as moarchy's is: SetVisible false on a
+  // keyboard already down does nothing, and asking first would put a DBus
+  // round trip on the one gesture that has to feel instant.
   function goHome(): void {
+    root.retreatKeyboard()
     root.focusWorkspace("empty")
   }
+
+  // ------------------------------------------------------ on-screen keyboard
+  //
+  // moarchy-keyboard, started from hypr/mobile.lua. It raises itself when a
+  // text field takes focus and retracts when focus leaves one; what is left to
+  // the shell is putting it away where Wayland says nothing (F3, I5d).
+  //
+  // It owns sm.puri.OSK0, Phosh's interface, so this is the same call
+  // omarchy-mobile-toggle-keyboard makes. Fire-and-forget: nothing here needs
+  // the answer, and it runs at the end of gestures.
+  function hideKeyboard(): void {
+    Quickshell.execDetached(["busctl", "--user", "call", "sm.puri.OSK0",
+                             "/sm/puri/OSK0", "sm.puri.OSK0", "SetVisible",
+                             "b", "false"])
+  }
+
+  // F3, I5d. Put the keyboard away now, and again if it comes up within the
+  // next second.
+  //
+  // Hiding once is not enough on Hyprland, because what raises the keyboard
+  // arrives after the hide. Going home from Settings, a text input activated
+  // after the switch, with the hide already sent; closing the drawer over a
+  // terminal, the terminal got the seat's keyboard back and its text input
+  // re-entered 132ms after the close. moarchy answers the second with a hide
+  // 250ms later, and a fixed delay is a race: the same close failed 6 of 6 in
+  // one run. So the second hide is not timed. It answers the raise itself,
+  // read off the home surface's height, which drops when the keyboard's zone
+  // arrives. The second is how long to keep answering.
+  //
+  // The cost is that a field tapped within that second has its keyboard put
+  // away, and is tapped again -- the trade F3 and I5d already make.
+  function retreatKeyboard(): void {
+    root.hideKeyboard()
+    keyboardRetreat.restart()
+  }
+
+  Timer {
+    id: keyboardRetreat
+    interval: 1000
+  }
+
+  Connections {
+    target: edgeGestures
+    function onKeyboardUpChanged() {
+      if (edgeGestures.keyboardUp && keyboardRetreat.running) root.hideKeyboard()
+    }
+  }
+
+  // What the keyboard's panel reserves at the bottom when it is up: its own
+  // default, in logical px, and deliberately not through Style.space -- it is
+  // another client's height, and that client never sees this theme's spacing.
+  // Only ever used as half of a threshold (I1a, I5e), so it has to be nowhere
+  // near either height it separates rather than exact.
+  readonly property int keyboardPanelHeight: 200
 
   // B1, B3. The sheets are put away before the workspace moves, because a
   // sheet left standing while the workspace changes underneath is a gesture

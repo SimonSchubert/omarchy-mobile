@@ -92,6 +92,31 @@ tag     = "0.14.3-1"
 ref     = "a52e8f23c0be7d482b944c6cf5ddee172da171e4"
 
 # ---------------------------------------------------------------------------
+# The on-screen keyboard: moarchy's, at the commit moarchy pins, for the reason
+# [omarchy] gives -- two ports of one phone UI that type through two different
+# keyboards are two projects.
+#
+# In no repo at all, so it is built here like xdg-terminal-exec. It is a Qt6
+# client of zwp_input_method_v2 and zwp_virtual_keyboard_v1, both of which
+# Hyprland advertises as Sway does, and it owns sm.puri.OSK0 on the session
+# bus, which is the name the shell calls to put it away (gestures.md F3, I5d).
+#
+# Its PKGBUILD is in packaging/ rather than at the root, which is what
+# `pkgbuilddir` says. It builds the checkout it sits in (`source=()`), so this
+# ref pins the code as well as its packaging.
+#
+# The trap moarchy's pin warns about is the same here. A commit can name a fix
+# that pacman never offers: a guest holding 0.1.0-3 compares versions, not
+# contents, so a fix reaches an installed guest only once the keyboard's own
+# PKGBUILD has moved its pkgrel. A freshly built image hides that completely.
+# ---------------------------------------------------------------------------
+[pkg.moarchy-keyboard]
+url         = "https://github.com/SimonSchubert/moarchy-keyboard"
+tag         = "0.1.0-3"
+ref         = "f1f2dda18f96c5ae087336410bc4178f405cba6f"
+pkgbuilddir = "packaging"
+
+# ---------------------------------------------------------------------------
 # The aarch64 container everything is built in. Pinned by digest rather than
 # by the `base-devel` tag: a floating tag is a clone at HEAD by another name.
 #

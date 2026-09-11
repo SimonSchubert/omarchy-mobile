@@ -2,7 +2,7 @@
 # Check the mobile shell against its acceptance criteria, in the running VM.
 #
 #   ./scripts/vm-selftest.sh              every section
-#   ./scripts/vm-selftest.sh A E S        only those (W A B C D E H S K settings)
+#   ./scripts/vm-selftest.sh A E S        only those (W A B C D E H S K settings keyboard)
 #
 # Every line of output names the AC it proves, from docs/spec/gestures.md,
 # shade.md, windows.md and settings.md, so an AC with no check here is visible
@@ -79,6 +79,29 @@ case $1 in
   usable) hyprctl -j monitors | jq -c 'first(.[]) | (.width / .scale) as $w
           | (.height / .scale) as $h | .reserved as $r
           | {at: [$r[0], $r[1]], size: [$w - $r[0] - $r[2], $h - $r[1] - $r[3]], fullscreen: 0}' ;;
+  # The on-screen keyboard: `Visible` as busctl prints it ("b true"), or
+  # nothing at all when no keyboard owns sm.puri.OSK0.
+  osk_visible) busctl --user get-property sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 Visible 2>/dev/null ;;
+  osk_set) busctl --user call sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 SetVisible b "$2" >/dev/null 2>&1 ;;
+  # "x y w h" of the layer surface with this namespace, as the compositor
+  # placed it -- the only account of a layer surface that is not its own.
+  layer) hyprctl -j layers | jq -r --arg n "$2" \
+           'first(.[].levels[][] | select(.namespace == $n) | "\(.x) \(.y) \(.w) \(.h)") // ""' ;;
+  # What the exclusive surfaces on the bottom edge take off every window.
+  reserved_bottom) hyprctl -j monitors | jq 'first(.[]).reserved[3]' ;;
+  # A terminal that takes one raw keystroke into a file and then waits, so its
+  # window stays up: what the on-screen keyboard types, byte for byte.
+  open_typist)
+    rm -f /tmp/omarchy-mobile-typed
+    setsid -f foot -a "$2" -T "$2" sh -c \
+      'stty raw -echo; dd bs=1 count=1 of=/tmp/omarchy-mobile-typed 2>/dev/null; sleep 900' \
+      >/dev/null 2>&1
+    for _ in $(seq 1 60); do
+      hyprctl -j clients | jq -e --arg c "$2" 'any(.[]; .class == $c)' >/dev/null && { sleep 0.3; exit 0; }
+      sleep 0.1
+    done
+    echo "!! $2 never mapped" >&2; exit 1 ;;
+  typed) od -An -c /tmp/omarchy-mobile-typed 2>/dev/null | tr -d ' ' ;;
   # W6: "<default-opacity tags> <opacity> <opacity_inactive>" for the first
   # window whose title starts with $2, once it has mapped.
   opacity)
@@ -425,8 +448,9 @@ section_H() {
   done
   local before pids_before; before=$(g nwin); pids_before=$(g pids foot)
   if [ -n "$target" ]; then
+    # Surface-local, so add where the compositor put the surface.
     read -r cx cy _ <<<"$target"
-    tap "$cx" "$cy"
+    tap "$cx" $(( cy + $(g layer omarchy-mobile-drawer | cut -d' ' -f2) ))
     for _ in $(seq 1 30); do [ "$(g nwin)" -gt "$before" ] && break; sleep 0.2; done
   fi
   check H4 "a tap on an icon still launches it (Foot at ${target% Foot})" \
@@ -730,7 +754,11 @@ section_settings() {
   geo=$(ipc gestures geometry); fill=$(grep -o 'fill=#[0-9a-f]*' <<<"$geo")
   check I1a "behind Settings the strip's band is the theme's background, not the wallpaper" \
     is "$(grep -o 'band=[01]' <<<"$geo") fill=#$(px 10,$last)" "band=1 $fill"
-  sws=$(g ws_id); g focus_ws empty; sleep 0.8
+  # Home the phone's way, through goHome. Leaving Settings for an empty
+  # workspace raises the keyboard -- a text input activates as the window loses
+  # focus -- and goHome is what puts it back down (F3). A bare hyprctl jump
+  # leaves it up, and the pixel then reads the keyboard's own background.
+  sws=$(g ws_id); ipc gestures swipe home >/dev/null; sleep 0.8
   check I1a "on a home screen it is the wallpaper again" \
     bash -c "[ '$(ipc gestures geometry | grep -o 'band=[01]')' = band=0 ] && [ 'fill=#$(px 10,$last)' != '$fill' ]"
   g focus_ws "$sws"; sleep 0.8
@@ -766,7 +794,9 @@ section_settings() {
     [ "${t#* * }" = Settings ] && { target=$t; break; }
   done
   if [ -n "$target" ]; then
-    read -r x y _ <<<"$target"; tap "$x" "$y"
+    # Surface-local, so add where the compositor put the surface.
+    read -r x y _ <<<"$target"
+    tap "$x" $(( y + $(g layer omarchy-mobile-drawer | cut -d' ' -f2) ))
     wait_for "ipc settings state" open
   fi
   check s.A8 "the drawer has a Settings tile, and a tap on it opens Settings at the root" \
@@ -972,8 +1002,148 @@ section_settings() {
   st quit >/dev/null
 }
 
+# The on-screen keyboard, and everything that has to make way for it: F3, I1a's
+# keyboard half, I5-I5e and I6 in gestures.md, and W5's typing in windows.md.
+# Reached by AppDrawer.qml, EdgeGestures.qml, Shell.qml and hypr/mobile.lua.
+#
+# Every one needs moarchy-keyboard running and owning sm.puri.OSK0, and each
+# is a SKIP rather than a FAIL without it. It leaves the keyboard down.
+section_keyboard() {
+  echo "-- keyboard: moarchy-keyboard"
+  reset_session
+  # One field of an IPC line of key=value pairs: `kv h "$geometry"`.
+  kv() { tr ' ' '\n' <<<"$2" | sed -n "s/^$1=//p"; }
+
+  local osk; osk=$(g osk_visible)
+  check osk "an on-screen keyboard owns sm.puri.OSK0 (${osk:-nothing})" test -n "$osk"
+  if [ -z "$osk" ]; then
+    local id; for id in W5 I6 I5b I1a F3 I5 I5a I5c I5d I5e; do skip "$id" "no on-screen keyboard"; done
+    return
+  fi
+
+  g osk_set false; sleep 0.5
+  g sh omarchy-mobile-toggle-keyboard >/dev/null; sleep 0.5
+  local toggled; toggled=$(g osk_visible)
+  g sh omarchy-mobile-toggle-keyboard >/dev/null; sleep 0.5
+  check osk "omarchy-mobile-toggle-keyboard puts it up and takes it down" \
+    is "$toggled / $(g osk_visible)" "b true / b false"
+
+  # W5. A text field raises the keyboard with nobody asking, and a real tap on
+  # a key reaches the app. A terminal gets the terminal layout: five rows of
+  # 40 under the keyboard's top edge, q to p the second of them.
+  g open_typist sel-kbd
+  wait_for "g osk_visible" "b true"
+  check W5 "a focused terminal raises the keyboard by itself" is "$(g osk_visible)" "b true"
+
+  # I6. The pill keeps the screen's edge and the keys sit on top of it. On
+  # Hyprland that is the band surface's doing -- it reserves from Bottom, which
+  # is arranged before the keyboard's Top -- and without it the strip landed
+  # between the app and the keys.
+  local strip_at kb_at edge=$(( STRIP_Y - 10 ))
+  strip_at=$(g layer omarchy-mobile-strip); kb_at=$(g layer moarchy-keyboard)
+  check I6 "with the keyboard up the pill keeps the screen edge (strip $strip_at, keyboard $kb_at)" \
+    is "$(cut -d' ' -f2 <<<"$strip_at") $(( $(cut -d' ' -f2 <<<"$kb_at") + 200 ))" "$edge $edge"
+  check I5b "the keyboard reserves its panel on top of the band ($(g reserved_bottom))" \
+    is "$(g reserved_bottom)" $(( 720 - edge + 200 ))
+
+  local ky; ky=$(g layer moarchy-keyboard | cut -d' ' -f2)
+  tap 18 $(( ky + 60 )); sleep 0.5
+  check W5 "a tap on the keyboard's q types q into the terminal" is "$(g typed)" q
+
+  # I1a, the keyboard half: the band's fill goes while the keyboard is up, and
+  # comes back behind the same window when it goes down.
+  local up down
+  up=$(ipc gestures geometry)
+  g osk_set false; wait_for "g reserved_bottom" $(( 720 - edge ))
+  down=$(ipc gestures geometry)
+  check I1a "the keyboard takes the band's fill away and gives it back (up kbd=$(kv kbd "$up") band=$(kv band "$up"), down kbd=$(kv kbd "$down") band=$(kv band "$down"))" \
+    is "$(kv kbd "$up")$(kv band "$up") $(kv kbd "$down")$(kv band "$down")" "10 01"
+
+  # I6. And the strip still takes a gesture over it: an up-flick goes home.
+  g osk_set true; wait_for "g reserved_bottom" $(( 720 - edge + 200 ))
+  drag $MID_X $STRIP_Y -300
+  check I6 "with the keyboard up an up-flick from the strip still goes home" is "$(g ws_windows)" 0
+
+  # F3, through the IPC and not a swipe, as moarchy's check is: the fault was
+  # in what going home does, not in reaching it. Sampled over 3s, because one
+  # late reading cannot tell "never went down" from "went down and came back".
+  g focus_class sel-kbd; sleep 0.5
+  g osk_set true; wait_for "g osk_visible" "b true"
+  ipc gestures swipe home >/dev/null
+  local f3_up=0 i
+  for i in 1 2 3 4 5 6; do sleep 0.5; [ "$(g osk_visible)" = "b true" ] && f3_up=$((f3_up + 1)); done
+  check F3 "going home from a terminal puts the keyboard away and it stays away ($f3_up of 6 samples up)" is "$f3_up" 0
+
+  # And from Settings, where Hyprland raises it after the switch: a text input
+  # activates as the shell's own window loses focus, with the hide already sent.
+  ipc settings open >/dev/null; sleep 1.5
+  g osk_set false; sleep 0.5
+  ipc gestures swipe home >/dev/null
+  f3_up=0
+  for i in 1 2 3 4 5 6; do sleep 0.5; [ "$(g osk_visible)" = "b true" ] && f3_up=$((f3_up + 1)); done
+  check F3 "going home from Settings leaves the keyboard down ($f3_up of 6 samples up)" is "$f3_up" 0
+  ipc settings quit >/dev/null; sleep 0.6
+
+  # I5, I5a. The drawer reflows above the keyboard, and its inset under the
+  # strip is dropped while the field has it up. A real tap on the field, at
+  # the point the drawer names in its own surface plus where the compositor
+  # put that surface.
+  ipc drawer open >/dev/null; sleep 0.5
+  local g_down g_up sx sy dy
+  g_down=$(ipc drawer geometry)
+  read -r sx sy _ <<<"$(ipc drawer searchTarget)"
+  dy=$(g layer omarchy-mobile-drawer | cut -d' ' -f2)
+  tap "$sx" $(( dy + sy ))
+  wait_for "g osk_visible" "b true"
+  g_up=$(ipc drawer geometry)
+  if [ "$(g osk_visible)" != "b true" ]; then
+    skip I5 "the keyboard did not come up for a tap on the search field ($(ipc drawer searchTarget))"
+  else
+    # The grid is as tall as its apps rather than the sheet, so its end does not
+    # move when the surface's bottom does, and moarchy's "gap unchanged" cannot
+    # hold here. What the criterion is for can: the grid ends clear of the
+    # keyboard, at least a strip above the surface's new bottom.
+    check I5 "the drawer reflows above the keyboard (h $(kv h "$g_down") -> $(kv h "$g_up"), the grid ending $(kv gap "$g_up") above it)" \
+      bash -c "[ $(kv h "$g_up") -lt $(kv h "$g_down") ] && [ $(kv gap "$g_up") -ge $(kv strip "$g_up") ]"
+    check I5a "the inset is -strip with the keyboard down and 0 with the field up ($(kv margin "$g_down") / $(kv margin "$g_up"))" \
+      is "$(kv margin "$g_down") $(kv margin "$g_up")" "-$(kv strip "$g_down") 0"
+  fi
+
+  # I5c. Closing lets go of the field, so the next open starts with the inset.
+  ipc drawer close >/dev/null; sleep 0.5
+  ipc drawer open >/dev/null; sleep 0.5
+  local st; st=$(ipc drawer searchTarget)
+  check I5c "the drawer reopens with the field let go ($(kv focused "$st"), margin $(kv margin "$(ipc drawer geometry)"))" \
+    is "$(kv focused "$st") $(kv margin "$(ipc drawer geometry)")" "false -$(kv strip "$g_down")"
+
+  # I5e. Forced up with the field untouched: the inset follows the keyboard.
+  g osk_set false; wait_for "g reserved_bottom" $(( 720 - edge ))
+  g osk_set true; wait_for "g reserved_bottom" $(( 720 - edge + 200 ))
+  local g_e; g_e=$(ipc drawer geometry); st=$(ipc drawer searchTarget)
+  check I5e "the inset follows the keyboard, not the field (focused=$(kv focused "$st") margin=$(kv margin "$g_e") kbd=$(kv kbd "$g_e"))" \
+    is "$(kv focused "$st") $(kv margin "$g_e") $(kv kbd "$g_e")" "false 0 1"
+  g osk_set false; ipc drawer close >/dev/null; sleep 0.5
+
+  # I5d. Closing the drawer never raises the keyboard. The drawer over an app
+  # whose terminal wants one, and a tap on the sheet so the drawer holds the
+  # seat's keyboard: the close hands it back to the terminal, whose text input
+  # re-enters. Read off the compositor's reservation, sampled over 3s.
+  g focus_class sel-kbd; sleep 0.5
+  g osk_set false; wait_for "g reserved_bottom" $(( 720 - edge ))
+  ipc drawer open >/dev/null; sleep 0.5
+  tap $MID_X $(( dy + 13 )); sleep 0.5
+  ipc drawer close >/dev/null
+  local d_up=0
+  for i in 1 2 3 4 5 6; do
+    sleep 0.5; [ "$(g reserved_bottom)" != $(( 720 - edge )) ] && d_up=$((d_up + 1))
+  done
+  check I5d "closing the drawer over a terminal leaves the keyboard down ($d_up of 6 samples up)" is "$d_up" 0
+
+  g osk_set false
+}
+
 SECTIONS=("$@")
-[ ${#SECTIONS[@]} -gt 0 ] || SECTIONS=(W A B C D E H S K settings)
+[ ${#SECTIONS[@]} -gt 0 ] || SECTIONS=(W A B C D E H S K settings keyboard)
 for s in "${SECTIONS[@]}"; do
   "section_$s"
 done

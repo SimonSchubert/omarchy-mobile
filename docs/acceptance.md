@@ -91,7 +91,7 @@ Hyprland 0.56.2 at 360x720 logical.
 | --- | --- | --- |
 | F1 | pass | **Changed:** Hyprland's own `empty` workspace selector *is* this rule, measured to pick the lowest free number including a gap. The window rule in `hypr/mobile.lua` uses the same word, so there is no second implementation to drift from the first |
 | F2 | pass | |
-| F3 | todo | There is no on-screen keyboard yet |
+| F3 | partial | Home from a terminal passes, six samples over 3s. Home from Settings failed before `retreatKeyboard` existed, and its check has not run since. **Changed:** On Hyprland the keyboard does pop up on the way home, when it leaves one of the shell's own windows: a text input activates after the switch, with the hide already sent. `goHome` hides, then hides again if the keyboard rises within the next second (`retreatKeyboard` in Shell.qml). A bare `hyprctl` jump from Settings to an empty workspace goes round `goHome` and still leaves it up; what activates is not found |
 | F4 | pass | The first retire frame keeps its home hint (`100:80`, not `100:0`) |
 
 ### G. Left edge — back
@@ -120,8 +120,16 @@ Hyprland 0.56.2 at 360x720 logical.
 | AC | Status | Note |
 | --- | --- | --- |
 | I1 | todo | The drawer does extend under the strip, but its pixel check is not written. Settings, which I1 also names, is a window now, so its band is I1a's |
-| I1a | pass | The home surface (Bottom) reaches under the strip and fills the band with `Color.background` while any window is focused. Behind Settings, one device pixel of the last row is the `fill=` that `gestures geometry` reports; on a home screen the band is the wallpaper again (`band=0`). Read at the output's own scale: `grim -s 1` blends the edge row with what lies beyond it. The keyboard clause waits for a keyboard (F3) |
-| I2–I7 | todo | A7 shows the pill works over the drawer (I6), but none of the section's pixel checks are written, and I5 needs a keyboard |
+| I1a | pass | The home surface (Bottom) reaches under the strip and fills the band with `Color.background` while any window is focused. Behind Settings, one device pixel of the last row is the `fill=` that `gestures geometry` reports; on a home screen the band is the wallpaper again (`band=0`). Read at the output's own scale: `grim -s 1` blends the edge row with what lies beyond it. The keyboard clause passes too: behind a terminal, `kbd=1 band=0` with the keyboard up and `kbd=0 band=1` down, read off the home surface's height (494 against 694) |
+| I2–I4 | todo | None of their pixel or geometry checks are written |
+| I5 | pass | **Changed:** a real tap on the search field raises the keyboard and the drawer goes from 694 to 474. moarchy's "gap unchanged" cannot hold here: this grid is as tall as its apps rather than the sheet, so its end stays where it is while the surface's bottom moves. The check is what the gap is for, that the grid ends at least a strip above the keyboard |
+| I5a | pass | The inset is -20 with the keyboard down and 0 with the field up |
+| I5b | pass | **Changed:** read off `hyprctl monitors` rather than the drawer: 220 reserved at the bottom with the keyboard up, the band's 20 plus the panel's 200 |
+| I5c | pass | |
+| I5d | partial | **Changed:** only the drawer takes the seat's keyboard here, OnDemand after a tap on it. Settings is a window and the theme picker a page of it. Over a terminal, tapped and closed: the terminal's text input re-entered 132ms after the close. moarchy's fixed 250ms second hide passed once and lost that race once, so the second hide answers the rise instead (F3). That version's check has not run yet |
+| I5e | pass | |
+| I6 | pass | **Changed:** the pill keeps the screen's edge because the band is reserved from Bottom. Hyprland arranges exclusive zones from Background up, so from Overlay the strip lost the edge to the keyboard on Top and sat between the app and the keys. Checked from `hyprctl layers`: the strip at 700, the keyboard's keys ending at 700. With the keyboard up, an up-flick from the strip still goes home |
+| I7 | todo | |
 
 ### J. The app you are leaving
 
@@ -160,7 +168,7 @@ Settings.
 
 | Constraint | Status | Note |
 | --- | --- | --- |
-| The strip reserves 20px off every window | holds | `hyprctl monitors`: `reserved: 0 26 0 20` |
+| The strip reserves 20px off every window | holds | `hyprctl monitors`: `reserved: 0 26 0 20`. **Changed:** the band surface reserves it, from Bottom, and the strip only draws the pill (I6) |
 | Only the left edge may take touch ahead of an app | holds | Nothing takes touch ahead of an app yet; the edge surface's input region is the strip's band at rest (`gestures geometry`: `input=band`) |
 | No window thumbnails except the app you are leaving | open | See J |
 | One app per workspace | holds | A window rule, not a daemon: `hypr/mobile.lua` |
@@ -222,7 +230,7 @@ which is also what grants the shade its Do Not Disturb and media services.
 | W2 | pass | Reads `hypr/mobile.lua`, as moarchy's reads `pinephone.conf` |
 | W3 | partial | The lone window's border is gone (W1 proves it); the border coming back on a split workspace is not checked |
 | W4 | todo | Upstream's gaps toggle writes the same `hl.config` call, and `mobile.lua` loads after it, so the toggle is currently a no-op |
-| W5 | pass | |
+| W5 | pass | And its typing half: a focused terminal raises the keyboard by itself, and a real tap on the keyboard's `q` types `q` into it |
 | W6 | pass | **Added here.** Settings' window is untagged and at opacity 1, and samples `#1a1b26` down its length, as the bar does |
 | L1–L9a | todo | The launch splash. Upstream's launch OSD still runs |
 

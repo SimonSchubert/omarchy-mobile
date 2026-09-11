@@ -69,13 +69,54 @@ Item {
     root.dragTrace = next
   }
 
+  // ------------------------------------------------- the on-screen keyboard
+  readonly property int keyboardPanelHeight: root.host ? root.host.keyboardPanelHeight : 200
+
+  // I5e. Is the keyboard up? Asked of the compositor's configure rather than
+  // of the search field, because the two come apart: the keyboard can be up
+  // with nothing here focused (I5d), and then the inset stays on with the
+  // keyboard under it. The surface reserves nothing, so its height loses the
+  // keyboard's zone when the keyboard rises -- a drop of the panel's height,
+  // and the threshold sits at half of it, far from both heights and from the
+  // strip the inset itself moves.
+  readonly property bool keyboardUp: !!drawerWindow.screen
+    && drawerWindow.height < drawerWindow.screen.height - root.keyboardPanelHeight / 2
+
+  // I5d. Set for the length of a dismissal that exists to open something else,
+  // and consumed by the dismiss() it guards. Without it the hide below would
+  // fire on a launch too, and rob the app of a keyboard it asks for the moment
+  // it maps -- a terminal does.
+  property bool handingOff: false
+
   function open(): void {
     if (root.host) root.host.closeOthers("drawer")
+    // A hand-off that never reached its dismiss must not spare the next one.
+    root.handingOff = false
+    // I5c, from the other side. The margin gate rests on "the field is focused
+    // only while the keyboard is up", so the sheet asserts it on the way in
+    // rather than trusting that every way out let go.
+    sheet.forceActiveFocus()
     root.dragging = false
     root.progress = 1
   }
 
   function dismiss(): void {
+    // I5c. Let go of the search field before the sheet goes, by handing active
+    // focus to an item in the same surface. A field that keeps Qt's focus
+    // across the close takes it back on the next open, a tap on it then
+    // changes nothing and enables no text input, and the keyboard stops rising
+    // for the rest of the session.
+    sheet.forceActiveFocus()
+
+    // I5d. Put the keyboard away on the way out. Letting go of the field is
+    // not enough: once the drawer has been tapped it holds the seat's keyboard,
+    // the window underneath loses it, and handing it back on the close
+    // re-enters that window's text input and brings the keyboard up with it --
+    // a keyboard nobody asked for, over whatever is on screen now. The handback
+    // comes after this call, so the host keeps answering for a moment.
+    if (!root.handingOff && root.host) root.host.retreatKeyboard()
+    root.handingOff = false
+
     root.dragging = false
     root.progress = 0
     root.query = ""
@@ -106,20 +147,37 @@ Item {
         + " top=" + Math.round(drawerWindow.screen
                                ? drawerWindow.screen.height - drawerWindow.height + root.stripHeight
                                : 0)
+        // I5-I5e. The inset in force, what it would be, how far the grid ends
+        // above the surface's bottom -- at least a strip, keyboard up or down --
+        // and whether the keyboard is up, as this surface reads it.
+        + " margin=" + drawerWindow.margins.bottom
+        + " strip=" + root.stripHeight
+        + " gap=" + Math.round(drawerWindow.height - grid.mapToItem(null, 0, grid.height).y)
+        + " kbd=" + (root.keyboardUp ? 1 : 0)
     }
 
-    // H4. Where cell n is on screen, in the logical coordinates vm-drag.sh
-    // takes, and what it launches -- so a check can tap a real icon rather than
-    // call launch() and prove nothing about the tap. The surface is anchored
-    // to the bottom of the screen and extends one strip past it, so its top is
-    // the screen height less its own, plus that strip.
+    // I5, I5c. The search field's centre and whether it holds focus. In the
+    // surface's own coordinates: where the surface starts on screen is the
+    // compositor's to say, so a check adds the drawer layer's y from
+    // `hyprctl layers` rather than trusting a number worked out here.
+    function searchTarget(): string {
+      var p = searchField.mapToItem(null, searchField.width / 2, searchField.height / 2)
+      return Math.round(p.x) + " " + Math.round(p.y) + " focused=" + searchField.activeFocus
+    }
+
+    // H4. Where cell n is, and what it launches -- so a check can tap a real
+    // icon rather than call launch() and prove nothing about the tap.
+    //
+    // In the surface's own coordinates, as searchTarget is. This used to add
+    // a top worked out here as the screen's height less the surface's plus a
+    // strip, which was 20px low at rest (46 against the 26 Hyprland reports)
+    // and 240 low with the keyboard up, when the surface is 474 tall. A check
+    // adds the drawer layer's y from `hyprctl layers` instead.
     function cellTarget(index: string): string {
       var item = grid.itemAtIndex(Number(index))
       if (!item || !item.entry || !root.apps) return "none"
       var p = item.mapToItem(null, item.width / 2, item.height / 2)
-      var top = drawerWindow.screen
-        ? drawerWindow.screen.height - drawerWindow.height + root.stripHeight : 0
-      return Math.round(p.x) + " " + Math.round(top + p.y) + " " + root.apps.entryName(item.entry)
+      return Math.round(p.x) + " " + Math.round(p.y) + " " + root.apps.entryName(item.entry)
     }
 
     function open(): string { root.open(); return "ok" }
@@ -148,6 +206,9 @@ Item {
   function launch(entry): void {
     if (!entry || !root.apps) return
     root.apps.launch(entry.id, root.apps.entryName(entry))
+    // A hand-off (I5d): the app being launched is the one that gets to say
+    // whether it wants a keyboard.
+    root.handingOff = true
     root.dismiss()
   }
 
@@ -180,7 +241,16 @@ Item {
     // wallpaper shows beneath it with the pill drawn on top (I1). A negative
     // margin is legal rather than a trick: layer-shell margins are int32 and
     // are subtracted with no clamping.
-    margins.bottom: -root.stripHeight
+    //
+    // I5a, I5e. Only while the on-screen keyboard is down. The margin extends
+    // the surface past the bottom of the usable area, and what is there depends
+    // on what else reserves: with the keyboard down it is the strip's band,
+    // and the strip on Overlay draws over the sheet there as wanted; with it
+    // up it is the
+    // keyboard, and the sheet's last row would sit over its top row of keys.
+    // Two signals, either one enough: the field's focus leads the raise, and
+    // `keyboardUp` answers for a keyboard something else put up.
+    margins.bottom: (searchField.activeFocus || root.keyboardUp) ? 0 : -root.stripHeight
 
     // The input region. Settled open, or while its own close drag runs, the
     // whole surface; otherwise nothing at all -- and "otherwise" includes the

@@ -11,7 +11,8 @@
 # It began with one package (hyprland; see [pkg.hyprland] in the manifest) and
 # is written as a loop over [pkg.*] because ALARM falling behind on a package,
 # or never carrying it, is a recurring hazard for an aarch64 port, not a
-# one-off. xdg-terminal-exec, from the AUR, was the second.
+# one-off. xdg-terminal-exec, from the AUR, was the second, and
+# moarchy-keyboard, from its own repo, the third.
 set -euo pipefail
 
 PKGS=${PKGS:-/pkgs}
@@ -52,8 +53,14 @@ for name in $(manifest_pkgs); do
   git config --global --add safe.directory "$WORK/$name"
   git -C "$WORK/$name" checkout --quiet "$ref" || die "no such commit in $name: $ref"
 
-  # Arch's packaging repos and the AUR both put the PKGBUILD at the root.
-  [ -f "$WORK/$name/PKGBUILD" ] || die "$name has no PKGBUILD at its root"
+  # Arch's packaging repos and the AUR both put the PKGBUILD at the root. A
+  # repo of our own may keep it further down and says where with
+  # `pkgbuilddir`, as moarchy's manifest does: moarchy-keyboard's is in
+  # packaging/. Optional, so its absence is quiet rather than manifest_get's
+  # loud miss.
+  pkgdir=$(manifest_get "pkg.$name" pkgbuilddir 2>/dev/null) || pkgdir=.
+  build="$WORK/$name/$pkgdir"
+  [ -f "$build/PKGBUILD" ] || die "$name has no PKGBUILD in $pkgdir"
 
   # An earlier build of the same package is not a duplicate, it is ambiguity:
   # the disk build's repo-add takes whichever the glob puts last, so the
@@ -70,7 +77,7 @@ for name in $(manifest_pkgs); do
   # file:// repo the disk build marks SigLevel = Never.
   #
   # PKGDEST puts the result straight where the disk build looks for it.
-  runuser -u builder -- bash -c "cd '$WORK/$name' && PKGDEST='$PKGS' \
+  runuser -u builder -- bash -c "cd '$build' && PKGDEST='$PKGS' \
     makepkg -s --noconfirm --nocheck --needed" \
     || die "makepkg failed for $name"
 

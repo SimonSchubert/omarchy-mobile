@@ -1234,3 +1234,130 @@ tap on card 0: a card with nothing to run stays, with the shade still up; an
 card sent under a running window's app id focuses that window. H7a, a short
 swipe that springs back, still dismisses nothing and runs nothing. The launch
 branch has no check yet -- it needs a desktop entry whose app is not running.
+
+## 2026-09-11 -- the on-screen keyboard
+
+moarchy's keyboard, [moarchy-keyboard](https://github.com/SimonSchubert/moarchy-keyboard),
+at the commit moarchy pins, and wired in the way moarchy wires it. The criteria
+it brings in are gestures.md F3, I1a's keyboard half and I5-I6, and the typing
+half of windows.md W5.
+
+### The way moarchy does it
+
+- **A pin, not a submodule.** `[pkg.moarchy-keyboard]` in `manifest.toml`, at
+  `f1f2dda`, moarchy's ref. `vm/build-packages.sh` builds it in the same loop
+  as hyprland and xdg-terminal-exec; it learned `pkgbuilddir`, moarchy's key,
+  because this PKGBUILD lives in `packaging/`. It builds the checkout it sits
+  in, so the ref pins the code too. 0.1.0-3 built on the first run.
+- **In the session tier**, so a `--session-only` image can type.
+- **Started by the compositor.** moarchy has `exec_always moarchy-keyboard` in
+  Sway's autostart; here `hypr/mobile.lua` calls `o.launch_on_start`, the
+  helper upstream's own autostart template names, which runs it through
+  uwsm-app. A second instance exits on its own, since the protocol grants one
+  input method per seat.
+- **The toggle.** `omarchy-mobile-toggle-keyboard` is moarchy's
+  `moarchy-toggle-keyboard` renamed, on the key moarchy binds, Super+I.
+- **The shell's half**, ported from moarchy.gestures and moarchy.drawer: going
+  home hides the keyboard (F3); the drawer drops its inset under the strip while
+  the keyboard is up (I5a, I5e), lets go of its search field on close (I5c), and
+  puts the keyboard away on close unless it is launching an app (I5d); and the
+  band's fill gives way to the keyboard (I1a). Both surfaces tell whether the
+  keyboard is up from their own configured height, as moarchy's do.
+
+Not ported: `moarchy-has-keyboard`, which exists to stop the lock screen
+stranding a phone that cannot type its password, and this image hides Lock. The
+back gesture's keyboard branch waits for the back gesture. I5d's Settings and
+theme-picker halves have nothing to act on here: Settings is a window, and the
+theme picker is a page of it.
+
+### The keyboard as shipped works on Hyprland
+
+Hyprland advertises the three protocols it needs: input-method-v2,
+virtual-keyboard-v1, and text-input-v3 for apps. It mapped 91 ms after start and
+drew its first frame at 141. A focused `foot` raised it with nothing asking,
+chose its terminal layout, and took a real tap through the VM's pointer: Esc
+arrived as `1b`, then `q` as `q`. The pointer reaches it because its one
+MultiPointTouchArea has `mouseEnabled`.
+
+### Hyprland stacks exclusive zones the other way up
+
+Measured with the keyboard forced up: the keys at y 520-720, the strip at
+500-520, between the app and the keys. This is the "stranded pill" moarchy
+records in `panel.cpp`, and moarchy's fix inverts here. Sway resolves exclusive
+zones layer by layer from Overlay down, so the keyboard sits on Top and the
+strip on Overlay keeps the edge. Hyprland arranges from Background up: on one
+edge the lowest layer gets the screen's edge, and the Top keyboard beat the
+Overlay strip to it.
+
+The keyboard could not move without patching it. It sets its own layer, Top
+while it is up and Overlay while it is down to a handle (its AC 52). So the
+reservation moved instead. The strip still draws the pill from Overlay but
+reserves nothing (`ExclusionMode.Ignore`), and a new surface,
+`omarchy-mobile-band`, reserves the same 20px from Bottom. It is transparent
+and takes no input: Bottom is below every window and every sheet, so nothing it
+could draw would be seen. Measured after:
+
+| | keyboard down | keyboard up |
+| --- | --- | --- |
+| strip | 700-720 | 700-720 |
+| keyboard surface | 500-724, a handle | 500-724, keys 500-700 |
+| reserved at the bottom | 20 | 220 |
+| drawer | 694, inset -20 | 474, inset 0 |
+| home | 694, band filled behind a window | 494, band off |
+
+The keyboard's 24px of background below its keys runs under the pill, which is
+what its `--gesture-strip-inset` is for; this strip is 20.
+
+### The guest could not install it
+
+Pushing the keyboard into a running guest failed on `layer-shell-qt`'s
+signature, "unknown trust". No image carries `archlinuxarm-keyring`: the build
+pacstraps against the builder's keyring, so every package in the image was
+verified, and pacman in the guest trusts none of ALARM's signatures afterwards.
+`layer-shell-qt` went in from the builder's pacman cache as a local file
+instead. The keyring is left for its own change.
+
+### The hide comes before the raise
+
+moarchy puts the keyboard away on the way home and on an overlay's close, and
+F3 records that on Sway a hide before the workspace switch sticks as well as
+one after. Here it does not. From Settings or Wi-Fi to an empty workspace, the
+keyboard's log reads `showing -- a text input activated` after the switch:
+something activates a text input as one of the shell's own windows loses focus,
+with nothing on the new workspace to type into. Leaving `foot` the same way
+raises nothing. What activates is not found.
+
+The drawer's close raced the same way. A drawer over a terminal, tapped so it
+held the seat's keyboard and then closed: the terminal's text input re-entered
+132ms after the close, and moarchy's second hide, 250ms after, caught it that
+time. In the run before, the same check had failed 6 of 6.
+
+So the second hide is not timed any more. `retreatKeyboard` in Shell.qml hides,
+then for one second hides again whenever the keyboard comes up, read off the
+home surface's height. `goHome` and every drawer close that is not a hand-off go
+through it. The cost is moarchy's: a field tapped inside that second has its
+keyboard put away once.
+
+### The drawer's cell targets were 20px low
+
+`drawer cellTarget` worked the surface's top out as the screen's height less
+the surface's, plus a strip: 46, where Hyprland reports 26. An 80px cell
+forgave that. With the keyboard up the surface is 474 tall and the same sum
+gives 266, and s.A8's tap on the Settings tile missed. Both targets are
+surface-local now, and the selftest adds the drawer layer's y from `hyprctl`.
+
+### The run
+
+`vm-selftest.sh` gains a `keyboard` section. The whole suite, before the last
+round of fixes: 144 of 149. The five failures were I5, whose "gap unchanged" is
+moarchy's and cannot hold for a grid sized to its apps; s.A8, on the cell
+target; settings' home-screen I1a, on the raise that follows the hide; and E2,
+which passed on a rerun of E. The keyboard section's other checks passed: the
+raise for a terminal, a typed `q`, I6's placement and up-flick, I5b's 220,
+I1a's keyboard half, F3 from a terminal, I5a, I5c and I5e, and I5d once.
+
+A rerun of D, H, settings and keyboard after the I5 and cell-target fixes
+passed both, and failed I1a on the home screen and I5d (6 of 6 up), the timed
+hide losing its race. `retreatKeyboard` is the answer to both and is the one
+part of this change no check has run: the last run, W to S, passed its 44
+checks and was stopped before the settings and keyboard sections.
