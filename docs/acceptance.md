@@ -23,10 +23,12 @@ an empty phone (A9, E6) while anybody else's window is up.
 | **partial** | Part of the criterion is met; the note says which part |
 | **todo** | Not built, or built and not yet exercised -- the note says which |
 
-Last full run: 2026-09-11, 70 checks -- 67 passing in one full run, and the three it
-failed (E3, E6, S22: two checks that read state before an animation and a
-client's close had finished, and a one-pixel rounding) passing on a rerun of
-their sections. VM windowed, one shell instance throughout, Omarchy 4.0.3 on
+Last full run: 2026-09-11, 129 checks -- 128 passing in one full run. The one
+it failed, S0 (the shade read closed after a pull that had followed the finger
+for 125 samples), passed on a rerun of H then S, the full run's order. That
+rerun lost S7, S10, S11 and S14 instead, each finding the shade shut under it,
+in a VM another session was pushing to at the same time; all four had passed
+in the full run. VM headless, Omarchy 4.0.3 with this project's patches, on
 Hyprland 0.56.2 at 360x720 logical.
 
 ---
@@ -198,6 +200,10 @@ which is also what grants the shade its Do Not Disturb and media services.
 | S21a | holds | Read per open, as in moarchy |
 | S22 | pass | At the cap, the list scrolls |
 | S23 | holds | Latched at the start of a drag. Not checked |
+| S24 | pass | **Changed:** by a patch -- upstream's service asks the bar whether to toast, and this bar says no (`notification-popups-bar-opt-out.patch`). Three notifications with the shade shut map no `omarchy-notifications` layer, and all three are listed |
+| S25 | pass | The first card's icon is on screen, and every row names where its icon came from |
+| S26 | pass | Shown after a notification, gone after Clear all, and Silent's glyph instead while Silent is on |
+| S27 | pass | A real tap on an `--exec` card runs it, removes the card and closes the shade; one on a card from an app with a window open focuses it; one on a card with nothing to run leaves it. The launch branch (an app with no window) is not checked. A sender's libnotify "default" action is not carried -- it dies with the live notification -- so those senders get focused instead, upstream's own fallback |
 
 | Constraint | Status | Note |
 | --- | --- | --- |
@@ -324,12 +330,12 @@ to travel up over the shade. The shade forwards the band instead.
 **`Toplevel.activate()` ignores the shell's own windows**, where it focuses
 anybody else's. Every focus goes through `hl.dsp.focus({ window = "address:…" })`.
 
-**Persistent toasts own the top of the screen.** Upstream's two first-run
-notifications do not time out, and the toast column takes every touch in
-roughly the top 170px until they are dismissed -- the drawer's handle and first
-grid row included. Pulling the shade down archives them into its list. The
-suite dismisses them before each section; H6 once failed without that for a
-reason that had nothing to do with H6.
+**Persistent toasts owned the top of the screen.** Upstream's two first-run
+notifications do not time out, and the toast column took every touch in
+roughly the top 170px until they were dismissed -- the drawer's handle and first
+grid row included. H6 once failed on it for a reason that had nothing to do
+with H6. There are no toasts now (S24); the suite still dismisses any before
+each section, for a guest whose Omarchy predates the patch.
 
 **Every `vm-push.sh` used to crash the shell.** It swapped the plugin's files
 while the shell was running, the shell hot-reloaded the plugin mid-copy, and

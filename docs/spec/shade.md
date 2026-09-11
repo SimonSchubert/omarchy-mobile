@@ -29,7 +29,7 @@ Ids are `S<n>`, cited by any check that proves one.
 | small tiles | Silent, Airplane, Torch, Rotate |
 | sliders | brightness, volume |
 | media | title and transport, when something is playing |
-| notifications | history, newest first, with a clear-all |
+| notifications | every notification, newest first, each with its icon, and a clear-all -- nothing toasts (S24) |
 
 The sheet is as tall as what is in it, up to 90% of the screen height below
 the gesture strip. Everything scrolls only in the notification list; the rest
@@ -307,6 +307,63 @@ begins and released when it ends: the sheet's own height is the divisor for
 both drag mappings (`gestures.md` D2a, 1:1 against the sheet it moves), so a
 notification landing mid-gesture would otherwise grow the sheet downward while
 making the same millimetre of thumb worth less of it.
+
+## S24–S27. No toasts
+
+**S24** Nothing toasts. Every notification -- whatever its urgency, whoever
+sent it, Omarchy's own confirmations included -- goes straight into the list
+above, and no surface is mapped over the screen for it. A toast is an Overlay
+surface across the top of every app and every sheet, and it takes their touches
+until it expires; upstream's two first-run toasts never do. The bar says that
+something arrived (S26); the shade is where it is read.
+
+Silent (S7) still decides what is worth keeping. With it on, upstream's rule for
+a silenced notification applies: one marked transient, or a bare `notify-send`
+with no name of its own, is dropped rather than recorded. Everything else is
+listed as usual.
+
+The switch is the bar's: upstream's notification service asks `shell.bar` for
+`notificationPopups`, and this bar answers `false`
+(`patches/notification-popups-bar-opt-out.patch`). Pointing `bar.id` back at
+`omarchy.bar` brings the toasts back with the rest of the desktop.
+
+→ with the shade shut, a notification maps no `omarchy-notifications` layer,
+and `shade notifications` lists it once the shade is opened
+
+**S25** Each card leads with an icon: the notification's own picture (an
+avatar, album art), else its app icon, else the icon of the desktop entry its
+app name matches, else the glyph Omarchy's own notifications carry, else a bell.
+No card is without one -- a column where some cards start at the edge and some
+48px in reads as misaligned, not as information.
+
+→ `shade target card0icon` is not `none`, and `shade icons` names a source for
+every row
+
+**S26** While the shade holds any notification, the status bar shows a bell
+beside the clock. It goes when the list is emptied, by Clear all or by the last
+swipe. While Silent is on, Silent's glyph shows instead: the list still fills,
+and the bar says only that you asked not to be told.
+
+→ `bar metrics` reads `bell=shown` after a notification, `bell=none` after Clear
+all, and `bell=none` with Silent on
+
+**S27** Tapping a card does what clicking its toast did, then the card goes and
+the shade closes. First match wins: the argv an Omarchy notification carries
+(`omarchy-notification-send --exec` -- the first-run "Update System" is one),
+else the sender's open window, else a launch of the app whose desktop entry
+answers to its name. A card with none of those does not light under a finger,
+and a tap leaves it where it is.
+
+A notification acted on is done with, as on Android, so this is the second way
+a card leaves the list after S18's swipe. What it cannot do is the one step of
+a toast's click that history does not keep: a sender's libnotify "default"
+action lives on its live notification, and the service lets go of that once
+the notification is written into history. Focusing the sender is upstream's own
+answer for the many senders that register no such action.
+
+→ a real tap on a card whose notification carries `--exec touch <file>` creates
+the file, closes the shade and removes the card; one on a card from an app with
+a window open focuses that window
 
 ---
 

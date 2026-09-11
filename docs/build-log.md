@@ -1110,3 +1110,127 @@ Settings' own, including real taps on the gear, the power glyph, a row and the
 back chevron, one real terminal opened from a row and closed, and a reminder
 set, listed, asked about and cancelled. The shade's S2 changed its answer from
 the Omarchy menu to Settings and gained S3 for the power glyph.
+
+## 2026-09-11 -- notifications live in the shade
+
+Nothing toasts any more. Every notification goes straight into the shade's
+list, each card leads with its sender's icon, and a bell beside the clock says
+something is waiting (shade.md S24–S26).
+
+### Why a patch
+
+The toasts are upstream's: a popup model and an Overlay window inside
+`notifications/Service.qml`. The first-party proxy a bar-kind plugin is handed
+carries `doNotDisturb` and nothing else, so the plugin can reach neither. Two
+ways round that were weighed and dropped:
+
+- Watch the live-toast files and run `notifications dismissAll` as each one
+  appears. No patch, but every toast is on screen for a fork and an IPC round
+  trip first -- a flash over the app, every time.
+- Leave Do Not Disturb on. It already writes a notification straight into
+  history, but it drops the ephemeral ones outright, still toasts Omarchy's own
+  confirmations and critical CLI alerts, and takes the Silent tile's meaning
+  with it.
+
+So `notification-popups-bar-opt-out.patch`. The service already reads
+`shell.bar` by name to place its toasts under the bar; now it also reads
+`notificationPopups`, and a `false` sends every notification down the path a
+silenced one takes, into history. A bar that says nothing keeps its toasts, so
+stock Omarchy is untouched and `bar.id` stays the one switch between the phone
+and the desktop. Toasts already up when the bar says no -- restored across a
+restart before the bar loaded -- are archived, not dropped, and `showHistory`,
+which replays history as toasts, answers `none`.
+
+### Silent still means something
+
+The new branch comes after the DND one. With Silent on, upstream's rule for a
+silenced notification still decides what is kept: a transient one, or a bare
+`notify-send`, is dropped. With Silent off everything is kept, confirmations
+included, because with no toast the list is the only place they can be seen.
+The bar's bell hides while Silent is on and Silent's own glyph stands in.
+
+### Where a card's icon comes from
+
+A history row carries `image`, `appIcon` and `glyph`, and upstream already
+copies file-backed images beside the history, so an avatar outlives the
+sender's temp file. The card takes the first of those that resolves -- themed
+names through `Quickshell.iconPath(name, true)`, the rule upstream's own card
+uses -- then the icon of the desktop entry the app name matches, then a bell.
+That lookup was the carousel's appId index, moved into Shell.qml so both read
+one copy, and it now indexes entry names too: a notification says "Firefox",
+not `firefox`.
+
+### The bell counts files
+
+There is no model to count: the proxy has no popup model, and history is a
+directory. So Bar.qml counts `*.json` there and re-counts on a directory watch,
+the toggles' pattern. It makes the directory before it watches it, because
+FileView cannot watch a path that does not exist and a first boot can get here
+before the service has made it.
+
+### vm-push.sh applies the patches
+
+The push only ever touched the user's home, and this change is in
+`/usr/share/omarchy`. It now copies `patches/` over too and applies, with
+sudo and `--fuzz=0`, each one that does not already reverse cleanly, dry-running
+it first so a patch that fails part-way leaves nothing behind. A second push
+onto a patched guest applies nothing and exits 0.
+
+### The run
+
+`vm-selftest.sh S H E` first: 38 checks, all passing, S24, S25 and S26 among
+them. Then the whole suite, because Shell.qml and `patches/` reach every
+section: 128 of 129. The one failure was S0, the shade reading closed after a
+pull that had followed the finger. It passed on a rerun of H then S, the full
+run's order, and that rerun lost S7, S10, S11 and S14 instead -- each found the
+shade shut when it went to tap a tile.
+
+Not this change, and not a flake either. Other sessions were driving the same
+VM: when the rerun ended the guest held a Settings window no check had left
+open, and the shell had restarted seconds before, from nobody's push in this
+session. A shell restart, or any sheet opening, shuts the shade under a run. It
+had happened the other way round already: this change's first push restarted
+the shell in the middle of another session's `settings` section, and because
+the selftest's dryRun guard does not survive a restart, that run's Restart row
+rebooted the guest for real. One VM wants one driver at a time.
+
+### Tap to run
+
+Clicking a toast ran it, and the first cut of this change lost that: a card in
+the shade only swiped away. Now a tap on a card does what the toast's click did,
+in upstream's order (`invokePopupDefault`), then removes the card and closes the
+shade (S27):
+
+- Omarchy's own `--exec` argv, which upstream carries in the row as data
+  precisely so a toast restored after a restart stays clickable. It survives
+  into history the same way, so the first-run "Update System" still updates.
+  Checked with upstream's own structural rule and run the way upstream runs it,
+  `Util.execArgv`, as bash positional parameters rather than a shell string.
+- Else the sender's window. Upstream asks `omarchy-hyprland-focus-app` to match
+  a class; here it is the foreign-toplevel list the carousel already reads,
+  matched on the app name, its reverse-DNS tail, or the id of the desktop entry
+  the name matches, and focused through `focusToplevel` like any card.
+- Else a launch of that desktop entry -- a step upstream does not have, because
+  a desktop toast is about an app that is running. A phone's notification often
+  is not.
+
+The step history cannot keep is a sender's libnotify "default" action. It is a
+method on the live notification, and `writeSilenced` lets that go once the row
+is on disk -- which is also what tells a Chromium sender its notification is
+gone. Keeping every notification live for as long as its card is listed would
+fix it, and would mean the service tracking sender objects for the life of the
+history, and ids that restart with every server; it is not attempted.
+Focusing the sender is upstream's own fallback for the senders that register no
+default action, which is most of them.
+
+A card with nothing to run does not light under a finger, so it does not
+promise a tap it will not keep. A swipe that springs back short of dismissing
+still releases inside the card, so a tap is told apart by the card being where
+it started.
+
+`vm-selftest.sh S`: 30 checks, all passing. Three are S27's, every one a real
+tap on card 0: a card with nothing to run stays, with the shade still up; an
+`--exec touch` card creates its file, removes itself and closes the shade; a
+card sent under a running window's app id focuses that window. H7a, a short
+swipe that springs back, still dismisses nothing and runs nothing. The launch
+branch has no check yet -- it needs a desktop entry whose app is not running.

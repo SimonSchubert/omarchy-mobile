@@ -18,8 +18,17 @@
 //                 plugin that declares kind "bar" -- one of the reasons this
 //                 plugin declares one (Bar.qml).
 //   clearing      The notifications proxy carries doNotDisturb and nothing that
-//                 clears, so Clear all and absorbing toasts on open go through
-//                 the service's own public IPC, `omarchy-shell notifications`.
+//                 clears, so Clear all goes through the service's own public
+//                 IPC, `omarchy-shell notifications`.
+//   toasts        There are none (S24). Bar.qml declares notificationPopups
+//                 false, and the service writes every notification straight
+//                 into the history this lists
+//                 (patches/notification-popups-bar-opt-out.patch). This file
+//                 used to absorb the toasts on each open instead, which left
+//                 them over every app until somebody pulled the shade down.
+//   tapping       A card does what clicking its toast did, as far as history
+//                 keeps it (S27): the notification's --exec argv, else the
+//                 sender's window, else a launch of its app.
 //   the gear      Opens Settings, and power opens it at its Power page (S2,
 //                 S3, settings.md A1, A3). Until Settings existed both opened
 //                 upstream's Omarchy menu, which on Hyprland at least
@@ -369,13 +378,6 @@ Item {
     if (root.host) root.host.closeOthers("shade")
     root.dragging = false
     root.progress = 1
-
-    // Absorb any live toasts. The toast column is Overlay too and maps after
-    // this surface, so anything left on screen floats over the shade that is
-    // supposed to be showing it. dismissAll is not a discard: the service
-    // archives each popup into the history directory, so they land in the
-    // list below -- what Android does when you pull down.
-    root.notificationsIpc(["dismissAll"])
     root.refresh()
   }
 
@@ -393,8 +395,9 @@ Item {
     if (!torchProbe.running) torchProbe.running = true
     // Twice, and the deferred one is not the redundant one. Immediately, so the
     // height the sheet opens at is decided before the open animation starts;
-    // deferred, because dismissAll archives through the service's own queue and
-    // the directory read in the same tick is a moment out of date.
+    // deferred, because the service writes through its own file-job queue, and
+    // a notification that arrived as the pull began can be a moment behind the
+    // read in the same tick.
     if (!historyRead.running) historyRead.running = true
     historyRefresh.restart()
   }
@@ -402,30 +405,23 @@ Item {
   Timer { id: historyRefresh; interval: 300; onTriggered: historyRead.running = true }
 
   // S18, S21a. The list is live while the shade is down, not read once per
-  // open. The service archives each toast into the history directory through
-  // its own file-job queue, and on this VM that finished after the deferred
-  // read above: three notifications sent, two listed, the third turning up only
-  // on the next open. A notification arriving with the shade already down
-  // belongs in the list too, which S21a's "per open" never promised against --
-  // it is one of the spec's unconfirmed lines. The height stays put under a
-  // finger regardless (S23).
+  // open. The service writes each notification into the history directory
+  // through its own file-job queue, and on this VM that finished after the
+  // deferred read above: three notifications sent, two listed, the third
+  // turning up only on the next open. A notification arriving with the shade
+  // already down belongs in the list too, which S21a's "per open" never
+  // promised against -- it is one of the spec's unconfirmed lines. The height
+  // stays put under a finger regardless (S23).
   //
   // The directory, not a file: a FileView cannot watch a path that does not
   // exist yet, and the service creates and deletes rows rather than editing
-  // them. Debounced through historyRefresh, because dismissAll archives several
-  // files in a burst.
+  // them. Debounced through historyRefresh, because a burst of notifications
+  // and Clear all both write several files at once.
   FileView {
     path: root.historyDir
     watchChanges: true
     printErrors: false
     onFileChanged: if (root.progress > 0) historyRefresh.restart()
-  }
-
-  // The service's public IPC, the same interface a keybinding uses. OMARCHY_PATH
-  // is passed explicitly because omarchy-shell refuses to run without it.
-  function notificationsIpc(args): void {
-    Quickshell.execDetached(["env", "OMARCHY_PATH=" + (Quickshell.env("OMARCHY_PATH") || "/usr/share/omarchy"),
-                             "omarchy-shell", "-q", "notifications"].concat(args))
   }
 
   // ------------------------------------------------------------- sources
@@ -699,6 +695,114 @@ Item {
     return String(row.timestamp || 0) + "-" + String(row.originalId || 0)
   }
 
+  // S25. What leads a card, first match wins: the notification's own picture
+  // (an avatar, album art -- upstream copies these beside the history, so they
+  // outlive the sender's temp file), its app icon, the icon of the desktop
+  // entry its app name matches, the glyph omarchy-notification-send attaches,
+  // and last a bell. `glyph` is always set, because a picture that is named
+  // and will not load falls back to it. `kind` is what `shade icons` reports.
+  readonly property int cardIcon: Style.space(36)
+  readonly property string bellGlyph: "󰂚"
+
+  // Upstream NotificationCard's rule, so a card here and a toast on the
+  // desktop resolve one value the same way. `check` is what keeps an unknown
+  // themed name from coming back as Qt's missing-texture placeholder.
+  function iconSource(value): string {
+    var s = String(value || "")
+    if (s === "") return ""
+    if (s.indexOf("file://") === 0 || s.indexOf("image://") === 0) return s
+    if (s.charAt(0) === "/") return Util.fileUrl(s)
+    return String(Quickshell.iconPath(s, true) || "")
+  }
+
+  function iconFor(row) {
+    var r = row || {}
+    var glyph = String(r.glyph || "") || root.bellGlyph
+    var image = root.iconSource(r.image)
+    if (image !== "") return { kind: "image", source: image, glyph: glyph }
+    var appIcon = root.iconSource(r.appIcon)
+    if (appIcon !== "") return { kind: "appIcon", source: appIcon, glyph: glyph }
+    var entry = root.host ? root.host.entryFor(r.app) : null
+    var apps = root.host ? root.host.apps : null
+    var fromEntry = entry && apps ? String(apps.iconSource(entry.icon) || "") : ""
+    if (fromEntry !== "") return { kind: "entry", source: fromEntry, glyph: glyph }
+    return { kind: r.glyph ? "glyph" : "fallback", source: "", glyph: glyph }
+  }
+
+  // S27. What a tap on a card does, first match wins -- the order upstream's
+  // toast click takes, less the one step history cannot keep:
+  //
+  //   exec    Omarchy's own `--exec` argv, which the row carries as data, so
+  //           it survives into history. The first-run "Update System" is one.
+  //   focus   the sender's window, if it has one open.
+  //   launch  the sender's app, if a desktop entry answers to its name --
+  //           what a phone does with a notification from an app not running.
+  //   none    nothing to do: the card does not light, and a tap leaves it.
+  //
+  // A libnotify "default" action is the step missing. It lives on the
+  // sender's live notification, which the service lets go of once the
+  // notification is written into history; focusing the sender is upstream's
+  // own answer for the senders that register none.
+
+  // Upstream's parseExecArgv (NotificationLogic.js): a structural check that
+  // fails closed. Which senders may set the hint is the notification bus's
+  // boundary, not this function's -- the same one upstream's toast has.
+  function execArgvFor(row) {
+    var text = String((row && row.execArgv) || "")
+    if (!text) return null
+    var parsed
+    try { parsed = JSON.parse(text) } catch (e) { return null }
+    if (!Array.isArray(parsed) || parsed.length === 0) return null
+    for (var i = 0; i < parsed.length; i++)
+      if (typeof parsed[i] !== "string") return null
+    if (!parsed[0] || parsed[0].charAt(0) === "-") return null
+    return parsed
+  }
+
+  // The sender's window: its app id is the notification's app name, the tail
+  // of a reverse-DNS one, or the id of the desktop entry the name matches --
+  // "Chromium" notifies, "chromium" is the window.
+  function windowFor(row) {
+    var app = String((row && row.app) || "").toLowerCase()
+    if (!app) return null
+    var entry = root.host ? root.host.entryFor(app) : null
+    var entryId = entry ? String(entry.id || "").toLowerCase().replace(/\.desktop$/, "") : ""
+    var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
+    for (var i = 0; i < list.length; i++) {
+      var id = String((list[i] && list[i].appId) || "").toLowerCase()
+      if (id && (id === app || id === entryId || id.split(".").pop() === app)) return list[i]
+    }
+    return null
+  }
+
+  function actionFor(row): string {
+    if (root.execArgvFor(row)) return "exec"
+    if (root.windowFor(row)) return "focus"
+    var entry = root.host && row ? root.host.entryFor(row.app) : null
+    return entry && root.host.apps ? "launch" : "none"
+  }
+
+  // The notification is done with once acted on, as on Android: the card goes
+  // and the shade with it, so what the tap opened is what is on screen. The
+  // row is dropped last -- that destroys the delegate this was called from.
+  function runRow(row): void {
+    var kind = root.actionFor(row)
+    root.lastAction = "card:" + kind
+    if (kind === "none") return
+    if (kind === "exec") {
+      // Through bash's positional parameters, as upstream runs it: never a
+      // shell string, so a title or a filename cannot become a command.
+      Util.execArgv(root.execArgvFor(row))
+    } else if (kind === "focus") {
+      root.host.focusToplevel(root.windowFor(row))
+    } else {
+      var entry = root.host.entryFor(row.app)
+      root.host.apps.launch(entry.id, root.host.apps.entryName(entry))
+    }
+    root.close()
+    root.dismissRow(row)
+  }
+
   // H7. Matched on the stem, not on object identity: with a JS array as the
   // model QML can hand out a fresh wrapper per access, and moarchy's `!==`
   // filter removed nothing while the file was already gone.
@@ -766,6 +870,10 @@ Item {
       }
       var item = items[name] || null
       if (name === "card0") item = notificationList.itemAtIndex(0)
+      if (name === "card0icon") {
+        var first = notificationList.itemAtIndex(0)
+        item = first ? first.iconItem : null
+      }
       if (!item || !item.visible) return "none"
       var p = item.mapToItem(null, item.width / 2, item.height / 2)
       return Math.round(p.x) + " " + Math.round(p.y) + " " + Math.round(item.width)
@@ -786,6 +894,26 @@ Item {
       for (var i = 0; i < root.historyRows.length; i++) {
         var r = root.historyRows[i]
         if (r) out.push(root.rowStem(r) + " " + (r.app || "?") + " " + (r.summary || ""))
+      }
+      return out.join("\n")
+    }
+
+    // S27. What a tap on each card would do, one line per row, in list order.
+    function actions(): string {
+      var out = []
+      for (var i = 0; i < root.historyRows.length; i++) {
+        var r = root.historyRows[i]
+        if (r) out.push(root.rowStem(r) + " " + root.actionFor(r))
+      }
+      return out.join("\n")
+    }
+
+    // S25. Where each card's icon came from, one line per row, in list order.
+    function icons(): string {
+      var out = []
+      for (var i = 0; i < root.historyRows.length; i++) {
+        var r = root.historyRows[i]
+        if (r) out.push(root.rowStem(r) + " " + root.iconFor(r).kind)
       }
       return out.join("\n")
     }
@@ -1605,7 +1733,10 @@ Item {
             id: card
             required property var modelData
             width: notificationList.width
-            height: cardBody.implicitHeight + Style.space(20)
+            height: Math.max(cardBody.implicitHeight, root.cardIcon) + Style.space(20)
+
+            // For `shade target card0icon`.
+            readonly property Item iconItem: cardIconSlot
 
             // H7a. Measured in moarchy: 100px leaves the notification, 340
             // removes it, on a 336px card.
@@ -1620,12 +1751,24 @@ Item {
               // Fades as it travels, so a half-swipe reads as "not yet".
               opacity: 1 - Math.min(0.75, Math.abs(sheetCard.x) / card.width)
 
-              // H7, H7b. The only way to dismiss one notification, and
+              // S27. A card that has something to do lights under a finger;
+              // one that has nothing does not, so it does not promise a tap.
+              readonly property string action: root.actionFor(card.modelData)
+              readonly property bool still: Math.abs(sheetCard.x) < root.slop
+
+              PressVeil {
+                anchors.fill: parent
+                radius: parent.radius
+                on: cardArea.pressed && sheetCard.still && sheetCard.action !== "none"
+              }
+
+              // H7, H7b. The only way to dismiss one notification unread, and
               // horizontal only with preventStealing false, so the list still
               // takes any drag that turns out to be a scroll (H5). Claiming one
               // axis rather than the gesture is what keeps a wandering scroll
               // from throwing away something you were reading.
               MouseArea {
+                id: cardArea
                 anchors.fill: parent
                 drag.target: sheetCard
                 drag.axis: Drag.XAxis
@@ -1636,6 +1779,10 @@ Item {
                   else springBack.restart()
                 }
                 onCanceled: springBack.restart()
+                // S27. A tap, told from a swipe by where the card is: a swipe
+                // that springs back short of dismissAt still releases inside
+                // the card, and must not run anything on the way.
+                onClicked: if (sheetCard.still) root.runRow(card.modelData)
               }
 
               NumberAnimation {
@@ -1644,12 +1791,55 @@ Item {
                 duration: 140; easing.type: Easing.OutCubic
               }
 
+              // S25. The sender, leading the card the way Android leads one.
+              Item {
+                id: cardIconSlot
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(12)
+                anchors.verticalCenter: parent.verticalCenter
+                width: root.cardIcon
+                height: root.cardIcon
+
+                readonly property var icon: root.iconFor(card.modelData)
+
+                Image {
+                  id: cardImage
+                  anchors.fill: parent
+                  visible: status === Image.Ready
+                  source: cardIconSlot.icon.source
+                  // Decoded at the size it is drawn: an avatar can be a
+                  // full-size photo, and there may be ten of them.
+                  sourceSize: Qt.size(root.cardIcon, root.cardIcon)
+                  asynchronous: true
+                  smooth: true
+                  fillMode: Image.PreserveAspectFit
+                }
+
+                // A glyph on a tonal disc: nothing to load, or what was named
+                // will not load. Not while it is still loading, or every
+                // picture would open on a flash of bell.
+                Rectangle {
+                  anchors.fill: parent
+                  visible: cardIconSlot.icon.source === "" || cardImage.status === Image.Error
+                  radius: width / 2
+                  color: root.container
+
+                  Ui.OpticalGlyph {
+                    anchors.fill: parent
+                    text: cardIconSlot.icon.glyph
+                    fontFamily: Style.font.family
+                    fontSize: Style.font.icon
+                    color: root.textOnSurface
+                  }
+                }
+              }
+
               Column {
                 id: cardBody
-                anchors.left: parent.left
+                anchors.left: cardIconSlot.right
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                anchors.leftMargin: Style.space(14)
+                anchors.leftMargin: Style.space(12)
                 anchors.rightMargin: Style.space(14)
                 spacing: Style.space(3)
 

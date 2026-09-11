@@ -108,10 +108,12 @@ here once it lands:
 | `lock-field-max-width.patch` | The lock screen's password field is 381px, wider than the screen it is centred on | [#11244](https://github.com/omacom/omarchy/pull/11244) |
 | `weather-panel-fit.patch` | The weather panel's hero row overlaps itself and its forecast row clips in a narrow popup | [#11238](https://github.com/omacom/omarchy/pull/11238) |
 | `plugin-manifest-kinds.patch` | A plugin that declares `kind: "menu"` never gets the app library, because its manifest's `kinds` is not an `Array` after a `QVariant` round trip | not submitted yet |
+| `notification-popups-bar-opt-out.patch` | A bar that shows notifications itself cannot turn the toasts off, so they float over its shade and every app | not submitted yet |
 
 The first three matter only on a narrow screen and change nothing at desktop
-width. The fourth is a plain bug. None of them is specific to aarch64 or to
-phones.
+width. The fourth is a plain bug. The fifth is a hook that does nothing unless
+a bar asks for it, so desktop Omarchy keeps its toasts. None of them is specific
+to aarch64 or to phones.
 
 Two divergences are deliberate and will stay, because they come from building a
 phone image rather than from aarch64:
@@ -128,7 +130,7 @@ phone image rather than from aarch64:
 ## The mobile UI
 
 <p align="center">
-  <img src="docs/screenshots/shade.png" width="24%" alt="The shade pulled down: clock, Wi-Fi and Bluetooth tiles, Silent, Airplane and Rotate, the volume slider, and notifications">
+  <img src="docs/screenshots/shade.png" width="24%" alt="The shade pulled down: clock, Wi-Fi and Bluetooth tiles, Silent, Airplane and Rotate, the volume slider, and three notifications, each led by its app's icon">
   <img src="docs/screenshots/wifi-screen.png" width="24%" alt="The Wi-Fi screen as a window of its own: a back chevron, the radio switch, and no Wi-Fi device in this VM">
   <img src="docs/screenshots/settings-root.png" width="24%" alt="Settings at the root: ten sections, each with the value it holds underneath">
   <img src="docs/screenshots/settings-theme.png" width="24%" alt="The Theme page: upstream's themes as a list, the one in use ticked">
@@ -149,7 +151,9 @@ it on.
   the finger. Drag down to put it away.
 - **Pull down the status bar** for the shade: Wi-Fi, Bluetooth, Silent,
   Airplane and Rotate, brightness and volume where there is hardware for them,
-  the media player, and notifications you swipe away. Holding the Wi-Fi or
+  the media player, and your notifications, each led by its app's icon: tap
+  one to open it, swipe it away to dismiss it. Nothing toasts over the screen:
+  a bell in the status bar says something is waiting. Holding the Wi-Fi or
   Bluetooth tile opens that radio's screen.
 - **Screens are windows**, so each gets a workspace and a carousel card: Wi-Fi,
   Bluetooth and Settings. Settings is ten phone-style sections over upstream's

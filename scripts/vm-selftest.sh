@@ -97,11 +97,15 @@ case $1 in
       "\(.name) \(.width)x\(.height)@\(.refreshRate) \(.x)x\(.y) \(.scale)"')"
     hyprctl eval "hl.monitor({ output = \"$name\", mode = \"$mode\", position = \"$pos\", scale = $scale, transform = 0 })" >/dev/null ;;
   menu_mapped) hyprctl layers | grep -c 'namespace: omarchy-menu' ;;
+  toasts) hyprctl layers | grep -c 'namespace: omarchy-notifications' ;;
   volume_view) echo "$(omarchy-shell shade tiles | grep -o 'volume=[a-z0-9]*') $(omarchy-shell shade target volume)" ;;
   radios) ls /sys/class/rfkill 2>/dev/null | wc -l ;;
   dnd) omarchy-shell notifications dndState ;;
   set_dnd) omarchy-shell notifications setDnd "$2" >/dev/null ;;
   notify) omarchy-notification-send "$2" "$3" >/dev/null 2>&1 ;;
+  # S27's two senders: one whose click runs an argv, one under an app's name.
+  notify_exec) shift; omarchy-notification-send "$1" "$2" --exec "${@:3}" >/dev/null 2>&1 ;;
+  notify_as) omarchy-notification-send --app-name "$2" "$3" "$4" >/dev/null 2>&1 ;;
   pids) hyprctl -j clients | jq -r --arg c "$2" '[.[] | select(.class == $c) | .pid] | sort | join(" ")' ;;
   kill_pids) shift; [ $# -gt 0 ] && kill "$@" 2>/dev/null; true ;;
   focus_ws) focus_ws "$2" ;;
@@ -116,10 +120,11 @@ case $1 in
     done
     echo "!! $2 never mapped" >&2; exit 1 ;;
   close_all)
-    # Toasts too. The notification popups are an Overlay surface whose input
-    # region is the toast column, above every sheet this shell draws -- a toast
-    # left standing from an earlier section swallowed every drag that started in
-    # the top 170px and failed H6 for a reason that had nothing to do with H6.
+    # Toasts too, which this bar turns off (S24) but a guest whose Omarchy
+    # predates the patch still has. The popups are an Overlay surface whose
+    # input region is the toast column, above every sheet this shell draws -- a
+    # toast left standing from an earlier section swallowed every drag that
+    # started in the top 170px and failed H6 for a reason unrelated to H6.
     omarchy-shell notifications dismissAll >/dev/null
     omarchy-shell drawer close >/dev/null; omarchy-shell recents close >/dev/null
     omarchy-shell shade close >/dev/null
@@ -513,14 +518,29 @@ section_S() {
   ipc settings quit >/dev/null; sleep 0.6
 
   g set_dnd off
+  # The bell's state by exact key, polled: the bar re-counts on a debounced
+  # directory watch, behind the service's own file queue.
+  bell_state() { ipc bar metrics | tr ' ' '\n' | sed -n 's/^bell=//p'; }
   for i in 1 2 3; do g notify "selftest $i" "Body of selftest notification $i"; sleep 0.2; done
+  sleep 0.8
+  # Counted with the shade still shut, which is when a toast would be up.
+  local toasts; toasts=$(g toasts)
+  check S26 "a notification puts the bell in the bar" wait_for bell_state shown
   ipc shade open >/dev/null; sleep 1.5
   local rows; rows=$(ipc shade notifications | grep -c 'selftest')
+  check S24 "three notifications, no toast ($toasts omarchy-notifications layers), all three in the shade" \
+    bash -c "[ '$toasts' = 0 ] && [ $rows -ge 3 ]"
   # The first of ITS OWN rows, not the first row: anything else that notifies
   # during the run is newer than all three and would lead the list.
   local first_own; first_own=$(ipc shade notifications | grep selftest | head -1)
   check S18 "notifications are listed, newest first ($rows; leading: ${first_own#* omarchy-action })" \
     bash -c "[ $rows -ge 3 ] && [[ '$first_own' == *'selftest 3'* ]]"
+  local icon0 kinds nrows
+  icon0=$(ipc shade target card0icon)
+  kinds=$(ipc shade icons | awk 'NF == 2' | wc -l | tr -d ' ')
+  nrows=$(ipc shade notifications | wc -l | tr -d ' ')
+  check S25 "every card leads with an icon ($kinds of $nrows; the first from $(ipc shade icons | head -1 | cut -d' ' -f2))" \
+    bash -c "[ '$icon0' != none ] && [ $kinds = $nrows ]"
   local cx cy
   read -r cx cy _ <<<"$(ipc shade target card0)"
   DX=-100 drag "$cx" "$cy" 0
@@ -565,6 +585,51 @@ section_S() {
   ipc shade close >/dev/null; sleep 0.8; ipc shade open >/dev/null; sleep 1.5
   check S19 "and they stay removed" is "$(ipc shade notifications | wc -l | tr -d ' ')" 0
   ipc shade close >/dev/null
+  check S26 "and the bell goes with them" wait_for bell_state none
+
+  g notify "selftest bell" "Body"
+  wait_for bell_state shown
+  g set_dnd on; sleep 0.5
+  # One read, so the two halves cannot disagree about when they were taken.
+  local silenced; silenced=$(ipc bar metrics)
+  check S26 "with Silent on, Silent's glyph stands in for the bell" \
+    bash -c "[[ '$silenced' == *dnd=on* ]] && [[ '$silenced' == *bell=none* ]]"
+  ipc notifications clear >/dev/null
+  g set_dnd off
+
+  # S27. Real taps on card 0, which is always the notification just sent: the
+  # list was emptied above, and each tap that runs something removes its card.
+  local acts ran after left
+  g notify "selftest inert" "Nothing to run"; sleep 1
+  ipc shade open >/dev/null; sleep 1.5
+  acts=$(ipc shade actions | head -1 | cut -d' ' -f2)
+  read -r cx cy _ <<<"$(ipc shade target card0)"; tap "$cx" "$cy"; sleep 1
+  check S27 "a tap on a card with nothing to run ($acts) leaves it, and the shade up" \
+    is "$(ipc shade state) $(ipc shade notifications | grep -c 'selftest inert')" "open 1"
+  ipc shade close >/dev/null; ipc notifications clear >/dev/null; sleep 0.8
+
+  # The marker goes first, so a file an earlier run left cannot pass this.
+  local marker=/tmp/omarchy-mobile-selftest-tapped
+  g sh "rm -f $marker"
+  g notify_exec "selftest tap" "Tap to run" touch "$marker"; sleep 1
+  ipc shade open >/dev/null; sleep 1.5
+  acts=$(ipc shade actions | head -1 | cut -d' ' -f2)
+  read -r cx cy _ <<<"$(ipc shade target card0)"; tap "$cx" "$cy"; sleep 1
+  ran=$(g sh "[ -e $marker ] && echo ran || echo not-run")
+  after=$(ipc shade state)
+  left=$(ipc shade notifications | grep -c 'selftest tap')
+  check S27 "a tap on an --exec card ($acts) runs it, closes the shade and removes the card" \
+    is "$ran $after $left" "ran closed 0"
+
+  g open_app sel-t; g focus_ws empty; sleep 0.4
+  g notify_as sel-t "selftest focus" "From sel-t"; sleep 1
+  ipc shade open >/dev/null; sleep 1.5
+  acts=$(ipc shade actions | head -1 | cut -d' ' -f2)
+  read -r cx cy _ <<<"$(ipc shade target card0)"; tap "$cx" "$cy"; sleep 1
+  check S27 "a tap on a card from an app with a window open ($acts) focuses it" \
+    is "$(g active_class) $(ipc shade state)" "sel-t closed"
+
+  ipc notifications clear >/dev/null
   g set_dnd "$dnd0"
 }
 

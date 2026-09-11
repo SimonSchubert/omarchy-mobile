@@ -83,6 +83,56 @@ Item {
 
   readonly property var apps: root.shell ? root.shell.appLibrary : null
 
+  // ------------------------------------------------- name -> desktop entry
+  //
+  // appLibrary turns an icon name into a source but has no lookup by id, so
+  // the index is built once and rebuilt when the app list moves -- scanning
+  // sortedEntries() per card would be O(apps) per card per frame. Here rather
+  // than in Carousel.qml, where it started, because a notification names its
+  // sender too, and the shade takes a card's icon from the same index.
+  property var entryIndex: ({})
+
+  function buildEntryIndex(): void {
+    var map = ({})
+    if (!root.apps) { root.entryIndex = map; return }
+    var rows = root.apps.sortedEntries("")
+    for (var i = 0; i < rows.length; i++) {
+      var entry = rows[i].entry
+      if (!entry) continue
+      var id = String(entry.id || "").toLowerCase().replace(/\.desktop$/, "")
+      if (!id) continue
+      if (map[id] === undefined) map[id] = entry
+      // An app often reports only the last segment of a reverse-DNS desktop
+      // id as its app id -- org.gnome.Papers runs as "papers". Index both;
+      // first writer wins, so an exact match is never displaced by a suffix.
+      var tail = id.split(".").pop()
+      if (tail && map[tail] === undefined) map[tail] = entry
+    }
+    // A notification's app name is usually the display name -- "Firefox",
+    // not "firefox.desktop" -- so names go in too, after every id, so that
+    // no name can displace one.
+    for (var j = 0; j < rows.length; j++) {
+      var named = rows[j].entry
+      var name = named ? String(named.name || "").toLowerCase() : ""
+      if (name && map[name] === undefined) map[name] = named
+    }
+    root.entryIndex = map
+  }
+
+  Connections {
+    target: root.apps
+    function onAppsChanged() { root.buildEntryIndex() }
+  }
+
+  onAppsChanged: root.buildEntryIndex()
+
+  // An app id or an app name, in any case; null for anything unknown.
+  function entryFor(name) {
+    if (!name) return null
+    var e = root.entryIndex[String(name).toLowerCase()]
+    return e === undefined ? null : e
+  }
+
   // Deep enough to hit without looking, shallow enough that it rarely lands on
   // an app's own bottom controls. Through Style.space like every other length
   // here, so a theme's spacing scale moves it with the rest of the shell.

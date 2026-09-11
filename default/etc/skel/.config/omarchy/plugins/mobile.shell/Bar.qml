@@ -66,6 +66,10 @@ Item {
   //                                 under the bar; the shade's grab band is
   //                                 exactly barSize tall
   //   fontFamily                    notifications/Service.qml renders toasts
+  //   notificationPopups            false, so notifications/Service.qml puts
+  //                                 every notification in the history the
+  //                                 shade lists and toasts none of them
+  //                                 (patches/notification-popups-bar-opt-out.patch)
   // Called behind a typeof guard, so a missing one is survivable:
   //   summonBarWidget / hideBarWidget / isBarWidgetOpen   shell.summon routing
   //   panelWidgetIdAt                                     togglePanelAt IPC
@@ -74,6 +78,11 @@ Item {
   readonly property string position: "top"
   readonly property string fontFamily: Style.font.family
   readonly property bool barHidden: false
+
+  // S24. No toasts: a phone reads its notifications in the shade. A toast here
+  // was an Overlay surface over the top 170px of every app and every sheet,
+  // taking their touches until it expired.
+  readonly property bool notificationPopups: false
 
   // This bar hosts no widgets, so every widget-routing call has one honest
   // answer. Returning false rather than omitting the function is what makes
@@ -267,12 +276,56 @@ Item {
   // ------------------------------------------------------------- notifications
   //
   // Through the host's first-party proxy, which it hands a plugin that declares
-  // kind "bar". The proxy carries doNotDisturb and not the popup model, so
-  // moarchy.bar's pending-notification dot is not ported -- there is nothing to
-  // count it from.
+  // kind "bar". The proxy carries doNotDisturb and not the popup model -- and
+  // with notificationPopups false there are no popups to count anyway: every
+  // notification goes straight into the history directory the shade lists. So
+  // the bell (S26) counts that directory, watched the way the toggles are.
   readonly property var notifications: root.shell && typeof root.shell.firstPartyServiceFor === "function"
     ? root.shell.firstPartyServiceFor("omarchy.notifications") : null
   readonly property bool dnd: root.notifications ? root.notifications.doNotDisturb === true : false
+
+  // The service's own path, which does not read XDG_STATE_HOME.
+  readonly property string historyDir:
+    Quickshell.env("HOME") + "/.local/state/omarchy/notifications/history"
+
+  property int historyCount: 0
+  readonly property bool bellShown: !root.dnd && root.historyCount > 0
+
+  // The directory is made before it is watched: FileView cannot watch a path
+  // that does not exist yet, and on a first boot this can run before the
+  // service has made it. So the watch is armed by the first count, not before.
+  property bool historyWatched: false
+
+  Process {
+    id: historyProbe
+    running: true
+    command: ["bash", "-c", "mkdir -p \"$1\" && ls -1 \"$1\" | grep -c '\\.json$'", "--", root.historyDir]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var n = parseInt(String(text || "").trim(), 10)
+        root.historyCount = isFinite(n) ? n : 0
+        root.historyWatched = true
+      }
+    }
+  }
+
+  // Debounced: Clear all, and the service's history trim, touch several files
+  // in one burst.
+  Timer {
+    id: historyRecount
+    interval: 150
+    onTriggered: {
+      if (historyProbe.running) historyRecount.restart()
+      else historyProbe.running = true
+    }
+  }
+
+  FileView {
+    path: root.historyWatched ? root.historyDir : ""
+    watchChanges: true
+    printErrors: false
+    onFileChanged: historyRecount.restart()
+  }
 
   SystemClock {
     id: clock
@@ -291,6 +344,8 @@ Item {
            + " slot=" + root.glyphSlot
            + " weight=" + root.textWeight
            + " dnd=" + (root.dnd ? "on" : "off")
+           + " bell=" + (root.bellShown ? "shown" : "none")
+           + " history=" + root.historyCount
            + " wifi=" + (root.wifiGlyph !== "" ? "shown" : "none")
            + " bt=" + (root.btGlyph !== "" ? "shown" : "none")
            + " pct=" + (root.batteryPercentShown ? "on" : "off")
@@ -354,6 +409,15 @@ Item {
             visible: root.dnd
             text: "󰂛"
             color: root.dim
+          }
+
+          // S26. Something is waiting in the shade. While Silent is on, its
+          // glyph takes this one's place: the shade still fills, and the bar
+          // says only that you asked not to be told.
+          StatusGlyph {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.bellShown
+            text: "󰂚"
           }
         }
 

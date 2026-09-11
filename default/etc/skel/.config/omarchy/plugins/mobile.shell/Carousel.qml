@@ -177,41 +177,10 @@ Item {
 
   // ------------------------------------------------- appId -> desktop entry
   //
-  // appLibrary turns an icon name into a source but has no lookup by id, so
-  // the index is built once and rebuilt when the app list moves -- scanning
-  // sortedEntries() inside a delegate would be O(apps) per card per frame.
-  property var appIdIndex: ({})
-
-  function buildIndex(): void {
-    var map = ({})
-    if (!root.apps) { root.appIdIndex = map; return }
-    var rows = root.apps.sortedEntries("")
-    for (var i = 0; i < rows.length; i++) {
-      var entry = rows[i].entry
-      if (!entry) continue
-      var id = String(entry.id || "").toLowerCase().replace(/\.desktop$/, "")
-      if (!id) continue
-      if (map[id] === undefined) map[id] = entry
-      // An app often reports only the last segment of a reverse-DNS desktop
-      // id as its app id -- org.gnome.Papers runs as "papers". Index both;
-      // first writer wins, so an exact match is never displaced by a suffix.
-      var tail = id.split(".").pop()
-      if (tail && map[tail] === undefined) map[tail] = entry
-    }
-    root.appIdIndex = map
-  }
-
-  Connections {
-    target: root.apps
-    function onAppsChanged() { root.buildIndex() }
-  }
-
-  onAppsChanged: root.buildIndex()
-
+  // The host's index (Shell.qml), which the shade's notification cards read
+  // too.
   function entryFor(appId) {
-    if (!appId) return null
-    var e = root.appIdIndex[String(appId).toLowerCase()]
-    return e === undefined ? null : e
+    return root.host ? root.host.entryFor(appId) : null
   }
 
   // K5, K9. A screen this shell draws is a window like any other and gets a
@@ -287,7 +256,7 @@ Item {
   function open(): void {
     if (root.host) root.host.closeOthers("recents")
     root.rebuildMru()
-    root.buildIndex()
+    if (root.host) root.host.buildEntryIndex()
     root.dragging = false
     root.homeHint = 0
     root.progress = 1

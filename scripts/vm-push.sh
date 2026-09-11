@@ -6,7 +6,8 @@
 # Copies what the image build would put in /etc/skel into the live user's home
 # -- the shell plugins and hypr/mobile.lua -- does the two things
 # vm/configure.sh does at build time (enable each plugin in shell.json, require
-# mobile.lua from hyprland.lua), and restarts the shell so it loads them.
+# mobile.lua from hyprland.lua), applies any of patches/ the installed Omarchy
+# does not carry yet, and restarts the shell so it loads them.
 #
 # A restart rather than the shell's own hot reload, which watches plugin files
 # and reloads on change. That reload segfaulted quickshell three times in
@@ -34,7 +35,7 @@ SKEL=default/etc/skel/.config
 ssh "${SSH_OPTS[@]}" -p "$PORT" "$USER_NAME@127.0.0.1" \
   'rm -rf ~/.cache/omarchy-mobile-push && mkdir -p ~/.cache/omarchy-mobile-push'
 scp "${SSH_OPTS[@]}" -P "$PORT" -rq \
-  "$SKEL/omarchy/plugins" "$SKEL/hypr/mobile.lua" default/etc/skel/.local \
+  "$SKEL/omarchy/plugins" "$SKEL/hypr/mobile.lua" default/etc/skel/.local patches \
   "$USER_NAME@127.0.0.1:.cache/omarchy-mobile-push/"
 
 ssh "${SSH_OPTS[@]}" -p "$PORT" "$USER_NAME@127.0.0.1" bash -s <<'GUEST'
@@ -55,6 +56,26 @@ SHELL_JSON=~/.config/omarchy/shell.json
 # that the carousel counted as an app. The same kill loop upstream's own
 # omarchy-restart-shell uses.
 while timeout 5 quickshell kill -p "$OMARCHY_PATH/shell" --any-display >/dev/null 2>&1; do :; done
+
+# Upstream's patches, onto the tree the image build installed. The build
+# applies them to a fresh tarball; this tree already carries the ones it was
+# built with, so a patch that reverses cleanly is in and is skipped. Dry-run
+# forward before the real thing, because a patch that fails half-way leaves
+# the hunks it did land. A failure is reported, not fatal: the shell is down
+# by now, and a push that stops here leaves the phone with no shell at all.
+patch_failed=0
+for p in "$STAGE"/patches/*.patch; do
+  [ -e "$p" ] || continue
+  name=$(basename "$p")
+  sudo patch -d "$OMARCHY_PATH" -p1 -R -f --dry-run --fuzz=0 -s <"$p" >/dev/null 2>&1 && continue
+  if sudo patch -d "$OMARCHY_PATH" -p1 --forward --dry-run --fuzz=0 -s <"$p" >/dev/null 2>&1; then
+    sudo patch -d "$OMARCHY_PATH" -p1 --forward --fuzz=0 --no-backup-if-mismatch -s <"$p"
+    echo "patched $name"
+  else
+    echo "!! $name does not apply to $OMARCHY_PATH" >&2
+    patch_failed=1
+  fi
+done
 
 mkdir -p "$PLUGINS"
 for dir in "$STAGE"/plugins/*/; do
@@ -87,7 +108,7 @@ hyprctl reload >/dev/null && echo "hyprland reloaded"
 # lands in the session's environment rather than this ssh login's.
 hyprctl dispatch 'hl.dsp.exec_cmd("omarchy-launch-shell")' >/dev/null
 for _ in $(seq 1 40); do
-  omarchy-shell shell ping >/dev/null 2>&1 && { echo "shell up"; exit 0; }
+  omarchy-shell shell ping >/dev/null 2>&1 && { echo "shell up"; exit "$patch_failed"; }
   sleep 0.25
 done
 echo "!! shell did not come back" >&2
