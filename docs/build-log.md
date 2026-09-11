@@ -1416,3 +1416,27 @@ drawer had no `launch`, so every Open was the fallback. It has moarchy's now:
 find the grid's entry for the id and launch it the way a tap does, or launch
 the id through the library and answer `no-entry`. There is no splash here yet
 (L1-L8), so L9 holds only as the hand-off.
+
+### Checked in the running guest
+
+The keyring, both packages and the rule went into the running guest the way
+the README's not-done line says to, and `vm-push.sh` put the drawer's `launch`
+there. Before and after:
+
+| | before | after |
+| --- | --- | --- |
+| `pkcheck` on `org.moarchy.store.manage`, over ssh | exit 127 | exit 0 |
+| ALARM's build key in the guest's keyring | `[ unknown]` | `[  full  ]` |
+
+`vm-selftest.sh apps` passed 9 of 9. Both packages were installed, and each app
+mapped a window from `drawer launch` with its bare id (L9a). The installed
+store calls `drawer launch` for Open (L9), and the two checks in the table
+pass. Then came the store's own path, `pkexec moarchy-store-helper install
+bottom` over ssh with no agent to answer a prompt. It installed `bottom`
+0.14.9-1, verified against ALARM's signature, and `remove` took it out again.
+`cowsay`, which is not in the catalogue, was refused.
+
+Not checked: a disk built from this change. The image in `vm/out/` is the one
+the shared VM runs from, so the pacstrap half is inferred, not seen: the
+keyring's `post_install` populating a fresh keyring, and the rule landing
+through `default/`.

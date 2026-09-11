@@ -232,7 +232,9 @@ which is also what grants the shade its Do Not Disturb and media services.
 | W4 | todo | Upstream's gaps toggle writes the same `hl.config` call, and `mobile.lua` loads after it, so the toggle is currently a no-op |
 | W5 | pass | And its typing half: a focused terminal raises the keyboard by itself, and a real tap on the keyboard's `q` types `q` into it |
 | W6 | pass | **Added here.** Settings' window is untagged and at opacity 1, and samples `#1a1b26` down its length, as the bar does |
-| L1–L9a | todo | The launch splash. Upstream's launch OSD still runs |
+| L1–L8 | todo | The launch splash. Upstream's launch OSD still runs |
+| L9 | partial | The hand-off holds: the installed store's Open calls `omarchy-shell drawer launch`, and the drawer answers it. The splash it hands off to is L1–L8 |
+| L9a | pass | `drawer launch` with a bare id finds the grid's entry for Keep and for the store, and each maps a window |
 
 ## [style.md](spec/style.md)
 
