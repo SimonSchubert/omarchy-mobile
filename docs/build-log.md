@@ -1939,3 +1939,139 @@ was called `baseline` -- which is one of `Item`'s anchor lines, and FINAL. The
 shell logs both lines and carries on, so the only symptom on the phone is that
 tapping an app goes back to having no feedback at all. Renamed
 `windowsAtLaunch`, with the reason in the file.
+
+---
+
+## 2026-09-12 -- long-press to uninstall, and the list that says what the phone is
+
+The grid had one verb. A tap launches (gestures.md H4), and there was no way to
+reach anything *about* an app -- what it is, what it came from, or how to be rid
+of it -- on an image that ships 58 desktop entries nobody chose one at a time.
+Upstream's answer is keyboard-shaped: Ctrl+D on a highlighted row of the Omarchy
+menu arms a confirm. A modifier on a highlighted row is not a thing a thumb can
+do. gestures.md L is the gesture that is, and it was copied into `docs/spec/`
+with the rest of them and left `todo`.
+
+Removal is the drawer's, not a terminal's. `omarchy-remove-launcher-entry` ends
+its package branch with
+
+```
+exec omarchy-launch-floating-terminal-with-presentation \
+     "echo Uninstalling ...; sudo pacman -Rns <pkg>"
+```
+
+so the only statement of what a removal will take is pacman's own `[Y/n]` in a
+60-column foot window, answered on the on-screen keyboard. That is the right
+control on a desktop and the wrong one here: it is the consequence being stated
+in the one surface that costs a keyboard to read. So the card asks the question
+itself, from the same pacman output, before anything runs.
+
+### The gesture had to share a MouseArea with two others
+
+The cell's `MouseArea` already holds the exclusive grab for the whole gesture --
+that is what lets a press starting on an icon drag the sheet closed (H1). A
+`TapHandler` alongside it would only ever get a passive grab, so the press it
+saw would end wherever the `MouseArea` decided the gesture was over. A timer
+armed on `pressed` has no grab of its own to lose, so that is what the hold is:
+500ms, cancelled by travel past the slop in either direction on either axis, and
+by the `onCanceled` a `Flickable` produces when it steals the grab.
+
+The flag that swallows the hold's click is cleared on the **next press**, never
+on release. Qt delivers `released` and then `clicked` to the same area, so a
+flag cleared in the release handler is already false when the click arrives --
+and the app you asked about is the app that starts. `sheetWasDrag` was already
+written that way for the same reason; `holdFired` sits beside it.
+
+### The rule that could not be copied
+
+L11 ported unchanged: nothing named `moarchy*` or `omarchy*`, which is
+`omarchy-config`, `moarchy-keyboard`, `moarchy-keep` and `moarchy-store-git`
+today and whatever this project ships later without anyone remembering to come
+back here.
+
+L12 did not. On moarchy every app is a dependency of `moarchy-meta`, a package
+with no files whose whole content is a `depends` line, so pacman itself objects
+to every removal and the rule is "accept pacman's answer, less the objection
+that is only the set talking" -- waived for that one name with
+`--assume-installed`. This image has no meta package at all: `vm/build-disk.sh`
+pacstraps `vm/packages/session` and `vm/packages/apps` as explicit targets.
+Nothing declares that the phone needs a terminal, and so:
+
+```
+$ pacman -Rs --print --print-format '%n %v %s' foot
+foot 1.28.0-2 958860
+fcft 3.3.3-1 192077
+libutf8proc 2.11.3-1 434455
+```
+
+Pacman is right to allow it, and the card would have offered to remove the
+terminal every TUI and every bridged Settings row opens in (K8).
+
+So the same question is asked of the list that does record it. The session tier
+*is* this project's "what the phone is made of" -- it is kept for its own reason,
+as what `vm-build.sh --session-only` installs -- and the build now installs it
+at `/etc/omarchy-mobile/session-packages`, verbatim, comments and all, so the
+file in the guest is the file in the repo and `omarchy-mobile-app-remove` does
+the one parse. `vm-push.sh` carries it too: the script treats a missing list as
+"cannot tell" and blocks every package removal, which is the right answer for a
+guest built before this landed and the wrong one for a guest that has just had
+the script pushed to it.
+
+It is asked of the **whole plan** and not of the target, and that is the half
+that matters. `-Rs` takes orphaned dependencies with it, so the way a session
+package dies is as somebody else's cascade. moarchy measured exactly that:
+`upower` went out as KWeather's orphan and took the battery indicator with it.
+Here `upower` is installed as a dependency of `power-profiles-daemon` and
+`localsearch`, and `power-profiles-daemon` is session tier, so pacman will not
+orphan it while that is installed -- covered, but covered by accident, which is
+why the check is over the plan rather than over the target.
+
+L13 has nothing to say here and is marked `n/a` rather than ported: it exists
+because an upgraded `moarchy-meta` resolves its dependencies and puts a removed
+app back. Nothing on this image does that, so a removal stays removed.
+
+### Measured on the four entries the rules disagree about
+
+Against real pacman in the guest, before any of it was wired to a button:
+
+| Entry | Package | What the script answered |
+| --- | --- | --- |
+| Clocks | `gnome-clocks` | `count 1`, `size 3.5 MiB` |
+| Files | `nautilus` | `blocked removing nautilus breaks dependency 'nautilus' required by nautilus-python` |
+| Foot | `foot` | `blocked The phone's session is made of foot.` |
+| Notes | `moarchy-keep` | `blocked Part of omarchy-mobile. The shell will not uninstall itself.` |
+
+Files is the one that shows pacman still does the work it can: `nautilus-python`
+declares `nautilus`, so L12's original half answers without the session list
+being consulted at all.
+
+### One sentence that was wrong
+
+`protected 1` is whether there is an Uninstall button, and the card drew one
+sentence in its place -- "Part of omarchy-mobile. The shell will not uninstall
+itself." True of Notes. Not true of Foot, which is protected without being any
+part of this project. Two rules lead to that line and they are not the same
+fact about the app, so the script emits a `guard` line with the sentence and the
+card draws that; the fallback in QML is a generic refusal, not one of the two.
+
+### Checked in the running guest
+
+`./scripts/vm-selftest.sh L`, 19 checks. The gesture is a real 900ms press on
+Foot's cell aimed with `drawer cellTarget`, and a real 1.2s drag from the same
+cell for the half that must not open a card. The three refusals are checked
+against the three things that cause them and none of them is confirmed -- a
+plan is `pacman -Rs --print`, which changes nothing, and that is what makes it
+safe to ask it about the phone's own terminal.
+
+The one removal the suite ever runs is of a launcher it writes into
+`~/.local/share/applications` two seconds earlier. That is the `kind user`
+branch, which deletes one file, so the whole path is exercised -- hold, plan,
+confirm, and the grid dropping the app without being reopened (L10) -- without
+uninstalling anything from somebody's phone.
+
+Two things the runs cost. The entry id carries no `.desktop`: `drawer detail`
+answers `foot`, not `foot.desktop`, which is also why `drawer launch` strips the
+suffix off whatever it is handed. And one run of four lost L5 and L6 to a card
+that had closed between two of the suite's own ssh round trips, while another
+session was driving the same VM; L6 reads the card in one round trip now rather
+than five, which is the half of that this repo can fix.

@@ -171,6 +171,12 @@ it on.
   [`hypr/mobile.lua`](default/etc/skel/.config/hypr/mobile.lua).
 - **Drag up on the wallpaper** of a home screen for the app drawer, 1:1 with
   the finger. Drag down to put it away.
+- **Hold an app icon** for a card that says what it is: the package that owns
+  it, its version and installed size. Uninstall never removes on the first tap
+  -- it shows the plan first, every package the removal would take and how much
+  they weigh, read out of `pacman -Rs --print`. Nothing this phone is made of
+  can go: the shell's own packages, and anything in the session tier, say so
+  instead of offering a button.
 - **Pull down the status bar** for the shade: Wi-Fi, Bluetooth, Silent,
   Airplane and Rotate, brightness and volume where there is hardware for them,
   the media player, and your notifications, each led by its app's icon: tap
@@ -257,7 +263,7 @@ All measured, and the surface layout is shaped around them.
 | `vm/build-packages.sh` | Builds what ALARM is behind on or lacks, from Arch's packaging repos and the AUR |
 | `vm/build-disk.sh` | pacstrap → configure → ESP + ext4 → GPT disk |
 | `vm/configure.sh` | Runs in the rootfs under `arch-chroot`: identity, fstab, initramfs, user, session |
-| `vm/packages/` | The package set, in three files, with every omission explained |
+| `vm/packages/` | The package set, in three files, with every omission explained. `session` is installed into the guest as `/etc/omarchy-mobile/session-packages`, because it is also the answer to "what may not be uninstalled" (gestures.md L12) |
 | `default/` | This project's own overlay, copied onto the rootfs |
 | `default/etc/skel/.config/omarchy/plugins/mobile.shell/` | The mobile UI -- status bar, shade, gestures, sheets and the Wi-Fi, Bluetooth and Settings screens -- as one Omarchy shell plugin. Settings' pages are data, in `Pages.js` |
 | `default/etc/skel/.config/hypr/mobile.lua` | One app per workspace, filling it, no layer animation on the shell's own sheets, and the on-screen keyboard started and bound to Super+I -- a user override loaded after upstream's defaults |
@@ -265,7 +271,7 @@ All measured, and the surface layout is shaped around them.
 | `default/etc/skel/.local/bin/` | `omarchy-mobile-*`, the helpers behind Settings' native pages: audio routing, reminders, time zone, plugins, About; and the keyboard toggle |
 | `default/etc/skel/.local/share/` | Desktop entries and icons for the Wi-Fi, Bluetooth and Settings screens. Only Settings shows in the drawer. Also a copy of mpv's entry that hides it from the drawer |
 | `default/etc/skel/.config/mimeapps.list` | The default handlers, named rather than left to the mimeinfo cache: GNOME Web for http/https, Evince for PDFs |
-| `default/usr/local/bin/` | Shadows of upstream `omarchy-*` scripts that assume a Chromium-family browser. `/usr/local/bin` comes before `/usr/bin` in the guest's PATH, so this overrides without patching the vendored tree |
+| `default/usr/local/bin/` | Shadows of upstream `omarchy-*` scripts that assume a Chromium-family browser -- `/usr/local/bin` comes before `/usr/bin` in the guest's PATH, so this overrides without patching the vendored tree. Also `omarchy-mobile-app-remove`, which the drawer's long-press card asks what an app is and what removing it would take; it lives here rather than in `~/.local/bin` so that a caller with no login shell can name it without a path |
 | `patches/` | Fixes to the vendored upstream. Applied with `--fuzz=0`, so a moved upstream fails the build |
 | `scripts/vm-*.sh` | Build, run, ssh, screenshot, drag, push the overlay into a running guest, selftest |
 | `docs/spec/` | moarchy's acceptance criteria, copied with their ids unchanged |
@@ -298,8 +304,7 @@ account, dead ends included.
   in the guest. Or rebuild. The image build itself was never affected, since it
   verifies against the builder's keyring.
 - Settings search from the drawer (settings.md O) and the coding-agent tile
-  (P). The drawer also has no long-press or uninstall, which want a detail
-  sheet this shell does not have yet.
+  (P).
 - An image built before 2026-09-11 has no xdg-terminal-exec, and on it every
   Settings row that opens a terminal shows nothing. Rebuild, or install the
   package.
