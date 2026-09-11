@@ -34,8 +34,12 @@ SKEL=default/etc/skel/.config
 # nothing ever reads a directory that is half copied.
 ssh "${SSH_OPTS[@]}" -p "$PORT" "$USER_NAME@127.0.0.1" \
   'rm -rf ~/.cache/omarchy-mobile-push && mkdir -p ~/.cache/omarchy-mobile-push'
+# The gtk-4.0/gtk.css symlink is NOT copied: it points at a path that exists
+# only in the guest, and scp follows symlinks -- it would try to read a target
+# that is not there on this Mac. The guest makes its own, below.
 scp "${SSH_OPTS[@]}" -P "$PORT" -rq \
-  "$SKEL/omarchy/plugins" "$SKEL/hypr/mobile.lua" default/etc/skel/.local patches \
+  "$SKEL/omarchy/plugins" "$SKEL/hypr/mobile.lua" "$SKEL/omarchy/themed" \
+  "$SKEL/omarchy/hooks" default/etc/skel/.local patches \
   "$USER_NAME@127.0.0.1:.cache/omarchy-mobile-push/"
 
 ssh "${SSH_OPTS[@]}" -p "$PORT" "$USER_NAME@127.0.0.1" bash -s <<'GUEST'
@@ -96,6 +100,18 @@ for dir in "$STAGE"/plugins/*/; do
 done
 
 install -m644 "$STAGE/mobile.lua" ~/.config/hypr/mobile.lua
+
+# The GTK4 palette, in the three pieces the image build puts in skel: the
+# template upstream's own engine renders on every theme set, the hook that
+# restarts the app daemons afterwards, and the symlink GTK reads. The symlink
+# is made here rather than copied, and -n so that a second push replaces the
+# link instead of writing through it into the staged theme directory.
+install -d ~/.config/omarchy/themed ~/.config/omarchy/hooks/theme-set.d ~/.config/gtk-4.0
+install -m644 "$STAGE/themed/gtk.css.tpl" ~/.config/omarchy/themed/gtk.css.tpl
+install -m755 "$STAGE/hooks/theme-set.d/50-gtk-apps.sh" \
+  ~/.config/omarchy/hooks/theme-set.d/50-gtk-apps.sh
+ln -sfn ../../.local/state/omarchy/current/theme/gtk.css ~/.config/gtk-4.0/gtk.css
+echo "pushed the GTK4 palette template, hook and symlink"
 
 # The drawer entries for the shell's own screens, and their icons.
 [ -d "$STAGE/.local" ] && cp -r "$STAGE/.local/." ~/.local/ && echo "pushed ~/.local entries"

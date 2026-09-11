@@ -1554,5 +1554,5 @@ the running guest, so what is inferred rather than seen is the overlay half --
 the three files landing in `/etc/skel` through `default/`, and `useradd -m`
 copying the symlink into a new user's home as a symlink rather than following
 it. `scripts/vm-push.sh` carries the same three installs so that a push and a
-build agree, but that edit sits on top of another session's in-flight lease
-work and is not part of this commit.
+build agree; it is committed separately, rebuilt from `HEAD`'s copy so that
+another session's in-flight lease work stayed out of it.

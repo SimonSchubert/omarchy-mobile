@@ -240,7 +240,8 @@ which is also what grants the shade its Do Not Disturb and media services.
 
 | AC | Status | Note |
 | --- | --- | --- |
-| A1–I4 | todo | No `scripts/style-check.sh` yet. The surfaces here follow moarchy's radii, roles, weights and 44px targets by hand, unchecked |
+| A1–I4 | todo | No `scripts/style-check.sh` yet. The surfaces here follow moarchy's radii, roles, weights and 44px targets by hand, unchecked. I1a is the exception below |
+| I1a | holds | GNOME's apps read the palette through `~/.config/gtk-4.0/gtk.css`, rendered per theme from `themed/gtk.css.tpl`. Checked in the guest 2026-09-12 against tokyo-night, catppuccin-latte and osaka-jade: Calendar drew each theme's own ground, text and accent, and the `--gapplication-service` daemons were restarted by the hook. No `vm-selftest.sh` line yet |
 
 ## [settings.md](spec/settings.md)
 
