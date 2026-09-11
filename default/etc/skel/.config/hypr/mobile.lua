@@ -45,6 +45,18 @@ hl.layer_rule({
   animation = "none",
 })
 
+-- The shell's own screens -- Settings, Wi-Fi, Bluetooth -- are windows, and
+-- upstream tags every window for 0.985 / 0.96 opacity (default/hypr/windows.lua).
+-- The wallpaper then tints the theme background they draw, away from the same
+-- colour in the bar, which is a layer surface and opaque: on Tokyo Night the
+-- bar measured #1a1b26 and Settings under it #1e1d27. Opted out the way
+-- upstream opts out its media windows (default/hypr/apps/system.lua).
+hl.window_rule({
+  match = { class = "^org\\.quickshell$" },
+  tag = "-default-opacity",
+  opacity = "1 1",
+})
+
 -- W3. The border stays and costs nothing in the normal case: it is dropped on
 -- a workspace holding one tiled window, which one-app-per-workspace makes the
 -- normal case. Split a workspace and it comes back -- it is then the only thing

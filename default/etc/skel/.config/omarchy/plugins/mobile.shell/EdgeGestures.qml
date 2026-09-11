@@ -28,7 +28,9 @@
 //           Below every window: on an empty workspace it gets the touch, and on
 //           an occupied one the app is over it and it gets nothing. The layer
 //           answers "is this the home screen", and nothing here asks. It never
-//           has to grow -- it is already the size of the gesture.
+//           has to grow -- it is already the size of the gesture. It reaches
+//           under the strip too, and fills the band with the theme's
+//           background whenever a window is focused (I1a).
 //
 // ---------------------------------------------------------------------------
 // What the up-drag from the strip means
@@ -432,6 +434,10 @@ Item {
         + " input=" + (root.tracking ? "full" : "band")
         + " home=" + Math.round(home.width) + "x" + Math.round(home.height)
         + " travel=" + Math.round(root.pullTravel)
+        // I1a: whether the band is filled, and with what, so a check can hold
+        // one pixel of the screen against what this surface says it painted.
+        + " band=" + (root.bandFilled ? 1 : 0)
+        + " fill=" + Color.background
     }
   }
 
@@ -529,6 +535,22 @@ Item {
     }
   }
 
+  // I1a. Whether the strip's band is the theme's background rather than the
+  // wallpaper: whenever a window is focused. A window stops at the top of the
+  // strip -- the strip reserves the band off every window -- so without this
+  // Settings, Wi-Fi and every app end in a stripe of wallpaper with the pill
+  // drawn on it. An empty workspace keeps the wallpaper, because it is the
+  // home screen. Asked the way the carousel's activeToplevel() asks it.
+  //
+  // I1a's other clause, the wallpaper again while the on-screen keyboard is
+  // up, waits for a keyboard: this image has none (F3).
+  readonly property bool bandFilled: {
+    if (ToplevelManager.activeToplevel) return true
+    var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
+    for (var i = 0; i < list.length; i++) if (list[i] && list[i].activated) return true
+    return false
+  }
+
   // ======================================================= the home screen
   PanelWindow {
     id: home
@@ -545,6 +567,21 @@ Item {
     // on empty space.
     exclusionMode: ExclusionMode.Normal
     exclusiveZone: 0
+
+    // I1a. One strip further down, under the strip's band, the way the drawer
+    // extends (I1). The zone stays zero, so no window moves: what grows is only
+    // where this surface can draw, and the edge surface above it still takes
+    // every press in the band.
+    margins.bottom: -root.stripHeight
+
+    // Bottom is below every window, so this shows only where no window is
+    // drawn -- the band -- and every sheet draws over it as before.
+    Rectangle {
+      anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+      height: root.stripHeight
+      visible: root.bandFilled
+      color: Color.background
+    }
 
     MouseArea {
       anchors.fill: parent

@@ -20,7 +20,7 @@ before any of this applies, and they belong to [gestures.md](gestures.md).
 
 ---
 
-## W1–W5. The window area
+## W1–W6. The window area
 
 **W1** A single app on a workspace fills its workspace exactly. No wallpaper
 shows around it, on any edge.
@@ -76,6 +76,15 @@ columns that were never at stake — the bar anchors top, the keyboard anchors
 bottom, and neither costs a character of width. What it cost was the keyboard:
 Settings ▸ Install from the AUR, `passwd`, and every other bridged row that
 asks a question drew a prompt over a keyboard whose keys took no touches.
+
+**W6** *Added here, not moarchy's.* The shell's own screens — Settings, Wi-Fi,
+Bluetooth — draw opaque, so the theme background they paint is the colour the
+bar paints. They are windows and the bar is a layer surface, and upstream tags
+every window for 0.985 / 0.96 opacity (`default/hypr/windows.lua`): through
+that, the wallpaper tinted Settings `#1e1d27` under a `#1a1b26` bar on Tokyo
+Night.
+→ with Settings open, `hyprctl getprop` reports `opacity` and
+`opacity_inactive` of 1 for its window, which carries no `default-opacity` tag
 
 ---
 

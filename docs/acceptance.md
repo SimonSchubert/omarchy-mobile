@@ -215,6 +215,7 @@ which is also what grants the shade its Do Not Disturb and media services.
 | W3 | partial | The lone window's border is gone (W1 proves it); the border coming back on a split workspace is not checked |
 | W4 | todo | Upstream's gaps toggle writes the same `hl.config` call, and `mobile.lua` loads after it, so the toggle is currently a no-op |
 | W5 | pass | |
+| W6 | pass | **Added here.** Settings' window is untagged and at opacity 1, and samples `#1a1b26` down its length, as the bar does |
 | L1–L9a | todo | The launch splash. Upstream's launch OSD still runs |
 
 ## [style.md](spec/style.md)

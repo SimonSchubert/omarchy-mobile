@@ -79,6 +79,18 @@ case $1 in
   usable) hyprctl -j monitors | jq -c 'first(.[]) | (.width / .scale) as $w
           | (.height / .scale) as $h | .reserved as $r
           | {at: [$r[0], $r[1]], size: [$w - $r[0] - $r[2], $h - $r[1] - $r[3]], fullscreen: 0}' ;;
+  # W6: "<default-opacity tags> <opacity> <opacity_inactive>" for the first
+  # window whose title starts with $2, once it has mapped.
+  opacity)
+    for _ in $(seq 1 60); do
+      a=$(hyprctl -j clients | jq -r --arg t "$2" 'first(.[] | select(.title | startswith($t)) | .address) // ""')
+      [ -n "$a" ] && break
+      sleep 0.1
+    done
+    [ -n "$a" ] || { echo "!! $2 never mapped" >&2; exit 1; }
+    echo "$(hyprctl -j clients | jq --arg a "$a" \
+            'first(.[] | select(.address == $a)) | [.tags[] | select(startswith("default-opacity"))] | length')" \
+         "$(hyprctl getprop "address:$a" opacity)" "$(hyprctl getprop "address:$a" opacity_inactive)" ;;
   transform) hyprctl -j monitors | jq 'first(.[]).transform' ;;
   rotate_back)
     read -r name mode pos scale <<<"$(hyprctl -j monitors | jq -r 'first(.[]) |
@@ -197,6 +209,11 @@ section_W() {
     bash -c "[ \"\$(ssh ${SSH_OPTS[*]} -p $PORT $USER_NAME@127.0.0.1 \"grep -c -E '^\\s*gaps_(in|out) = 0,' ~/.config/hypr/mobile.lua\")\" = 2 ]"
   check W5 "nothing is fullscreened on the user's behalf" \
     is "$(g rect sel-b | jq .fullscreen)" 0
+  ipc settings open >/dev/null
+  local opacity; opacity=$(g opacity Settings)
+  check W6 "the shell's own screens draw opaque, as the bar does ($opacity)" \
+    is "$opacity" "0 1 1"
+  ipc settings quit >/dev/null
 }
 
 section_A() {
