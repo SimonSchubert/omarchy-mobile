@@ -1,0 +1,18 @@
+--- a/shell/shell.qml
++++ b/shell/shell.qml
+@@ -1327,7 +1327,14 @@
+       id: panelEntry
+       required property var modelData
+       readonly property string pluginId: modelData.id
+-      readonly property var manifest: modelData.manifest
++      // The live manifest, not the model's copy. An Instantiator converts every
++      // model entry through QVariant, and a QVariantList returns to JS as a
++      // sequence wrapper rather than an Array -- so Array.isArray(kinds) is
++      // false here and every host check guarded on it silently says no.
++      // manifestHasKind() is one of those, which is why a third-party `menu`
++      // plugin never receives the application-library facade it is promised.
++      readonly property var manifest: shell.pluginRegistry.installedPlugins[modelData.id]
++                                      || modelData.manifest
+       readonly property string entryKind: modelData.kind
+       readonly property bool keepLoaded: modelData.keepLoaded === true
+       readonly property string sourceUrl: shell.pluginRegistry.entryPointUrl(manifest, entryKind)
