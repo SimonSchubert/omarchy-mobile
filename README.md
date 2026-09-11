@@ -135,6 +135,15 @@ a phone image rather than from aarch64:
   Geary, Camera, Music, Sound Recorder and Showtime are added: the apps a phone
   is expected to have, and libadwaita apps that fit a 360px screen. mpv stays
   installed for upstream's scripts, but the drawer's video player is Showtime.
+- **Those apps follow the theme.** Upstream themes a GTK app twice -- light or
+  dark, and an icon theme -- so Calendar and Contacts would sit in stock Adwaita
+  beside a shell drawn in the theme's own colours
+  ([basecamp/omarchy#7557](https://github.com/basecamp/omarchy/issues/7557), open,
+  with two unreviewed PRs). Here a user template renders the active theme's
+  `colors.toml` into `~/.config/gtk-4.0/gtk.css` on every `omarchy-theme-set`,
+  and a hook restarts the app daemons that parse it once at startup, so the
+  GNOME apps take the theme's background, text and accent. Geary is GTK3, which
+  cannot be recoloured this way, and keeps Adwaita.
 
 ## The mobile UI
 
@@ -239,6 +248,7 @@ All measured, and the surface layout is shaped around them.
 | `default/` | This project's own overlay, copied onto the rootfs |
 | `default/etc/skel/.config/omarchy/plugins/mobile.shell/` | The mobile UI -- status bar, shade, gestures, sheets and the Wi-Fi, Bluetooth and Settings screens -- as one Omarchy shell plugin. Settings' pages are data, in `Pages.js` |
 | `default/etc/skel/.config/hypr/mobile.lua` | One app per workspace, filling it, no layer animation on the shell's own sheets, and the on-screen keyboard started and bound to Super+I -- a user override loaded after upstream's defaults |
+| `default/etc/skel/.config/omarchy/themed/gtk.css.tpl` | The active theme's palette for GTK4 and libadwaita apps. Upstream's own template engine renders it on every theme set, because it sits in the user template directory it already reads; `~/.config/gtk-4.0/gtk.css` is a symlink to the result, and `hooks/theme-set.d/50-gtk-apps.sh` restarts the app daemons that parse it once at startup |
 | `default/etc/skel/.local/bin/` | `omarchy-mobile-*`, the helpers behind Settings' native pages: audio routing, reminders, time zone, plugins, About; and the keyboard toggle |
 | `default/etc/skel/.local/share/` | Desktop entries and icons for the Wi-Fi, Bluetooth and Settings screens. Only Settings shows in the drawer. Also a copy of mpv's entry that hides it from the drawer |
 | `patches/` | Fixes to the vendored upstream. Applied with `--fuzz=0`, so a moved upstream fails the build |
