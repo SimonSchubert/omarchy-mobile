@@ -350,3 +350,629 @@ There is nothing for it to protect — the port is bound to loopback by the QEMU
 this repo started, and the key belongs to an image this repo built minutes ago.
 What it *does* protect is `~/.ssh/known_hosts`, which never gets an entry for a
 `127.0.0.1` that will mean something different tomorrow.
+
+---
+
+## 2026-09-09 -- the app drawer, and two things Hyprland does not do
+
+Phase 2's first surface: a band at the bottom edge that drags a full-screen app
+grid up behind the finger. It ships as a plugin, `mobile.drawer`, in
+`default/etc/skel/.config/omarchy/plugins/`.
+
+### Where a plugin lives, and why not where moarchy puts it
+
+moarchy installs its nine plugins to `/usr/share/moarchy/plugins`, which needs a
+patch: upstream's `PluginRegistry` scans `$OMARCHY_PATH/shell/plugins` and
+`~/.config/omarchy/plugins` and nowhere else, so `port-4x.patch` adds a
+`systemPluginsDir` and a third `scan_thirdparty` call.
+
+That is the right shape for a package that is upgraded independently of the
+image. It is the wrong shape here, where the plugin ships *in* the image and the
+user directory is seeded from `/etc/skel` anyway. So this uses the directory
+upstream already scans, and the patch is not needed. It also buys something
+moarchy has to work for: saving a file under `~/.config/omarchy/plugins`
+hot-reloads the plugin, so iterating on the drawer is `scp` and nothing else.
+
+Enabling is one jq call in `configure.sh` — a third-party plugin is on exactly
+when its id appears in `shell.json` — and the id list is derived from the
+directories that shipped rather than written out, so the second plugin is a
+directory and not also an edit somewhere else.
+
+### One plugin, not two, because 4.0.3 sandboxes them
+
+moarchy splits the gesture from the drawer: `moarchy.gestures` owns every edge
+and drives `moarchy.drawer` through the shell. That needs the trusted host
+object, and 4.0.3 does not hand it to an installed plugin — `pluginShellFor()`
+returns a facade whose `summon`/`hide` accept only the plugin's own id, with no
+`panelLoaders` and no `callIfLoaded` at all. moarchy patches `shell.qml` to
+trust its own namespace; this project would rather not, so the edge and the
+sheet are one plugin and talk to each other directly.
+
+### `kind: "menu"`, and the bug behind it
+
+The manifest declares `"menu"` rather than `"panel"`, because that is the kind
+that gets an application library: `pluginAppLibraryFor()` is handed to a plugin
+whose manifest declares `menu` and to no other. Writing the app list without it
+would mean re-implementing desktop-entry enumeration and the icon-theme fallback
+index, and getting the second wrong is a grid of blank squares.
+
+It did not work. `state` reported `apps=0` with no warning anywhere, and the
+facade came through as `appLibrary: null` while the sibling `bar` facade on the
+same `createObject` call arrived fine. A probe in the host said why:
+
+```
+PROBE omarchy.monitor  isArray= true   kinds= ["bar-widget"]  hasMenu= false
+PROBE mobile.drawer    isArray= false  kinds= ["menu"]        hasMenu= false
+```
+
+The manifest reaches `pluginShellFor()` as an `Instantiator` model entry, which
+round-trips through `QVariant`; a `QVariantList` returns to JavaScript as a
+sequence wrapper, and `Array.isArray` on one is false. `manifestHasKind()` guards
+on exactly that. `JSON.stringify` still prints `["menu"]`, which is why the
+manifest injected into the plugin looked perfectly normal.
+
+`patches/plugin-manifest-kinds.patch` reads the live manifest out of the registry
+instead of the model's copy. One line, and every other consumer of that object is
+repaired with it.
+
+### Hyprland does not hold the implicit pointer grab across a layer surface
+
+This is the one that cost a rewrite. Wayland says a press latches the pointer to
+the surface it landed on and that motion keeps arriving there however far it
+travels; moarchy's gesture strip is 20px tall and tracks a full-height swipe on
+Sway because of it. Hyprland stops at the surface edge, to the pixel:
+
+```
+press at surface-local y=19, drag up 58px   ->  last motion at dy = -18
+press at surface-local y=13, drag up 300px  ->  last motion at dy = -10
+```
+
+The button release still arrives, so the gesture ends having seen 18px of a
+300px drag — which reads as a tap every time, and the drawer sprang back on a
+swipe that had crossed the whole screen.
+
+So the surface that owns a gesture has to be as large as the gesture. It cannot
+be a permanently full-screen input region, which would eat every touch meant for
+an app, so the region grows for the length of the drag: the bottom band at rest,
+the whole surface from press to release. A `mask` does that without a resize, so
+no configure round trip and the exclusive zone never moves. `dragWatchdog` puts
+it back if a release never comes, because a stuck mask is a screen that answers
+nothing.
+
+The strip that draws the pill and reserves the band is now input-transparent
+(`mask: Region {}`) and the drawer surface underneath owns the gesture, because
+the drawer is the one that can grow.
+
+### A layer surface with exclusive keyboard focus takes every pointer event
+
+Every full-screen overlay in the Omarchy shell asks for
+`WlrKeyboardFocus.Exclusive`, and so does moarchy's drawer. Under it, a press on
+the bottom edge while the drawer was open produced no press, no release and no
+log line at all — the edge was deaf for as long as the sheet was mapped. Under
+`OnDemand` the same press arrives and the swipe dismisses.
+
+It is not a cosmetic choice: the carousel, the shade and the back swipe all live
+on edges, and Exclusive would make every one of them deaf whenever the drawer is
+open. What it costs is that Qt's focus stays on the sheet rather than the search
+field until the field is tapped — which on a phone is wanted anyway, since
+opening the drawer should not raise the on-screen keyboard.
+
+Keyboard focus is keyed on the settled state rather than on `progress`, so it
+never changes mid-gesture: a focus change moves the pointer focus with it, and
+that cancels the drag being delivered.
+
+### A Region's own properties do not re-apply the mask
+
+Written the obvious way — one `Region` whose `y`/`height` are bound to a
+`inputFull` flag — the surface kept the region it measured when it was first
+attached. The band worked, because the band is the state it was created in, and
+nothing else on the sheet answered a press: the drawer could be dragged up and
+then its handle could not be pressed.
+
+Two `Region` objects, swapped by assigning `mask`, re-apply.
+
+### `Date.now()` is not a good enough clock for a fling
+
+The velocity term is moarchy's, smoothed over `dt = max(1, now - lastT)`. On a
+compositor handing on a pointer stream, two motion events land in the same
+millisecond often enough that the clamp turns a 3px step into 3 px/ms — five
+times the fling threshold — off a finger that has barely moved. Measured: a 41px
+drag over 120ms reported **2.98 px/ms** and opened the drawer on what should have
+been a spring-back.
+
+Speed is now sampled at most once per 8ms, over real elapsed time. A phone
+touchscreen samples at 60-120Hz and would never have shown this.
+
+### Testing a gesture with no hands
+
+The guest's pointer is the `usb-tablet` QEMU forwards from the host, and nothing
+in the guest can drive it. `scripts/vm-drag.sh` creates a second, relative
+pointer through `/dev/uinput` for the length of one gesture and destroys it
+afterwards; the drawer answers `omarchy-shell shell call mobile.drawer state ""`
+with one line, so each criterion is checkable from a terminal:
+
+```
+A  edge up 40px  (<35%)     closed progress=0 apps=13
+B  edge up 300px (>35%)     open progress=100 apps=13
+C  edge up while open       closed progress=0 apps=13
+D  handle down 400px        closed progress=0 apps=13
+E  handle down 60px         open progress=100 apps=13
+F  grid drag down 400px     closed progress=0 apps=13
+G  tap the field, "libre"   open progress=100 apps=3
+H  Escape clears the query  open progress=100 apps=13
+I  Escape again closes      closed progress=0 apps=13
+J  tap Foot                 closed, and `hyprctl clients` has a foot window
+K  edge up over an app      open progress=100 apps=13
+```
+
+G is where the keyboard focus decision shows up. Escape does nothing on a
+freshly opened drawer and works from the first tap on the sheet onwards, because
+OnDemand means the compositor hands focus over on a CLICK and this surface is
+mapped from startup -- opening the drawer is not an event it acts on. On a phone
+that is nearly the wanted behaviour anyway (no Escape key, and the drawer must
+not raise the on-screen keyboard); on a VM with a real keyboard it is the price
+of keeping the edge alive.
+
+Two things the harness taught about itself, both of which looked like product
+bugs first. Correcting the pointer against `hyprctl cursorpos` *during* the drag
+makes the correction's own jitter read as a downward fling on release, so the
+drag is open loop with `accel_profile flat` set first — one relative unit, one
+logical pixel. And a single relative jump of 180 units lands at the far edge of
+the screen rather than the middle, because libinput accelerates it; the start
+position is walked to in small steps instead.
+
+Repeatedly rewriting the plugin file in place also segfaulted quickshell three
+times, in `QQmlComponent::createObject` under "Local plugin changed, reloading".
+Writing to a temp file and renaming stopped it: the inotify watcher was reading
+a file that was still being written. Not a shipping concern -- the file changes
+once, at build time -- but worth knowing before iterating on device.
+
+---
+
+## 2026-09-10 -- a sweep for the rest of the notification bug
+
+`notification-card-max-width.patch` was found by looking at one surface. The
+question this session asks is how many others are wrong the same way, so every
+surface the shell can put on screen got opened over IPC and captured with
+`grim`:
+
+```
+for t in omarchy.power omarchy.monitor omarchy.bluetooth omarchy.network \
+         omarchy.agents omarchy.clock omarchy.weather omarchy.audio; do
+  omarchy-shell $t open; sleep 2; ./scripts/vm-screenshot.sh shots/$t.png
+  omarchy-shell $t close
+done
+```
+
+plus the menu, the emoji and clipboard pickers, the OSD, the notification
+history, the lock preview, the background switcher and the keybindings
+cheatsheet. Five surfaces are wrong at 360 logical, and screenshots only say
+*that* they are wrong, not by how much — so the guest's copy of the shell got
+temporary probes, the same trick that found the manifest bug:
+
+```qml
+Timer { running: true; interval: 1500; repeat: true; onTriggered:
+  console.log("PROBE weather-hero avail=" + heroProbe.width + ...) }
+```
+
+`console.log` from the shell lands in the compositor's own unit, which is where
+to look for it:
+
+```
+journalctl --user -u 'wayland-wm@hyprland\x2duwsm.desktop.service'
+```
+
+The five, measured:
+
+```
+PROBE lock-field         screen=360 fieldW=381 x=-11 right=370
+PROBE weather-hero       avail=318 leftEnd=185.36 rightX=99.72 overlap=85.64
+PROBE weather-forecast   avail=318 rowW=329.3 rowX=-6 cut=11.3
+PROBE bar                width=360 leftEnd=140.5 rightStart=271 freeMiddle=130.5
+PROBE bar-center         anchorX=121 anchorW=118.125
+PROBE clock-calendar     viewport=318 content=426 grid=426 flickable=true
+```
+
+Two are the notification bug exactly — a fixed desktop width on a surface
+narrower than it — and both are patched: `lock-field-max-width.patch` and
+`weather-forecast-fit.patch`, described in the README.
+
+Two are a different fault, and are not patched. The weather hero and the bar
+both anchor one child to the left edge and another to the right and never ask
+whether the two fit; the hero overlaps by 85px and the bar's centred clock
+starts 19.5px inside the workspace list. Neither can be fixed by clamping,
+because in both cases the content genuinely does not fit — they need to reflow
+or to give something up, which is a design decision rather than a robustness
+fix.
+
+The fifth is not a defect. The calendar grid is 426 wide in a 318 viewport, but
+`flickable=true` and upstream's own comment says the grid is meant to scroll
+rather than shrink. It is merely a poor thing to do with a thumb, inside a panel
+that also scrolls vertically.
+
+### The A/B at desktop width, and why the first one lied
+
+The notification patch was held to "measured in the VM at both ends", so these
+were too. The first attempt to widen the screen produced two identical
+screenshots and a conclusion that was nonsense, because
+
+```
+$ hyprctl keyword monitor Virtual-1,1920x1080@60,0x0,1
+keyword can't work with non-legacy parsers. Use eval.
+```
+
+prints its complaint on stdout and exits **0**. Redirected into `/dev/null` next
+to the rest of the setup, a silent no-op looks exactly like a successful mode
+change. `hyprctl eval` and `hl.monitor({...})` is the working form, already
+noted above; it needs to be checked with `hyprctl monitors`, not assumed.
+
+With the mode actually changed, upstream and patched captures at 1920×1080
+differ by at most **2/255 on 33 of 32,219 pixels** in the weather hero, and by
+the same margin over a 24×4 patch of the lock screen's mouse cursor. That is
+llvmpipe's anti-aliasing between two renders, not a layout change — which is
+what both patches predict, since `Math.min` returns the upstream value on every
+screen wide enough to hold it.
+
+### The hero after all, and a binding loop on the way
+
+The hero overlap was left unpatched above as a design call. The PR's "after"
+image settled it — the popup still overlapped as badly as the "before" did,
+and a fix nobody can see in its own screenshot is not a fix anyone will take —
+so it joins the forecast in one patch, now `weather-panel-fit.patch`.
+
+The first version bound the anchors to conditionals, the pattern `Button.qml`
+uses:
+
+```qml
+anchors.left: hero.stacked ? undefined : parent.left
+anchors.horizontalCenter: hero.stacked ? parent.horizontalCenter : undefined
+```
+
+It looked right at 360 and was wrong at 1920, where the hero's halves piled up
+at the left edge. The journal said why:
+
+```
+Binding loop detected for property "stacked"
+Binding loop detected for property "height"
+```
+
+`stacked` flips on every open, because the popup's width starts at 0. The anchor
+bindings that depend on it re-evaluate in no fixed order, so for a moment the
+row can hold both `left` and `horizontalCenter`, and Qt reads that pair as a
+stretch: it sizes the row to twice the distance between them. The row's width
+feeds `stacked`, which is the loop, and QML breaks it wherever the values happen
+to stand. `Button.qml`'s condition does not depend on the button's own width, so
+there it has nothing to feed back into.
+
+`State` plus `AnchorChanges` is Qt's answer — it clears the old anchors before it
+sets the new ones — and it leaves the default state as upstream's own anchor
+lines. With it, a fresh start and a live switch in either direction land in the
+same place, within 3/255 on at most 49 pixels, and the journal is clean.
+
+One capture pass on the way was worthless, and it is worth saying how: the
+Bash tool's shell is zsh, which does not word-split an unquoted `$SSHO`, so
+`scp $SSHO file host:` failed, the upstream file never reached the guest, and
+the "upstream" captures were of the patched code. The helper scripts are bash
+with an array now.
+
+### Smaller, in the end
+
+The `State` version worked and was 26 lines, which is a lot to ask a reviewer
+to read for a popup that only misbehaves on a small screen. The forecast fix
+already had the idiom — lay the row out at the size it wants and scale it to
+the room it gets — and the hero takes the same thing in four lines: its width
+becomes `max(parent.width, what the halves need)` and it scales from its left
+edge. The PR drops to +6 −1.
+
+The trade is that at 360 logical the hero renders at about 76% instead of
+stacking at full size. What it buys is that the desktop layout keeps its shape
+on a phone, the popup does not grow taller, and there is nothing to loop on:
+the width it reads is the halves' own, not anything positioned.
+
+Re-verified the same way: 38 pixels at 3/255 against upstream at 1920×1080,
+live switches landing where fresh starts do, and a clean journal.
+
+### A patch that carried half of upstream with it
+
+The lock fix is branched from today's `quattro` for the PR, and
+`patches/lock-field-max-width.patch` was then regenerated by diffing the pinned
+v4.0.3 file against the fork's copy. But `LockView.qml` has moved on `quattro`
+since v4.0.3 — video wallpapers arrived, through a new `BackgroundMedia` — so
+that diff was the one-line fix *plus* three hunks of upstream's wallpaper work.
+
+It applied cleanly, because it was a perfectly valid diff from v4.0.3. The VM
+is what caught it: the lock plugin stopped loading altogether,
+
+```
+LockView.qml:90:5: BackgroundMedia is not a type
+service plugin load failed for omarchy.lock: ... Type LockView unavailable
+```
+
+and with it went the `lock` IPC target, which is to say the lock screen. A
+build from that patch would have shipped exactly that.
+
+`--fuzz=0` guarantees a patch lands where it was aimed; it says nothing about
+what the patch contains. So the rule this leaves behind: `patches/` are
+generated from the pinned tree plus the change, never from a file that came
+from `quattro`, and a patch's hunk count gets looked at, not just its exit code.
+The weather patch was not affected — `Panel.qml` is identical on both — but it
+was checked again for the same reason.
+
+---
+
+## 2026-09-11 -- moarchy's criteria, and the carousel
+
+moarchy's UI specs are now this project's: `docs/spec/` holds `gestures.md`,
+`shade.md`, `windows.md`, `style.md` and `settings.md` copied at `d0e5dd2` with
+every id and every line unchanged, and `docs/acceptance.md` is the ledger of
+which ones hold here. Copied rather than rewritten, so an id means the same
+thing in both projects, and so the places where Hyprland changes the answer are
+written down as changes rather than silently absorbed.
+
+The first slice is gestures.md A to F plus windows.md W1-W5: the strip, the
+carousel, going home, the home screen, and the drawer moved off the edge.
+`scripts/vm-selftest.sh` checks 38 of them and all 38 pass.
+
+### One plugin, `mobile.shell`
+
+`mobile.drawer` became `mobile.shell`, with the edge, the carousel and the
+drawer as three files under one entry point. The reasons are the 4.0.3 sandbox
+(a plugin can drive only its own id) and the two Hyprland input findings from
+the drawer, and they arrive at the same layout from opposite ends: one surface
+owns the edges and writes every sheet's `progress` directly.
+
+The edge is its own full-screen Overlay surface now, rather than the drawer's
+input region. That is what lets the strip work over both sheets (A6, A7): the
+drawer and the carousel are Top, and every Overlay surface is above every Top
+one. The drawer takes no input while the home screen drags it up, for the grab
+reason -- a region opening under the finger would take the rest of the drag.
+
+### Dispatching under Lua
+
+```
+$ hyprctl dispatch workspace 3
+error: [string "return hl.dispatch(workspace 3)"]:1: ')' expected near '3'
+```
+
+0.56 wraps a dispatch request in `return hl.dispatch(...)`, so the request has
+to be an `hl.dsp` expression. That also works through Quickshell's socket:
+`Hyprland.dispatch('hl.dsp.focus({ workspace = "e+1" })')` from QML switches
+workspace, measured, and nothing forks.
+
+### One app per workspace is a window rule
+
+moarchy needs `bin/moarchy-one-app-per-workspace`, a Python loop on Sway's IPC.
+Hyprland's rule engine does it at map time:
+
+```lua
+hl.window_rule({ match = { class = ".*", float = false }, workspace = "empty" })
+```
+
+Three foots opened from one workspace landed on 1, 2 and 3, with focus following
+the last. And `empty` is moarchy's F1 rule exactly: with windows on 1 and 3,
+`focus({ workspace = "empty" })` from 3 went to 2, the hole. The home gesture
+dispatches the same word, so the "two implementations that drifted" defect
+moarchy's F1 records has nothing to drift between.
+
+W1 in numbers: upstream's `gaps_out = 10` and `border_size = 2` left a lone foot
+at `[12,38] 336x650` inside a `360x674` usable area. With `hypr/mobile.lua` it
+is `[0,26] 360x674` exactly. The border rule is `match = { workspace = "w[tv1]" }`,
+so it comes back on a split workspace (W3). `hyprland.lua` gets
+`require("hypr.mobile")` appended by `configure.sh` -- the file's own last
+comment is where it says personal configuration goes.
+
+### `Toplevel.activate()` works here
+
+moarchy's E2 comment records the foreign-toplevel activate request doing nothing
+on Sway, silently, for as long as the carousel existed. On Hyprland it switches
+to the window's workspace and focuses it (`misc:focus_on_activate` is on
+upstream), so tapping a card is `activate()` and nothing else.
+
+### Two QML traps
+
+The edge component was first called `Edges.qml`. Quickshell exports an
+uncreatable `Edges` enum, and an explicit import outranks a file in the plugin's
+own directory, so the whole plugin failed with
+
+```
+Shell.qml[181:3]: Element is not creatable.
+```
+
+and what stayed on screen was the *old* `mobile.drawer`, which the push had not
+removed -- a working drawer on screen, from the wrong plugin. It is
+`EdgeGestures.qml` now.
+
+The carousel card's press veil read `parent.color.a` inside a `Behavior`. A
+Behavior is not an Item, `parent` there does not reach the Rectangle, and it
+threw `Cannot read property 'a' of undefined` once per card.
+
+### A toast is not a test fixture
+
+The first full selftest run was 37 of 38: H6, dragging the drawer's handle,
+failed. Probing by start position found a clean line -- drags from y ≤ 160
+never reached the drawer, from y ≥ 200 they closed it -- which looked like an
+input-region bug in upstream's notification surface. It was not. That surface
+is `visible: popupModel.count > 0`, and a screenshot showed why it was mapped:
+upstream's two first-run toasts, "Update System" and "Learn Keybindings", which
+do not time out and sit on Overlay from y 26 to about 174.
+
+So H6 was test isolation, and `reset_session` now calls
+`omarchy-shell notifications dismissAll`. But it is a real phone finding too:
+until those toasts are dismissed, the top of every sheet is dead to touch. That
+is the shade's job (S18, S19) and is recorded in `docs/acceptance.md`.
+
+### Iterating without a rebuild
+
+`scripts/vm-push.sh` copies the overlay into the running guest's home, does what
+`configure.sh` does at build time, reloads Hyprland and restarts the shell. A
+restart rather than the shell's own hot reload, which segfaulted three times
+while a file was mid-write (above), and a plugin that is four files is four
+windows for that race.
+
+---
+
+## 2026-09-11 -- the bar, the shade, and two screens that are windows
+
+shade.md next, and it needed two decisions before any code. How the shade shares
+the top edge with upstream's bar -- Wayland cannot hand a tap on to the surface
+underneath, so whatever owns the pull-down loses the bar's taps -- was settled as
+*replace the bar*, moarchy's route. And the screens behind the shade's gear,
+power button and long presses were settled as *port moarchy's*: Wi-Fi and
+Bluetooth now, Settings later.
+
+### The bar kind is a bigger grant than it looks
+
+Replacing the bar is sanctioned: shell.json's `bar.id` picks any plugin that
+declares kind `bar`. Reading how the host treats one turned up three things:
+
+- `PluginRegistry.isEnabled` answers for a bar-kind plugin from `bar.id` alone,
+  ignoring the plugins list -- for every entry point the plugin has.
+- `barPluginMayControl` lets a bar-kind plugin summon and hide any plugin with a
+  UI kind. `omarchy.menu` is one, so the gear can open it.
+- `firstPartyServiceFor` hands a bar-kind plugin proxies for the notifications
+  and media services -- Do Not Disturb and the active player, which the shade
+  needs and a sandboxed plugin cannot reach.
+
+So `mobile.shell` declares `["menu", "bar"]` with Bar.qml as the second entry
+point, and gets all three with no patch. The first bullet is also a feature:
+`bar.id` is now the switch between the phone UI and stock desktop Omarchy.
+
+The proxy has no `clearPopups` or `clearHistory`, so Clear all and absorbing
+toasts on open go through the service's public IPC: `notifications dismissAll`,
+which archives the toasts into the history, then `notifications clear`, in one
+process, because two could clear the history before the archive landed in it.
+
+### A8, three designs later
+
+The shade is a full-screen Overlay surface, always mapped, whose input region
+grows: the bar's band at rest, everything from the press on -- the edge
+surface's pattern, for the grab reason. moarchy's answer to A8 is a third
+state: open, with the home pill's band cut out, so an up-swipe from the pill
+falls through to the strip. It failed, twice over:
+
+- The press reached nothing at all after an open, by IPC or by drag. Polled
+  through a held drag, the edge surface never saw it and neither did the shade.
+  After two taps on a tile it did reach the edge -- so the cut-out region,
+  applied as the open animation ended, stayed uncommitted until something
+  repainted.
+- Once it reached the edge, the drag still stopped dead. It has to travel up
+  over the shade, and Hyprland hands a drag to whichever surface is topmost under
+  the finger: the grab finding again, from the other side.
+
+The one that works: the shade keeps the band and forwards the gesture to
+EdgeGestures' own functions, with a `borrowed` flag so the edge surface does not
+open its own region and take the drag back. B3 comes with it -- a sideways swipe
+with the shade down is the strip's sideways swipe.
+
+Probing it took two tries of its own. A fixed sleep before reading "mid-hold"
+state read it before vm-drag.sh had pressed at all -- `hyprctl cursorpos` still
+showed the start position. Polling inside the guest every 200ms while the drag
+ran is what finally showed who got the press.
+
+### H2 cancelled by its own sheet
+
+A close drag on the scrim delivered eleven samples and left the shade open. The
+drag took progress to 0, the scrim and the sheet are `visible: progress > 0`,
+and Qt cancels the grab of a MouseArea whose item disappears under it --
+`sheetCancel` put the sheet back up. Both stay visible for the length of a drag
+now.
+
+### Glyphs lost in transit, by range
+
+The gear and power buttons drew as empty circles. Every other glyph in the file
+rendered. The two that vanished are U+E615 and U+F011, in the Basic
+Multilingual Plane's private-use area; the ones that survived are all U+F0xxx,
+in plane 15. Whatever the cause in the toolchain, the rule is now: private-use
+glyphs are written as escapes -- `"\uF104"`, `"\u{F092F}"` -- in every file this
+project writes.
+
+### The screens, and `activate()` on the shell's own windows
+
+Wi-Fi and Bluetooth are FloatingWindows (gestures.md K). The window rule gives
+each a workspace -- `org.quickshell`, `[0,26] 360x674`, alone on it -- and the
+carousel lists them as `mobile.wifi` and `mobile.bluetooth`.
+
+K12 failed: summoning Wi-Fi while Bluetooth was focused left Bluetooth focused.
+The handle was resolved -- `recents list` named the screen through it -- so the
+foreign-toplevel `activate()` that focused foot in E2 does nothing for the
+shell's *own* windows. Focusing by Hyprland address,
+`hl.dsp.focus({ window = "address:0x…" })`, moved focus across workspaces, and
+every focus goes that way now, with `activate()` as the fallback. (A `title:^…`
+selector answered "window not found".) moarchy's `show()` -- visible false, then
+true -- reopens a screen the compositor closed from outside, measured by closing
+Bluetooth through `hl.dsp.window.close()` and summoning it again.
+
+### The selftest nearly closed someone's Moonlight
+
+A Moonlight window appeared on workspace 1 mid-session: the user's. The suite's
+reset killed every client, and E3 and E6 flicked card 0 blind. It now opens its
+own windows as `sel-*`, closes only those and the shell's screens, skips the two
+criteria that need an empty phone while anything else is up, and will not flick
+a card that is not its own.
+
+### Hyprland's debug overlay deadlocked Hyprland
+
+The drag traces had fallen from 13-14 samples to 3-4, and `debug:overlay` was
+the obvious way to read frame times. It showed them -- 4 FPS, ~270ms average
+render time mid-drag -- and shortly after it was switched off Hyprland stopped:
+every thread in `__futex_wait`, IPC and screencopy dead, the log silent. A new
+`[pango] fontcon` thread had appeared, and pango draws the overlay's text.
+SIGTERM was ignored; SIGKILL, then a reboot at the user's word. Not again.
+
+### What the slowdown was not
+
+Two suspects, each tested on its own:
+
+- **Pointer churn.** vm-drag.sh creates a uinput device per gesture, 87 so far,
+  each removal logging libseat's "Could not close device: Device not taken". A
+  fresh session read 4 samples with none, and 4 again after 20 more.
+- **The shade's always-mapped surface.** Pushed with it unmapped, then with the
+  drawer unmapped too: 3-4 and 3-7 samples, the same as with both mapped. An idle
+  transparent surface costs nothing measurable here.
+
+What did change is the environment. The fast numbers were taken with QEMU
+headless; every slow one with it windowed, and with macOS's `mediaanalysisd` at
+269% CPU on the host. The trace-count checks now drag over 720ms instead of 360,
+which proves "follows the finger" at any frame rate.
+
+### Every push crashed the shell
+
+The stray cards were the tell. After a reboot, with nothing opened, the carousel
+listed two `org.quickshell` windows titled "quickshell" that belonged to no
+screen, and E6 could never empty the phone past them. They belonged to two extra
+quickshell processes, children of the shell the session had started, and the
+shell's own log said where they came from, once per push:
+
+```
+Local plugin changed, reloading: mobile.shell
+Local plugin changed, reloading: mobile.shell
+ERROR: Quickshell has crashed under pid 17595 (Coredumps will be available under that pid.)
+ERROR: Quickshell has been restarted.
+```
+
+with a SIGSEGV core for each in `coredumpctl`. vm-push.sh swapped the plugin's
+files in first and restarted the shell afterwards, so the running shell saw its
+plugin change mid-copy and hot-reloaded it -- the reload that segfaulted three
+times in the drawer's first session, when a file was being written in place.
+Quickshell restarted itself each time, and not always cleanly: an earlier child
+kept running beside the new one, with its window mapped, its surfaces drawn and
+its IPC answering or not depending on which instance a call reached. That is a
+fair account of every "flaky" check this session.
+
+The push now stops the shell with upstream's own kill loop before it touches a
+file, and launches it again through the compositor afterwards, as
+`omarchy-restart-shell` does.
+
+One thing came out of the frame-rate work: `hypr/mobile.lua` turns layer animation off for
+`omarchy-mobile-*`, as upstream does for its own surfaces -- every sheet here
+animates itself. Keeping the carousel mapped all the time, like the drawer, was
+tried as well, to win back the frames a per-gesture map costs. It won none (5
+samples still) and a card from an earlier gesture showed through the shade in
+the next screenshot, so it went back.
+
+Two failures in that run were the suite's own. Its guest helper is called
+through ssh, which hands the remote shell one string to re-split, so
+`notify "selftest 3" "Body"` arrived as four words: every notification was
+summarised "selftest", and S18's "newest first" had nothing to tell apart. And
+the trace drags run for 1.5 seconds now -- at the frame rates this VM reached
+windowed, 720ms still left fewer than eight frames to count.
