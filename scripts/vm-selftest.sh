@@ -719,6 +719,22 @@ section_settings() {
        "org.quickshell $(g usable) 1"
   check K5 "its card names the screen" is "$(ipc recents list | grep -c '^mobile.settings')" 1
 
+  # gestures.md I1a. One pixel of the screen's last row, left of the pill,
+  # against the colour the shell says it painted there. At the output's own
+  # scale: `grim -s 1` resamples, and on the screen's edge row its filter
+  # blends in what lies beyond the edge -- the wallpaper read #2a2263 at y=715
+  # and #261e59 at y=719. The last device pixel of the block is the true one.
+  px() { g sh "grim -g '$1 1x1' -t ppm - | tail -c 3 | od -An -tx1 | tr -d ' \n'"; }
+  # The screen's last row: STRIP_Y is the band's middle, 710 of 720.
+  local last=$(( STRIP_Y + 9 )) geo fill sws
+  geo=$(ipc gestures geometry); fill=$(grep -o 'fill=#[0-9a-f]*' <<<"$geo")
+  check I1a "behind Settings the strip's band is the theme's background, not the wallpaper" \
+    is "$(grep -o 'band=[01]' <<<"$geo") fill=#$(px 10,$last)" "band=1 $fill"
+  sws=$(g ws_id); g focus_ws empty; sleep 0.8
+  check I1a "on a home screen it is the wallpaper again" \
+    bash -c "[ '$(ipc gestures geometry | grep -o 'band=[01]')' = band=0 ] && [ 'fill=#$(px 10,$last)' != '$fill' ]"
+  g focus_ws "$sws"; sleep 0.8
+
   # A real tap on a row, aimed with `rowTarget` plus where Hyprland put the
   # window -- the path a finger takes, where every other check here takes IPC.
   local wx wy; read -r wx wy <<<"$(g win_at Settings)"

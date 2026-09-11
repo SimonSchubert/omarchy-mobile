@@ -119,7 +119,9 @@ Hyprland 0.56.2 at 360x720 logical.
 
 | AC | Status | Note |
 | --- | --- | --- |
-| I1–I7 | todo | The drawer does extend under the strip (I1) and A7 shows the pill works over it (I6), but none of the section's pixel checks are written, and I5 needs a keyboard |
+| I1 | todo | The drawer does extend under the strip, but its pixel check is not written. Settings, which I1 also names, is a window now, so its band is I1a's |
+| I1a | pass | The home surface (Bottom) reaches under the strip and fills the band with `Color.background` while any window is focused. Behind Settings, one device pixel of the last row is the `fill=` that `gestures geometry` reports; on a home screen the band is the wallpaper again (`band=0`). Read at the output's own scale: `grim -s 1` blends the edge row with what lies beyond it. The keyboard clause waits for a keyboard (F3) |
+| I2–I7 | todo | A7 shows the pill works over the drawer (I6), but none of the section's pixel checks are written, and I5 needs a keyboard |
 
 ### J. The app you are leaving
 
