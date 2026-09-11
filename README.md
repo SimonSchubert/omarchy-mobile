@@ -132,8 +132,9 @@ a phone image rather than from aarch64:
   Xournal++, Evince, Print Settings and Disks are left out, and so is sushi,
   which depends on Evince.
   GNOME's Calculator, Calendar, Contacts, Maps, Clocks, Weather, Text Editor,
-  Geary, Camera, Music and Sound Recorder are added: the apps a phone is
-  expected to have, and libadwaita apps that fit a 360px screen.
+  Geary, Camera, Music, Sound Recorder and Showtime are added: the apps a phone
+  is expected to have, and libadwaita apps that fit a 360px screen. mpv stays
+  installed for upstream's scripts, but the drawer's video player is Showtime.
 
 ## The mobile UI
 
@@ -239,7 +240,7 @@ All measured, and the surface layout is shaped around them.
 | `default/etc/skel/.config/omarchy/plugins/mobile.shell/` | The mobile UI -- status bar, shade, gestures, sheets and the Wi-Fi, Bluetooth and Settings screens -- as one Omarchy shell plugin. Settings' pages are data, in `Pages.js` |
 | `default/etc/skel/.config/hypr/mobile.lua` | One app per workspace, filling it, no layer animation on the shell's own sheets, and the on-screen keyboard started and bound to Super+I -- a user override loaded after upstream's defaults |
 | `default/etc/skel/.local/bin/` | `omarchy-mobile-*`, the helpers behind Settings' native pages: audio routing, reminders, time zone, plugins, About; and the keyboard toggle |
-| `default/etc/skel/.local/share/` | Desktop entries and icons for the Wi-Fi, Bluetooth and Settings screens. Only Settings shows in the drawer |
+| `default/etc/skel/.local/share/` | Desktop entries and icons for the Wi-Fi, Bluetooth and Settings screens. Only Settings shows in the drawer. Also a copy of mpv's entry that hides it from the drawer |
 | `patches/` | Fixes to the vendored upstream. Applied with `--fuzz=0`, so a moved upstream fails the build |
 | `scripts/vm-*.sh` | Build, run, ssh, screenshot, drag, push the overlay into a running guest, selftest |
 | `docs/spec/` | moarchy's acceptance criteria, copied with their ids unchanged |

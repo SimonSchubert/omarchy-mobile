@@ -95,18 +95,22 @@ moarchy-store-git
 # reason [pkg.moarchy-keep] gives for Notes. All are libadwaita, so they reflow
 # to the 360px panel, and all are in ALARM's aarch64 [extra].
 #
-# Each fills a gap rather than doubling a tile. chromium, nautilus, foot, imv
-# and mpv stay upstream's handlers: Music is a library to browse rather than a
-# player for one file, and claims no MimeType, so mpv still opens what it did.
-# Geary is the mail client that upstream's aether would have been (omitted:
-# x86_64-only). Camera is for the phone this image stands in for; the VM has no
-# /dev/video, so there it stops at the portal's permission prompt.
+# Each fills a gap rather than doubling a tile. chromium, nautilus, foot and imv
+# stay upstream's handlers, and so does mpv, which upstream's screen recorder
+# and yt-dlp host also run. Its tile is what changes: in the VM mpv aborts at
+# startup (no hardware EGL, then an assertion in its X11 fallback), so the
+# drawer's player is Showtime, and mpv's entry is hidden by a copy of it in
+# default/etc/skel/.local/share/applications. Music is a library to browse
+# rather than a player for one file, and claims no MimeType, so mpv still opens
+# what it did. Geary is the mail client that upstream's aether would have been
+# (omitted: x86_64-only). Camera is for the phone this image stands in for; the
+# VM has no /dev/video, so there it stops at the portal's permission prompt.
 #
 # About 140 MB of download, against the 400 MB the six omitted packages cost.
 # Most of it is two WebKits that evolution-data-server brings for Calendar and
 # Contacts, and Geary uses webkit2gtk-4.1 too, so it costs only 3 MB more.
 # Camera, Music and Sound Recorder share their GStreamer plugins: 13 MB for the
-# three.
+# three, and Showtime plays through the same ones for 0.1 MB more.
 gnome-calculator
 gnome-calendar
 gnome-contacts
@@ -118,6 +122,7 @@ geary
 snapshot
 gnome-music
 gnome-sound-recorder
+showtime
 
 # --- icons -----------------------------------------------------------------
 # Breeze answers icon names nothing else here draws. The App Store asks for
