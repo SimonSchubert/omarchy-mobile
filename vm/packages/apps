@@ -1,5 +1,5 @@
 # The apps tier: the rest of upstream's omarchy-base.packages that exists for
-# aarch64 and is not needed to bring the session up, less the six
+# aarch64 and is not needed to bring the session up, less the eight
 # vm/packages/omitted leaves out on purpose, plus GNOME's phone apps at the end.
 #
 # Installed by default, because "get it running as Omarchy is" means Omarchy's
@@ -10,7 +10,6 @@
 chromium
 nautilus
 nautilus-python
-gnome-disk-utility
 imv
 mpv
 mpv-mpris
@@ -57,7 +56,6 @@ nss-mdns
 cups
 cups-filters
 cups-pk-helper
-system-config-printer
 gvfs-mtp
 gvfs-nfs
 gvfs-smb
@@ -120,3 +118,11 @@ geary
 snapshot
 gnome-music
 gnome-sound-recorder
+
+# --- icons -----------------------------------------------------------------
+# Breeze answers icon names nothing else here draws. The App Store asks for
+# `system-software-install`, which otherwise only HighContrast has, as a
+# monochrome glyph the drawer shows as a black blot. The image had Breeze by
+# accident until 2026-09-11, through kdenlive's kiconthemes; leaving kdenlive
+# out took it away, so it is named here now. 11 MB of download.
+breeze-icons

@@ -81,7 +81,7 @@ itself.
   Arch Linux ARM. Of the other 27, one is built here from the AUR:
   xdg-terminal-exec, which every terminal Omarchy opens goes through. The other
   26 are listed with reasons in [`vm/packages/omitted`](vm/packages/omitted),
-  along with six that do exist and are left out on purpose.
+  along with eight that do exist and are left out on purpose.
   [`session`](vm/packages/session) is what Hyprland and the shell need to start;
   [`apps`](vm/packages/apps) is the rest, plus GNOME's phone apps.
 - **Hyprland is rebuilt.** ALARM moved `aquamarine` to `libaquamarine.so=14`
@@ -129,7 +129,8 @@ a phone image rather than from aarch64:
   `vm-ssh.sh` can get in (`--no-ssh-key` opts out). That is acceptable only
   because this image is a local development VM and is never published.
 - **A phone's app set.** Upstream's LibreOffice, Kdenlive, Moonlight,
-  Xournal++ and Evince are left out, and so is sushi, which depends on Evince.
+  Xournal++, Evince, Print Settings and Disks are left out, and so is sushi,
+  which depends on Evince.
   GNOME's Calculator, Calendar, Contacts, Maps, Clocks, Weather, Text Editor,
   Geary, Camera, Music and Sound Recorder are added: the apps a phone is
   expected to have, and libadwaita apps that fit a 360px screen.

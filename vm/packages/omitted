@@ -77,10 +77,11 @@ sddm                            # in ALARM, and installed by the session tier's
                                 # Hyprland gets a chance to.
 #
 # Upstream's desktop apps that are not in a phone's default set, and the
-# previewer that would pull one of them back in. All six install fine from
-# ALARM. They left the apps tier on 2026-09-11, which took 141 packages and
-# 400 MB off its download, and GNOME's phone apps took their place
-# (vm/packages/apps). `pacman -S` brings any of them back.
+# previewer that would pull one of them back in. All eight install fine from
+# ALARM, and all left the apps tier on 2026-09-11: the first six took 141
+# packages and 400 MB off its download, and Print Settings and Disks, dropped
+# later that day, another 5 packages and 2.6 MB. GNOME's phone apps took their
+# place (vm/packages/apps). `pacman -S` brings any of them back.
 libreoffice-fresh               # desktop office suite; 163 MB on its own
 kdenlive                        # desktop video editor; 183 MB with the KDE
                                 # Frameworks it pulls in
@@ -92,3 +93,6 @@ evince                          # the document viewer; chromium is the
 sushi                           # Nautilus's spacebar previewer. It depends on
                                 # evince, so installing it brings the document
                                 # viewer back, and a phone has no spacebar
+system-config-printer           # Print Settings, a desktop's printer admin.
+                                # CUPS and its web interface stay
+gnome-disk-utility              # Disks; partitioning is not a phone's job
