@@ -54,6 +54,7 @@ tty1 straight into Hyprland, so there is nothing to type.
 ./scripts/vm-ssh.sh hyprctl monitors       # one command
 ./scripts/vm-screenshot.sh                 # grim, from inside the session
 ./scripts/vm-run.sh --headless             # no window; Hyprland headless + VNC
+./scripts/vm-run.sh --detach               # the window, owned by no terminal or session
 ./scripts/vm-run.sh --geometry 1080x2340   # a different panel
 ./scripts/vm-drag.sh 180 712 -300          # swipe up from the bottom edge
 ./scripts/vm-push.sh                       # the overlay into a running guest, no rebuild

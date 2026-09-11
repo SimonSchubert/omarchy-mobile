@@ -4,6 +4,18 @@
 #   ./scripts/vm-run.sh              # a window on the Mac, Hyprland on DRM
 #   ./scripts/vm-run.sh --headless   # no display; Hyprland headless + VNC
 #   ./scripts/vm-run.sh --geometry 1080x2340
+#   ./scripts/vm-run.sh --detach     # the same window, owned by no terminal
+#
+# From a terminal, QEMU stays in it: the serial console is that terminal, and
+# closing it stops the VM. From anything else -- a Claude session's Bash tool --
+# it detaches, as --detach asks for from a terminal too. QEMU gets a process
+# session of its own, the serial console goes to vm/out/serial.log, the monitor
+# to vm/out/monitor.sock, and this returns once ssh is up. A VM started as a
+# session's background task died with that session, and whenever the Mac ran
+# short of memory, and the window on the Mac went with it.
+#
+# If the VM is already up, this says so and leaves it alone. The window on the
+# Mac is somebody's, and a restart closes it.
 #
 # Both modes serve VNC on the forwarded port, so `open vnc://127.0.0.1:PORT`
 # works either way, and the GUEST IS IDENTICAL in both -- it always gets a
@@ -34,17 +46,23 @@ die() { printf '\033[31m!! %s\033[0m\n' "$*" >&2; exit 1; }
 HEADLESS=0
 GEOMETRY=""
 SNAPSHOT=0
+DETACH=auto
 EXTRA=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --headless)  HEADLESS=1; shift ;;
     --geometry)  GEOMETRY="$2"; shift 2 ;;
     --snapshot)  SNAPSHOT=1; shift ;;
-    -h|--help)   sed -n '2,17p' "$0"; exit 0 ;;
+    --detach)    DETACH=1; shift ;;
+    -h|--help)   sed -n '2,18p' "$0"; exit 0 ;;
     --)          shift; EXTRA+=("$@"); break ;;
     *)           die "unknown argument: $1" ;;
   esac
 done
+# The serial console on stdio is only any use with a terminal to show it.
+if [ "$DETACH" = auto ]; then
+  if [ -t 0 ]; then DETACH=0; else DETACH=1; fi
+fi
 
 VERSION=$(manifest_get omarchy-mobile version) || exit 1
 IMG="vm/out/omarchy-mobile-$VERSION.img"
@@ -60,6 +78,21 @@ SMP=$(manifest_get vm smp)       || exit 1
 MEM=$(manifest_get vm memory)    || exit 1
 SSH_PORT=$(manifest_get vm ssh_port) || exit 1
 VNC_PORT=$(manifest_get vm vnc_port) || exit 1
+
+# Already up: say so rather than fail on the port forward, and never restart it.
+holder=$(lsof -nP -t -iTCP:"$SSH_PORT" -sTCP:LISTEN 2>/dev/null | head -n1 || true)
+if [ -n "$holder" ]; then
+  cmd=$(ps -o command= -p "$holder" 2>/dev/null || true)
+  case "$cmd" in
+    *qemu-system-aarch64*)
+      case "$cmd" in *"-display none"*) mode="headless, no window" ;; *) mode="in a window" ;; esac
+      echo "==> already running: pid $holder, $mode -- left as it is"
+      echo "    ssh  127.0.0.1:$SSH_PORT   (./scripts/vm-ssh.sh)"
+      echo "    vnc  127.0.0.1:$VNC_PORT   (open vnc://127.0.0.1:$VNC_PORT)"
+      exit 0 ;;
+    *) die "127.0.0.1:$SSH_PORT is taken by pid $holder: ${cmd%% *}" ;;
+  esac
+fi
 
 QEMU=$(command -v qemu-system-aarch64) || die "qemu-system-aarch64 not found -- brew install qemu"
 FW_DIR=$(dirname "$QEMU")/../share/qemu
@@ -87,7 +120,6 @@ args=(
   -device virtio-rng-pci
   -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22,hostfwd=tcp:127.0.0.1:$VNC_PORT-:5900"
   -device virtio-net-pci,netdev=net0
-  -serial mon:stdio
 )
 
 # --snapshot throws away every write on exit. The image stays pristine, which
@@ -111,8 +143,50 @@ else
   echo "==> window: ${W}x${H}, Hyprland on virtio-gpu DRM"
 fi
 
+SERIAL=vm/out/serial.log
+MONITOR=vm/out/monitor.sock
+PIDFILE=vm/out/qemu.pid
+if [ "$DETACH" = 1 ]; then
+  rm -f "$MONITOR" "$PIDFILE"
+  args+=(-serial "file:$SERIAL" -monitor "unix:$MONITOR,server=on,wait=off" -pidfile "$PIDFILE")
+else
+  args+=(-serial mon:stdio)
+fi
+
 echo "    ssh  127.0.0.1:$SSH_PORT   (./scripts/vm-ssh.sh)"
 echo "    vnc  127.0.0.1:$VNC_PORT   (open vnc://127.0.0.1:$VNC_PORT)"
-echo "    the serial console is this terminal; C-a x quits qemu"
-echo
-exec "$QEMU" "${args[@]}" ${EXTRA[@]+"${EXTRA[@]}"}
+if [ "$DETACH" = 0 ]; then
+  echo "    the serial console is this terminal; C-a x quits qemu"
+  echo
+  exec "$QEMU" "${args[@]}" ${EXTRA[@]+"${EXTRA[@]}"}
+fi
+
+echo "    serial $SERIAL; stop it with"
+echo "      echo system_powerdown | nc -U $MONITOR"
+
+# Fork, and setsid in the child before it becomes QEMU: it leaves the caller's
+# process group and session, and launchd adopts it when the caller exits, so
+# nothing that tears down the caller's process tree reaches it.
+python3 - "$QEMU" "${args[@]}" ${EXTRA[@]+"${EXTRA[@]}"} <<'PY'
+import os, sys
+if os.fork():
+    os._exit(0)
+os.setsid()
+null = os.open(os.devnull, os.O_RDWR)
+log = os.open("vm/out/qemu.log", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+os.dup2(null, 0)
+os.dup2(log, 1)
+os.dup2(log, 2)
+os.execv(sys.argv[1], sys.argv[1:])
+PY
+
+for _ in $(seq 50); do
+  if lsof -nP -iTCP:"$SSH_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "    up: pid $(cat "$PIDFILE" 2>/dev/null || echo '?'), detached"
+    exit 0
+  fi
+  sleep 0.2
+done
+printf '\033[31m!! QEMU did not come up; vm/out/qemu.log says:\033[0m\n' >&2
+tail -n 20 vm/out/qemu.log >&2
+exit 1
