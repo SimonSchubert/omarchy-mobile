@@ -216,6 +216,14 @@ if [ -d "$REPO/default" ] && [ -n "$(ls -A "$REPO/default" 2>/dev/null)" ]; then
   info "$(cd "$REPO/default" && find . -type f | wc -l) files"
 fi
 
+# What the session is made of, in the guest. The drawer's long-press card
+# refuses to remove anything on it (gestures.md L12): this image pacstraps both
+# tiers as explicit targets and has no meta package, so pacman has no
+# dependency to object with and `pacman -Rs foot` would take the terminal every
+# TUI opens in. Copied verbatim rather than stripped, so the file in the guest
+# is the file in the repo and omarchy-mobile-app-remove does the one parse.
+install -Dm644 "$REPO/vm/packages/session" "$ROOTDIR/etc/omarchy-mobile/session-packages"
+
 # ---------------------------------------------------------------------------
 say "configure"
 # /root, not /tmp. arch-chroot mounts a FRESH TMPFS over the target's /tmp
