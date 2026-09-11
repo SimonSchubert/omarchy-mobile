@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Name=Bluetooth
+GenericName=Bluetooth
+Comment=Pair and connect Bluetooth devices
+# A screen the shell already holds, not a process: this asks the running shell
+# to put it up (mobile.shell, BluetoothScreen.qml). omarchy-shell finds the
+# shell through OMARCHY_PATH, which the session exports.
+Exec=omarchy-shell bluetooth open
+# A name unique to this project, so no icon theme can shadow it with a
+# symbolic glyph drawn for a panel -- moarchy's themed name resolved to a dark
+# monochrome icon, unreadable on the drawer's dark sheet. It falls through to
+# hicolor, where this project installs it.
+Icon=omarchy-mobile-bluetooth
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=bluetooth;pair;headset;headphones;speaker;keyboard;

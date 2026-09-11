@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "mobile.shell",
+  "name": "Mobile shell",
+  "version": "1.0.0",
+  "author": "omarchy-mobile",
+  "description": "The phone UI: status bar, shade, bottom edge, recents carousel, home screen and app drawer.",
+  "kinds": [
+    "menu",
+    "bar"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "menu": "Shell.qml",
+    "bar": "Bar.qml"
+  }
+}

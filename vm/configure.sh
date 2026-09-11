@@ -103,6 +103,56 @@ hl.monitor({
 EOF
 
 # ---------------------------------------------------------------------------
+say "mobile window rules"
+# What a phone needs from the window manager -- one app per workspace, filling
+# it (docs/spec/windows.md W1-W5) -- is hypr/mobile.lua, which the overlay
+# put in skel. hyprland.lua is the one user file that names what it loads, and
+# its own last comment is where it says personal configuration goes, so the
+# require is appended there rather than written into anything upstream owns.
+HYPR_USER=/etc/skel/.config/hypr/hyprland.lua
+[ -f /etc/skel/.config/hypr/mobile.lua ] || { echo "!! no hypr/mobile.lua -- the overlay did not land in skel" >&2; exit 1; }
+[ -f "$HYPR_USER" ] || { echo "!! no $HYPR_USER -- upstream config did not land in skel" >&2; exit 1; }
+grep -qF 'require("hypr.mobile")' "$HYPR_USER" \
+  || printf '\n-- omarchy-mobile: one app per workspace, filling it.\nrequire("hypr.mobile")\n' >>"$HYPR_USER"
+
+# ---------------------------------------------------------------------------
+say "mobile shell plugins"
+# This project's own quickshell plugins ship into the directory upstream
+# already scans -- ~/.config/omarchy/plugins, seeded from /etc/skel -- rather
+# than into a system path. moarchy needed a system path and had to patch
+# PluginRegistry to add one; here the user directory costs nothing and buys
+# on-device iteration, because the shell reloads a plugin whose files change.
+#
+# The overlay put the directories there before this script ran. What is left is
+# the enabled bit: a third-party plugin is on exactly when its id appears in
+# shell.json, so add each one that is not already listed.
+#
+# The list is DERIVED from what shipped rather than written out here. A second
+# plugin is then a directory, not a directory and an edit to this file that
+# someone has to remember.
+SHELL_JSON=/etc/skel/.config/omarchy/shell.json
+PLUGIN_DIR=/etc/skel/.config/omarchy/plugins
+if [ -d "$PLUGIN_DIR" ]; then
+  [ -f "$SHELL_JSON" ] || { echo "!! no $SHELL_JSON -- upstream config did not land in skel" >&2; exit 1; }
+  for manifest in "$PLUGIN_DIR"/*/manifest.json; do
+    [ -f "$manifest" ] || continue
+    id=$(jq -re '.id' "$manifest") || { echo "!! no id in $manifest" >&2; exit 1; }
+    # A plugin that declares kind "bar" is enabled by BEING the bar: the host's
+    # PluginRegistry.isEnabled answers for it from `bar.id` alone and ignores
+    # the plugins list. mobile.shell is one -- the phone's status bar and the
+    # rest of its UI are one switch (Bar.qml).
+    is_bar=$(jq '.kinds | index("bar") != null' "$manifest")
+    tmp=$(mktemp)
+    jq --arg id "$id" --argjson bar "$is_bar" '
+      if $bar then .bar.id = $id | .plugins = ((.plugins // []) | map(select(.id != $id)))
+      else .plugins = ((.plugins // []) | if any(.id == $id) then . else . + [{id: $id}] end)
+      end' "$SHELL_JSON" >"$tmp"
+    mv "$tmp" "$SHELL_JSON"
+    if [ "$is_bar" = true ]; then say "  enabled $id, as the bar"; else say "  enabled $id"; fi
+  done
+fi
+
+# ---------------------------------------------------------------------------
 say "system users and groups"
 # Arch's `filesystem` package no longer ships a populated /etc/group -- it
 # ships /usr/lib/sysusers.d/basic.conf and lets systemd-sysusers create the
