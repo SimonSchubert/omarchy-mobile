@@ -1,25 +1,61 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-  <!-- The drawer tile for Settings, drawn like Wi-Fi's and Bluetooth's: a
-       white glyph on a tile, so it reads on any sheet a theme produces. The
-       gear is a stroked ring and eight teeth rather than one cut-out path,
-       because the drawer rasterises through Qt SVG, which is SVG Tiny and has
-       no masks. -->
-  <defs>
-    <linearGradient id="settingsTile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#8A94A6"/>
-      <stop offset="1" stop-color="#4B5563"/>
-    </linearGradient>
-  </defs>
-  <rect width="128" height="128" rx="28" fill="url(#settingsTile)"/>
-  <g transform="translate(64 64)" fill="#ffffff">
-    <rect x="-8" y="-42" width="16" height="20" rx="3"/>
-    <rect x="-8" y="-42" width="16" height="20" rx="3" transform="rotate(45)"/>
-    <rect x="-8" y="-42" width="16" height="20" rx="3" transform="rotate(90)"/>
-    <rect x="-8" y="-42" width="16" height="20" rx="3" transform="rotate(135)"/>
-    <rect x="-8" y="-42" width="16" height="20" rx="3" transform="rotate(180)"/>
-    <rect x="-8" y="-42" width="16" height="20" rx="3" transform="rotate(225)"/>
-    <rect x="-8" y="-42" width="16" height="20" rx="3" transform="rotate(270)"/>
-    <rect x="-8" y="-42" width="16" height="20" rx="3" transform="rotate(315)"/>
+  <!-- The drawer tile for Settings, except it is no longer a tile. AppDrawer.qml
+       paints .desktop icons bare, so this sits in a row with Contacts,
+       Calculator and Notes, and every one of those is an Adwaita app icon: an
+       object on the surface rather than a glyph on a coloured square. A gear is
+       the object here, built the way Adwaita builds a round one (see Clocks):
+       a solid mass, and the same depth trick the others use, two copies offset
+       down the grey ramp so a lip of shadow shows under the teeth.
+
+       Still eight teeth and a ring drawn additively rather than one cut-out
+       path, because the drawer rasterises through Qt SVG, which is SVG Tiny and
+       has no masks. The bore is painted over the body for the same reason: a
+       real hole would need a mask, so this is a dark disc on top pretending to
+       be one.
+
+       Monochrome on purpose, and the one icon in the grid that is. Everything
+       around it carries a saturated accent, so the system app reads as the
+       system app by having none.
+
+       That leaves contrast to the greys, which is the whole reason for the
+       values here. A theme can put this on a near-white sheet, and at 42px a
+       light gear on cream is a ghost: hence #c0bfbc for the body rather than
+       Calculator's #deddda, and hence the bore, which is not decoration but
+       the dark mass that keeps the middle from filling in. An all-grey bore
+       was tried and is the one that disappears. -->
+  <g transform="translate(64 68)" fill="#5e5c64">
+    <circle cx="0" cy="0" r="40"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(45)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(90)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(135)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(180)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(225)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(270)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(315)"/>
   </g>
-  <circle cx="64" cy="64" r="20" fill="none" stroke="#ffffff" stroke-width="16"/>
+  <g transform="translate(64 66)" fill="#9a9996">
+    <circle cx="0" cy="0" r="40"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(45)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(90)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(135)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(180)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(225)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(270)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(315)"/>
+  </g>
+  <g transform="translate(64 62)" fill="#c0bfbc">
+    <circle cx="0" cy="0" r="40"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(45)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(90)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(135)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(180)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(225)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(270)"/>
+    <rect x="-9" y="-52" width="18" height="22" rx="5" transform="rotate(315)"/>
+  </g>
+  <circle cx="64" cy="62" r="24" fill="#5e5c64"/>
+  <circle cx="64" cy="62" r="18" fill="#3d3846"/>
 </svg>

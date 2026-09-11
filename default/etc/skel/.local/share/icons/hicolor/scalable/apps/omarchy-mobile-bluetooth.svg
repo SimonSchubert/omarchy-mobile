@@ -1,15 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-  <!-- See moarchy.wifi/icon.svg for why this is a file and not a theme name.
+  <!-- See omarchy-mobile-wifi.svg for why this is a file and not a theme name,
+       and for why it stopped being a tile.
+
        Violet rather than the Bluetooth blue, so a thumb tells this apart from
-       Wi-Fi at drawer size without reading either label. -->
-  <defs>
-    <linearGradient id="btTile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#9B7BF9"/>
-      <stop offset="1" stop-color="#6D28D9"/>
-    </linearGradient>
-  </defs>
-  <rect width="128" height="128" rx="28" fill="url(#btTile)"/>
-  <path d="M42 40 L86 80 L64 102 L64 26 L86 48 L42 88"
-        fill="none" stroke="#ffffff" stroke-width="10"
+       Wi-Fi at drawer size without reading either label. That was true when
+       both were tiles and it is the reason the two keep separate ramps now
+       that neither is: Adwaita's purple here, its blue there.
+
+       The rune is the old one scaled up by a quarter about the centre, because
+       a mark that filled 44px of a 128px canvas was drawn to sit inside a tile
+       and looks lost without one. Same depth step as the others, one darker
+       copy 3px down. -->
+  <path d="M36.5 35 L91.5 85 L64 112.5 L64 17.5 L91.5 45 L36.5 95"
+        fill="none" stroke="#813d9c" stroke-width="14"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M36.5 32 L91.5 82 L64 109.5 L64 14.5 L91.5 42 L36.5 92"
+        fill="none" stroke="#c061cb" stroke-width="14"
         stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

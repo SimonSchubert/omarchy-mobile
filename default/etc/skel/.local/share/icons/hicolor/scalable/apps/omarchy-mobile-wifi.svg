@@ -1,21 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
   <!-- Shipped rather than named, because a themed name is not a picture.
        `network-wireless-symbolic` is a monochrome glyph the icon theme paints
-       near-black, and the drawer's sheet is dark: the entry was there and
-       invisible. A tile with a white glyph reads on any background the theme
-       can produce, and it does not depend on Yaru carrying a wireless icon,
-       which it does not. -->
-  <defs>
-    <linearGradient id="wifiTile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#4C8DF8"/>
-      <stop offset="1" stop-color="#1D4ED8"/>
-    </linearGradient>
-  </defs>
-  <rect width="128" height="128" rx="28" fill="url(#wifiTile)"/>
-  <g fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round">
-    <path d="M31.5 59.5 A46 46 0 0 1 96.5 59.5"/>
-    <path d="M41.4 69.4 A32 32 0 0 1 86.6 69.4"/>
-    <path d="M51.3 79.3 A18 18 0 0 1 76.7 79.3"/>
+       near-black, and it was there and invisible on a dark sheet. This is a
+       picture, and its blues are opaque, so it reads on any background the
+       theme can produce and does not depend on Yaru carrying a wireless icon,
+       which it does not.
+
+       No longer a white glyph on a gradient square. Settings' gear explains
+       why: the drawer paints icons bare beside GNOME's, and a tile is the one
+       shape in that row that reads as a tile. So the fan is the object, in
+       Adwaita's blue ramp, with the same depth step the others use, one darker
+       copy 3px down.
+
+       The radii step by 19 against a stroke of 12, which leaves 7px of air
+       between the arcs. At 42px that air is two pixels, and it is the whole
+       difference between a fan and a blue blob. -->
+  <g fill="none" stroke="#1a5fb4" stroke-width="12" stroke-linecap="round">
+    <path d="M15.5 81 A56 56 0 0 1 112.5 81"/>
+    <path d="M32 90 A37 37 0 0 1 96 90"/>
+    <path d="M48.4 100 A18 18 0 0 1 79.6 100"/>
   </g>
-  <circle cx="64" cy="92" r="6.5" fill="#ffffff"/>
+  <circle cx="64" cy="109" r="7.5" fill="#1a5fb4"/>
+  <g fill="none" stroke="#3584e4" stroke-width="12" stroke-linecap="round">
+    <path d="M15.5 78 A56 56 0 0 1 112.5 78"/>
+    <path d="M32 87 A37 37 0 0 1 96 87"/>
+    <path d="M48.4 97 A18 18 0 0 1 79.6 97"/>
+  </g>
+  <circle cx="64" cy="106" r="7.5" fill="#3584e4"/>
 </svg>
