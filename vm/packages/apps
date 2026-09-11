@@ -75,3 +75,10 @@ kernel-modules-hook
 fcitx5
 fcitx5-gtk
 fcitx5-qt
+
+# --- built here, from the AUR ---------------------------------------------
+# Not in ALARM. vm/build-packages.sh builds it from its AUR PKGBUILD, pinned as
+# [pkg.xdg-terminal-exec] in the manifest, into the local repo pacstrap reads
+# ahead of ALARM's. Every terminal Omarchy opens goes through it, which is most
+# of what Settings' bridged rows do.
+xdg-terminal-exec

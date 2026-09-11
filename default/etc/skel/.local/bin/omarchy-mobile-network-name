@@ -1,0 +1,23 @@
+#!/bin/bash
+# The one field of omarchy-network-status a Settings detail line wants: what
+# you are on (docs/spec/settings.md I6). Ported from moarchy-network-name.
+#
+#   omarchy-mobile-network-name        the Wi-Fi name, "Ethernet" or "Not connected"
+#   omarchy-mobile-network-name wifi   the Wi-Fi name, or "Not connected"
+#
+# omarchy-network-status answers a whole record -- <kind>\t<name>\t<signal>\t<freq>
+# -- for a bar widget that lays the fields out itself. A detail line is one
+# value, and on moarchy's phone the unsplit record read "wifi Paradise2 65
+# 2462.0", its tabs shifting every column of the `rows` TSV after it.
+#
+# The `wifi` form is for the Wi-Fi networks row, which on this VM's wired link
+# would otherwise say "Ethernet" under a label about Wi-Fi.
+set -uo pipefail
+
+IFS=$'\t' read -r kind name _ _ < <(omarchy-network-status 2>/dev/null)
+
+case "${1:-any}:${kind:-}" in
+  *:wifi)       echo "${name:-Wi-Fi}" ;;
+  any:ethernet) echo "Ethernet" ;;
+  *)            echo "Not connected" ;;
+esac

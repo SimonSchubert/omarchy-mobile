@@ -51,6 +51,7 @@ VERSION=$(manifest_get omarchy-mobile version) || die "no version pin"
 GUEST_USER=$(manifest_get guest user)          || die "no guest user"
 GUEST_HOST=$(manifest_get guest hostname)      || die "no guest hostname"
 OMARCHY_REF=$(manifest_get omarchy ref)        || die "no omarchy ref"
+OMARCHY_VERSION=$(manifest_get omarchy version) || die "no omarchy version"
 OMARCHY_URL=$(manifest_get omarchy url)        || die "no omarchy url"
 VM_WIDTH=$(manifest_get vm width)              || die "no vm width"
 VM_HEIGHT=$(manifest_get vm height)            || die "no vm height"
@@ -228,6 +229,7 @@ say "configure"
 install -Dm755 "$SHARE/configure.sh" "$ROOTDIR/root/configure.sh"
 GUEST_USER="$GUEST_USER" GUEST_HOST="$GUEST_HOST" ROOT_UUID="$ROOT_UUID" \
 ESP_UUID="$ESP_UUID" VERSION="$VERSION" COMMIT="$COMMIT" \
+OMARCHY_VERSION="$OMARCHY_VERSION" OMARCHY_REF="$OMARCHY_REF" \
 VM_WIDTH="$VM_WIDTH" VM_HEIGHT="$VM_HEIGHT" VM_SCALE="$VM_SCALE" \
 SSH_PUBKEY="${SSH_PUBKEY:-}" \
   arch-chroot "$ROOTDIR" /root/configure.sh

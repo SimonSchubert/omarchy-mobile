@@ -1,0 +1,31 @@
+#!/bin/bash
+# The time zone, for the Settings pages that pick one by region and then city
+# (docs/spec/settings.md L). Ported from moarchy-timezone.
+#
+#   omarchy-mobile-timezone current
+#   omarchy-mobile-timezone set <Area/City>
+#
+# Upstream's omarchy-menu-timezone pipes all ~420 zones into a select box with a
+# filter field, which wants a keyboard to find one entry out of four hundred.
+# The pages walk region then city instead, so this only has to do the write.
+#
+# The zone stays timedatectl's: it is written and read through it, and there is
+# no second store.
+set -euo pipefail
+
+case "${1:-}" in
+  set)
+    [[ -n ${2:-} ]] || { echo "usage: omarchy-mobile-timezone set <Area/City>" >&2; exit 1; }
+    sudo timedatectl set-timezone "$2"
+    # Upstream's clock reads the zone once. This phone's bar is its own, but the
+    # clock plugin is still loaded, and a desktop running this wants it.
+    omarchy-shell -q omarchy.clock refresh >/dev/null 2>&1 || true
+    ;;
+  current)
+    timedatectl show -p Timezone --value
+    ;;
+  *)
+    echo "usage: omarchy-mobile-timezone {current|set <Area/City>}" >&2
+    exit 2
+    ;;
+esac

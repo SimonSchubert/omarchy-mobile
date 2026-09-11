@@ -1,9 +1,10 @@
 // The phone shell: the status bar, the shade, the bottom edge, the recents
-// carousel, the home screen and the app drawer, as one Omarchy shell plugin.
+// carousel, the home screen, the app drawer and the screens that are windows,
+// as one Omarchy shell plugin.
 //
-// Implements docs/spec/gestures.md and docs/spec/shade.md. AC ids in comments
-// refer to those files, which are the contract; docs/acceptance.md says which
-// of them hold here.
+// Implements docs/spec/gestures.md, docs/spec/shade.md and
+// docs/spec/settings.md. AC ids in comments refer to those files, which are the
+// contract; docs/acceptance.md says which of them hold here.
 //
 // ---------------------------------------------------------------------------
 // Why one plugin
@@ -30,9 +31,10 @@
 //   EdgeGestures.qml  the strip, the home screen, and the gestures on both
 //   Carousel.qml      recent apps
 //   AppDrawer.qml     the app grid
-//   WifiScreen.qml, BluetoothScreen.qml
+//   WifiScreen.qml, BluetoothScreen.qml, SettingsScreen.qml
 //                     screens that are windows (gestures.md K), each through
-//                     MobileAppWindow.qml
+//                     MobileAppWindow.qml. Settings' pages are data, in
+//                     Pages.js, drawn by SettingsRow.qml and read by Guards.js
 //
 // ---------------------------------------------------------------------------
 // Why kinds "menu" and "bar"
@@ -45,8 +47,9 @@
 // "bar" makes this plugin a bar option, selected by shell.json's `bar.id`, and
 // the host gives a bar-kind plugin two things the shade needs: first-party
 // service proxies (Do Not Disturb, the media player) and leave to summon any
-// menu (the gear opens omarchy.menu). Both come with the manifest, so the menu
-// instance below has them too.
+// other plugin, which a Settings row falls back on for a surface that is not
+// one of this shell's own. Both come with the manifest, so the menu instance
+// below has them too.
 //
 // It also makes `bar.id` the one switch for the whole phone UI: the host
 // enables a bar-kind plugin exactly when `bar.id` names it, for every entry
@@ -55,9 +58,9 @@
 // ---------------------------------------------------------------------------
 // IPC targets
 // ---------------------------------------------------------------------------
-// `gestures`, `recents`, `drawer`, `shade` and `bar` -- moarchy's names, so
-// every check moarchy's spec writes as `omarchy-shell recents state` runs here
-// verbatim.
+// `gestures`, `recents`, `drawer`, `shade`, `bar`, `wifi`, `bluetooth` and
+// `settings` -- moarchy's names, so every check moarchy's spec writes as
+// `omarchy-shell recents state` runs here verbatim.
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
@@ -90,7 +93,8 @@ Item {
   // shell.isPluginOpen() reads `opened` by name, and summon/hide arrive as
   // open()/close(). A summon names the sheet in its payload --
   // `{"surface": "recents"}` or `"shade"` -- and defaults to the drawer, which
-  // is what a keybinding for "the launcher" means.
+  // is what a keybinding for "the launcher" means. A screen's summon may also
+  // carry `returnTo` and, for Settings, `page`.
   readonly property bool opened: drawer.opened || carousel.opened || shade.opened
 
   function open(payloadJson) {
@@ -101,8 +105,9 @@ Item {
       if (root.hasApps()) carousel.open()
     } else if (payload.surface === "shade") {
       shade.open()
-    } else if (payload.surface === "wifi" || payload.surface === "bluetooth") {
-      root.openScreen(payload.surface, "")
+    } else if (payload.surface === "wifi" || payload.surface === "bluetooth"
+               || payload.surface === "settings") {
+      root.openScreen(payload.surface, payload.returnTo || "", payload.page || "")
     } else {
       drawer.open()
     }
@@ -212,15 +217,18 @@ Item {
     return false
   }
 
-  // S6b, S6d, K. The screens that are windows: Wi-Fi and Bluetooth.
-  // `returnTo` is where each one's back chevron goes afterwards -- the shade,
-  // when its long press is what opened the screen.
-  readonly property var screens: [wifiScreen, bluetoothScreen]
+  // S6b, S6d, K10. The screens that are windows: Wi-Fi, Bluetooth and
+  // Settings. `returnTo` is where each one's back chevron goes afterwards --
+  // the shade, when its long press is what opened Wi-Fi; Settings, when one of
+  // its rows did. `page` is Settings' alone, and names the page to open at.
+  readonly property var screens: [wifiScreen, bluetoothScreen, settingsScreen]
 
-  function openScreen(name, returnTo): bool {
-    var s = name === "wifi" ? wifiScreen : (name === "bluetooth" ? bluetoothScreen : null)
+  function openScreen(name, returnTo, page): bool {
+    var s = name === "wifi" ? wifiScreen
+          : name === "bluetooth" ? bluetoothScreen
+          : name === "settings" ? settingsScreen : null
     if (!s) return false
-    s.open(JSON.stringify({ returnTo: returnTo || "" }))
+    s.open(JSON.stringify({ returnTo: returnTo || "", page: page || "" }))
     return true
   }
 
@@ -261,6 +269,11 @@ Item {
 
   BluetoothScreen {
     id: bluetoothScreen
+    host: root
+  }
+
+  SettingsScreen {
+    id: settingsScreen
     host: root
   }
 

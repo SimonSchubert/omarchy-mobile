@@ -5,6 +5,7 @@
 # do: identity, fstab, initramfs, the user, and what starts the session.
 #
 # Environment in: GUEST_USER GUEST_HOST ROOT_UUID ESP_UUID VERSION COMMIT
+#                 OMARCHY_VERSION OMARCHY_REF
 #                 SSH_PUBKEY (optional)
 set -euo pipefail
 
@@ -284,8 +285,13 @@ chown -R "$GUEST_USER:$GUEST_USER" "/home/$GUEST_USER"
 # ---------------------------------------------------------------------------
 say "provenance"
 install -d /etc/omarchy-mobile
+# The Omarchy pin as well as this project's own. About Omarchy reads it
+# (omarchy-mobile-about): omarchy-version asks pacman for a package this image
+# does not install, and upstream's own version file reads 4.0.0.alpha at v4.0.3.
 cat >/etc/omarchy-mobile/release <<EOF
 VERSION=$VERSION
 COMMIT=$COMMIT
+OMARCHY_VERSION=${OMARCHY_VERSION:-}
+OMARCHY_REF=${OMARCHY_REF:-}
 BUILT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF

@@ -69,6 +69,29 @@ tag     = "0.56.2-2"
 ref     = "b8035f2fd4540f4f88c747846388027dce715d5d"
 
 # ---------------------------------------------------------------------------
+# xdg-terminal-exec is not behind in ALARM but absent from it: it lives in the
+# AUR. It is built here because every terminal Omarchy opens goes through it --
+# omarchy-launch-floating-terminal-with-presentation execs
+# `xdg-terminal-exec --app-id=org.omarchy.terminal ...` -- and without it
+# uwsm-app logs one line and nothing appears:
+#
+#   uwsm_app-daemon: sent: error 'Error: Command not found: "xdg-terminal-exec"' 1
+#
+# Settings bridges forty-odd of upstream's rows that way (docs/spec/settings.md
+# E), so on an image without it those rows are taps that do nothing.
+#
+# The AUR's git repo keeps the PKGBUILD at its root, the same shape as Arch's
+# packaging repos, so vm/build-packages.sh builds it unchanged. The AUR has no
+# tags: `tag` is the pkgver-pkgrel this commit builds, for reading, and `ref`
+# is what is checked out. The PKGBUILD pins its source tarball by sha256, and
+# that sum was checked against the tarball when this pin was taken.
+# ---------------------------------------------------------------------------
+[pkg.xdg-terminal-exec]
+url     = "https://aur.archlinux.org/xdg-terminal-exec.git"
+tag     = "0.14.3-1"
+ref     = "a52e8f23c0be7d482b944c6cf5ddee172da171e4"
+
+# ---------------------------------------------------------------------------
 # The aarch64 container everything is built in. Pinned by digest rather than
 # by the `base-devel` tag: a floating tag is a clone at HEAD by another name.
 #

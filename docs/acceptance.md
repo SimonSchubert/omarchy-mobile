@@ -127,20 +127,22 @@ Hyprland 0.56.2 at 360x720 logical.
 
 ### K. Settings is an app
 
-Here the screens that are windows are Wi-Fi and Bluetooth; Settings is not built.
+Three screens are windows: Wi-Fi, Bluetooth and Settings. Section K of the
+selftest checks Wi-Fi; its Settings section checks the same criteria on
+Settings.
 
 | AC | Status | Note |
 | --- | --- | --- |
-| K1 | pass | `class org.quickshell`, alone on its workspace, the usable area exactly |
-| K2 | pass | Swiped off and back, the screen is still there |
+| K1 | pass | `class org.quickshell`, alone on its workspace, the usable area exactly -- Wi-Fi and Settings |
+| K2 | pass | Swiped off and back, the screen is still there; for Settings, on the page it was left on |
 | K3 | todo | Not checked for the other ways a workspace moves |
 | K4 | todo | Not checked |
 | K5 | pass | Glyph, name and page, from the screen itself -- there is no desktop entry for an app id that names the shell process |
-| K6 | pass | Flicking the card closes the window; summoned again, it opens (moarchy's visible-false-then-true, measured after a compositor-side close too) |
-| K7 | todo | Needs the back gesture |
-| K8 | todo | Needs Settings' rows |
+| K6 | pass | Flicking the card closes the window; summoned again, it opens (moarchy's visible-false-then-true, measured after a compositor-side close too). Settings reopens at the root |
+| K7 | todo | Needs the back gesture. Settings' `goBack()` walks its stack and answers false at the root, for the gesture to close it then |
+| K8 | pass | A bridged row's terminal comes up tiled on a workspace of its own and Settings stays running (settings.md E6) |
 | K9 | holds | Measured: the class is `org.quickshell`, and each screen is told apart by a title prefix |
-| K10 | partial | Wi-Fi and Bluetooth; Settings is not built |
+| K10 | pass | Wi-Fi, Bluetooth and Settings, and the theme picker is a page of Settings, not a screen |
 | K11 | todo | Needs J |
 | K12 | pass | **Changed:** by Hyprland address, for the reason under E2 |
 
@@ -169,8 +171,8 @@ which is also what grants the shade its Do Not Disturb and media services.
 | AC | Status | Note |
 | --- | --- | --- |
 | S1 | holds | `H:mm` and `dddd d MMMM`, per minute. Not checked as text |
-| S2 | pass | **Changed:** the gear opens upstream's Omarchy menu, not Settings, which is not built. A tap outside dismisses it -- HyprlandFocusGrab works here, where moarchy's port had to stub it out |
-| S3 | holds | **Changed:** power opens the same menu at `system`. Not checked separately from S2 |
+| S2 | pass | A real tap on the gear opens Settings at the root, and no `omarchy-menu` layer maps. Until Settings existed it opened upstream's Omarchy menu, which dismissed on a tap outside it here -- HyprlandFocusGrab, which moarchy's port had to stub out |
+| S3 | pass | A real tap on the power glyph opens Settings at `system.power` |
 | S4 | partial | Ported. This VM has no Wi-Fi device, so the tile reads "No Wi-Fi" -- a state S4 does not list, added rather than showing "Off" for a radio that is not there |
 | S5 | partial | Ported; "No adapter" is the only state reachable here |
 | S6 | pass | A 900ms hold opens the Wi-Fi screen and puts the shade away; the tap it interrupts does not fire |
@@ -223,9 +225,88 @@ which is also what grants the shade its Do Not Disturb and media services.
 
 ## [settings.md](spec/settings.md)
 
+Settings is `SettingsScreen.qml` in `mobile.shell`, a screen that is a window
+like Wi-Fi and Bluetooth. `vm-selftest.sh settings` checks it with real taps on
+the gear, the power glyph, a row and the back chevron, and over IPC for the
+rest; its lines print with an `s.` in front, because settings.md's ids reuse
+gestures.md's letters. Checked 2026-09-11 with `vm-selftest.sh S K settings`:
+85 checks, 53 of them Settings', all passing on the first run.
+
+Where a row runs upstream's command rather than moarchy's -- most of them, since
+moarchy's stand-ins are for Sway -- the criterion is read against upstream's
+command. The helpers moarchy calls `bin/moarchy-*` are `omarchy-mobile-*` in
+`~/.local/bin`.
+
 | AC | Status | Note |
 | --- | --- | --- |
-| A1–P11 | todo | Not built. The shade's gear and power button stand in with upstream's Omarchy menu (S2, S3) |
+| A1 | pass | A real tap on the gear |
+| A2 | pass | With the drawer up |
+| A3 | pass | A real tap on the power glyph; no `omarchy-menu` layer maps |
+| A4 | pass | |
+| A5 | holds | open() sets the page and defers every read to `Qt.callLater`. Not checked against slow readers |
+| A6 | pass | |
+| A7 | pass | From another app's workspace, at `appearance.bar`: focus comes back, the page is kept, one card |
+| B1 | pass | A real tap on a row, aimed with `settings rowTarget` |
+| B2 | pass | The chevron by tap, and `back` walking up from the power glyph's deep link to `closed` |
+| B3, B5 | todo | Need the back gesture (gestures.md G). `goBack()` is there for it to call |
+| B4 | partial | The carousel rises over Settings with its card leading (the K6 check does exactly that); the home band leaving it running is not checked |
+| B6 | pass | |
+| B7 | holds | **Changed:** Theme is a page here, not a plugin, so it returns to where it was opened from by being popped |
+| B8 | pass | Firefox's row hidden with no Firefox; and Lock, below |
+| B9 | pass | |
+| C1 | pass | Stay awake against `omarchy-toggle-idle status` |
+| C2, C3 | pass | The battery flag, set and put back |
+| C4 | pass | Both ways, read off `bar metrics`. The target is this project's `bar`, whose `syncFlags` Bar.qml declares |
+| C4a, C6 | holds | No Show status bar and no transparency row. Not checked |
+| C5 | holds | **Changed:** upstream's `omarchy-toggle-idle`, whose state file the shell's own idle service reads (it logs `stay-awake: disabled state-file`). There is no swayidle to check |
+| C7 | todo | The crash-capture unit is not checked |
+| C8 | pass | |
+| C9 | partial | Not activated for real, since it changes sshd; E6 shows a bridged terminal leaving Settings running |
+| D1 | pass | DNS, and Theme against `omarchy-theme-current` |
+| D2 | holds | A choice ticks only on an exact match with the reader. Not checked with a stub |
+| D3 | holds | The Epiphany row, which needs Epiphany installed to be seen |
+| D4 | pass | The default terminal, written as the one it already is. Choice writes re-read when the write exits, not when it starts |
+| D5, D6, D7 | pass | |
+| D8 | changed | AI agent is hidden: `omarchy-default-agent` installs through mise, which this image does not have. The rows are upstream's thirteen, writing upstream's `omarchy-default-agent <name>` |
+| E1 | pass | And Screenshot records `omarchy-capture-screenshot fullscreen`, and Restart asks before Continue records `omarchy-system-reboot` |
+| E2 | holds | Checked statically against `omarchy-menu.jsonc`, not by the selftest: no bridged row differs from upstream's action except Screenshot (`fullscreen`) and Change password (`sudo passwd "$USER"`). moarchy's three package-row exceptions are gone -- they call `xdg-terminal-exec` as upstream does |
+| E3 | holds | Every first word resolves under the shell's PATH, checked by hand, not by the selftest |
+| E4 | changed | No bridge shims: upstream's own commands work on Hyprland. The one missing piece was `xdg-terminal-exec` itself, which is a package now (`[pkg.xdg-terminal-exec]`) |
+| E5 | partial | The presentation terminal comes up tiled, filling its own workspace at 360x674 -- class `foot`, because foot's desktop entry gives xdg-terminal-exec no way to pass `--app-id` on. Typeable needs the keyboard |
+| E6 | pass | A real terminal from Add a web app, closed afterwards |
+| E7 | todo | |
+| E8 | holds | The presentation wrapper waits for a key after the command. Seen, not checked |
+| E9 | partial | **Changed:** About reads the Omarchy pin from `/etc/omarchy-mobile/release`, because `omarchy-version` asks pacman for a package this image does not install. An image built before 2026-09-11 has no pin there and falls back to upstream's version file, which reads 4.0.0.alpha |
+| F1, G1–G7 | todo | `settings coverage` emits 133 lines from `Pages.js`, but `docs/menu-coverage.md` is not ported, so parity has nothing to be checked against |
+| F2–F7 | holds | Guards.js is moarchy's, unchanged. F6 is what hides Lock, AI agent and Install from the AUR |
+| F8 | changed | AI agent's row is guarded again -- on mise, the installer, not on the agents (D8) |
+| H1 | pass | Walked over every page |
+| H2 | holds | `settings coverage` carries `trigger.toggle.notifications` as Shade |
+| I1 | holds | `listPlugins` shows `mobile.shell` and `settings state` answers |
+| I2 | holds | Every glyph is one code point, checked statically. They are written as escapes here, as everywhere in this project |
+| I3, I4 | holds | Checked by the greps the criteria give |
+| I5 | changed | No bin directory to put first: the helpers are in `~/.local/bin`, which the session already has on PATH |
+| I6 | holds | `omarchy-mobile-network-name` |
+| J1 | partial | The list is the page; the no-notification half is not checked |
+| J2, J5, J6, J13 | holds | Seen over IPC, not asserted |
+| J3, J4, J8, J12 | pass | A reminder set, listed, asked about and cancelled |
+| J7, J9, J10 | todo | |
+| J11 | todo | No keyboard here. The window is what the compositor shrinks, as moarchy's is now |
+| s.K1, s.K3, s.K5, s.K6 | holds | Audio rows exist, monitors are filtered, an empty list is an info row, nothing opens a terminal. Not asserted |
+| s.K2 | pass | One sink in this VM |
+| s.K4 | todo | Needs a second sink |
+| L1–L4 | pass | Europe against `timedatectl` |
+| L5 | todo | Not set, so as not to move the VM's clock |
+| M1, M2, M5 | pass | |
+| M3, M6 | holds | |
+| M4 | todo | Not flipped for real |
+| N1 | holds | |
+| N2, N3 | pass | **Changed:** it names Omarchy and omarchy-mobile, this project's counterpart to moarchy |
+| O1–O12 | todo | Search from the drawer is not ported |
+| O13, O14 | holds | Update system and Authorize SSH keys are rows, claiming no upstream id |
+| O15 | pass | |
+| P1–P11 | todo | The coding-agent tile needs mise |
+| Lock | changed | Not in settings.md. Lock is hidden unless `passwd -S` reads `P`: upstream's lock is the shell's lock screen, which asks PAM, and this image locks the account password. The selftest checks it (`s.B8`) |
 
 ---
 

@@ -976,3 +976,137 @@ through ssh, which hands the remote shell one string to re-split, so
 summarised "selftest", and S18's "newest first" had nothing to tell apart. And
 the trace drags run for 1.5 seconds now -- at the frame rates this VM reached
 windowed, 720ms still left fewer than eight frames to count.
+
+---
+
+## 2026-09-11 -- Settings
+
+settings.md, ported from `moarchy.settings`: a third screen that is a window,
+beside Wi-Fi and Bluetooth. `SettingsScreen.qml` renders the tree in
+`Pages.js`, `Guards.js` asks each page's questions in one `bash -lc`, and
+`SettingsRow.qml` draws a row. The shade's gear opens it at the root and the
+power glyph at Power, where both opened upstream's Omarchy menu before. The
+native pages keep their helpers from moarchy, renamed `omarchy-mobile-*` and
+shipped in `~/.local/bin` through skel: audio routing, reminders, time zone,
+plugins, About, and the network name.
+
+### Inside `mobile.shell`, for the usual reason
+
+`moarchy.settings` is a plugin of its own and opens the Wi-Fi and Bluetooth
+screens with `shell.summon()`. Under 4.0.3's sandbox a plugin can summon only
+itself, so Settings is a screen of `mobile.shell` and a row that opens Wi-Fi
+calls the host's `openScreen()`, with `returnTo: "settings"` so the Wi-Fi back
+chevron comes back. Settings is still running on its own workspace when it
+does, so it comes back on the page it was left on (A7), with nothing written
+to make that happen. The IPC target is still `settings`, so every verb in
+settings.md answers as written.
+
+It loaded and mapped on the first push -- `class org.quickshell`, `360x674`,
+the card reading `mobile.settings` -- which after the drawer's session is worth
+writing down.
+
+### Every terminal row was dead
+
+The first bridged row tried in the VM mapped nothing, and the shell's log said
+nothing about it. The user manager's journal did:
+
+```
+uwsm_app-daemon[901]: received: app -- xdg-terminal-exec --app-id=org.omarchy.terminal --title=Omarchy -e bash -c '...'
+uwsm_app-daemon[901]: sent: error 'Error: Command not found: "xdg-terminal-exec"' 1
+```
+
+`omarchy-launch-floating-terminal-with-presentation` ends in
+`uwsm-app -- xdg-terminal-exec`, and xdg-terminal-exec is an AUR package, so
+`vm/packages/omitted` carried it. Nothing in the session needed it until forty
+Settings rows did -- along with every terminal upstream's own menu opens, which
+is to say this was broken before Settings and nobody had tapped anything that
+showed it.
+
+It is `[pkg.xdg-terminal-exec]` now, built by the loop that builds hyprland,
+from the AUR's git at a pinned commit. The AUR keeps its PKGBUILD at the root
+the way Arch's packaging repos do, so `vm/build-packages.sh` needed nothing new.
+Docker was not running to build it, so the VM got the same v0.14.3 script by
+hand, in `/usr/local` where a later package cannot collide with it, from the
+tarball the PKGBUILD pins and checked against the PKGBUILD's sha256. The next
+image build installs the package.
+
+Two things came with it. `omarchy-default-terminal` reads through
+`xdg-terminal-exec --print-id`, so the Terminal page ticked nothing before and
+ticks Foot now. And the presentation terminal is not the float upstream asks
+for. xdg-terminal-exec hands `--app-id` and `--title` on only to a terminal
+whose desktop entry says how (`X-TerminalArgAppId`, `X-TerminalArgTitle`), and
+foot's entry says nothing, so the window arrives as class `foot`, not
+`org.omarchy.terminal`. Upstream's 875x600 float rule never matches it, and
+the window rule tiles it into a workspace of its own:
+
+```
+{"class":"foot","title":"foot","floating":false,"at":[0,26],"size":[360,674],"ws":1}
+```
+
+875 pixels is 2.4 screens wide here, so the rule not matching is the better
+outcome, and it is the one moarchy's E5 asks for on purpose.
+
+### Upstream's commands, not moarchy's stand-ins
+
+Most of moarchy's departures from upstream are Sway: nightlight on wlsunset,
+lock on swaylock, logout through swaymsg, screenshots on bare grim, and a shell
+restart that avoids Hyprland's socket. Here upstream's own command is the one
+that works, so a bridged row runs upstream's action string. A static pass over
+every row that claims a bridged id, against `omarchy-menu.jsonc` itself, finds
+no difference but the ones declared at the row:
+
+- **Screenshot** takes `fullscreen`. Upstream's bare call is `smart`, a region
+  picker that wants a drag across the part to keep.
+- **Change password** runs under sudo, as in moarchy: the account password is
+  locked, so `passwd` has nothing to check the old one against.
+- The three package rows lost moarchy's presentation wrapper, and are
+  upstream's `xdg-terminal-exec --app-id=org.omarchy.terminal ...` byte for
+  byte, now that the image has the command.
+
+### Rows this image cannot run are not offered
+
+Each is a `when:`, so the row comes back when what it needs does.
+
+- **Lock.** Upstream's lock is the shell's own lock screen, which asks PAM, and
+  the account ships with a locked password (`passwd -S` reads `L`). A lock
+  nobody can lift, over a session you then reach only over ssh. Offered once
+  the password is usable, which Change password is how you get.
+- **AI agent.** `omarchy-default-agent` installs through `omarchy-mise-install`,
+  and mise is not in the image.
+- **Install from the AUR.** The picker searches and installs through yay, which
+  is not in the image either.
+
+### A version nobody could read
+
+About's first row was "4.0.0.alpha". `omarchy-version` asks pacman for the
+`omarchy` package, and this image vendors Omarchy from a commit rather than
+installing it, so it exits 1 with nothing printed. Upstream's own version file
+is what the fallback found, and at v4.0.3 it reads 4.0.0.alpha. The release
+file now records the manifest's pin, `OMARCHY_VERSION` and `OMARCHY_REF`, and
+About reads that first. The running VM predates it and will say 4.0.0.alpha
+until it is rebuilt.
+
+### Three changes to moarchy's machinery
+
+- A choice's write runs as a process, and the page re-reads when it exits.
+  moarchy started the write and re-read straight away, which races it:
+  `omarchy-theme-set` takes seconds, and the tick stayed on the old theme. A
+  second tap while one is running waits for it rather than killing it, because
+  a theme stopped halfway is a theme half applied.
+- A row a guard hides takes no space. The ListView's `spacing` was kept for
+  every hidden row, so Power with Lock withdrawn began 6px lower than every
+  other page, and More software, with most of its offers withdrawn, stacked
+  those gaps up between the rows it did show.
+- A choice page scrolls its ticked row into view once, when its reader
+  answers. The theme in use was below the fold of a 22-row list.
+
+Not ported: search from the drawer (settings.md O) and the coding-agent tile
+(P), which needs mise; the back gesture that K7 and B3 ride on is not built.
+
+### The run
+
+`vm-selftest.sh S K settings`: 85 checks, all passing on the first run. 53 are
+Settings' own, including real taps on the gear, the power glyph, a row and the
+back chevron, one real terminal opened from a row and closed, and a reminder
+set, listed, asked about and cancelled. The shade's S2 changed its answer from
+the Omarchy menu to Settings and gained S3 for the power glyph.

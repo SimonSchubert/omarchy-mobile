@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- The drawer tile for Settings, drawn like Wi-Fi's and Bluetooth's: a
+       white glyph on a tile, so it reads on any sheet a theme produces. The
+       gear is a stroked ring and eight teeth rather than one cut-out path,
+       because the drawer rasterises through Qt SVG, which is SVG Tiny and has
+       no masks. -->
+  <defs>
+    <linearGradient id="settingsTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8A94A6"/>
+      <stop offset="1" stop-color="#4B5563"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#settingsTile)"/>
+  <g transform="translate(64 64)" fill="#ffffff">
+    <rect x="-8" y="-42" width="16" height="20" rx="3"/>
+    <rect x="-8" y="-42" width="16" height="20" rx="3" transform="rotate(45)"/>
+    <rect x="-8" y="-42" width="16" height="20" rx="3" transform="rotate(90)"/>
+    <rect x="-8" y="-42" width="16" height="20" rx="3" transform="rotate(135)"/>
+    <rect x="-8" y="-42" width="16" height="20" rx="3" transform="rotate(180)"/>
+    <rect x="-8" y="-42" width="16" height="20" rx="3" transform="rotate(225)"/>
+    <rect x="-8" y="-42" width="16" height="20" rx="3" transform="rotate(270)"/>
+    <rect x="-8" y="-42" width="16" height="20" rx="3" transform="rotate(315)"/>
+  </g>
+  <circle cx="64" cy="64" r="20" fill="none" stroke="#ffffff" stroke-width="16"/>
+</svg>

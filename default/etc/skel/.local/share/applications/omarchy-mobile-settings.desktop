@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Settings
+GenericName=Settings
+Comment=Network, display, sound, appearance and the rest of the phone
+# A screen the shell already holds, not a process: this asks the running shell
+# to put it up (mobile.shell, SettingsScreen.qml). Already running, it comes
+# back on the page it was left on (docs/spec/settings.md A7).
+Exec=omarchy-shell settings open
+# A name unique to this project, for the reason the Wi-Fi entry gives: a themed
+# name resolves to a monochrome panel glyph that vanishes on the drawer's sheet.
+Icon=omarchy-mobile-settings
+Terminal=false
+Categories=Settings;
+Keywords=settings;preferences;options;theme;wallpaper;font;dns;sound;time;power;about;

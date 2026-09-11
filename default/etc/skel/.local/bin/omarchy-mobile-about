@@ -1,0 +1,89 @@
+#!/bin/bash
+# What About phone and About Omarchy say (docs/spec/settings.md N). Ported from
+# moarchy-about.
+#
+#   omarchy-mobile-about rows      provider.json rows for About Omarchy
+#   omarchy-mobile-about omarchy   the Omarchy version
+#   omarchy-mobile-about device    what this is running on
+#
+# Upstream's omarchy-launch-about is fastfetch in a terminal that sizes itself
+# by measuring its own output and re-renders on every resize. The fields were
+# never the problem; a 360px screen draws them better as rows, and rows need no
+# terminal at all.
+set -uo pipefail
+
+RELEASE=/etc/omarchy-mobile/release
+
+release() { sed -n "s/^$1=//p" "$RELEASE" 2>/dev/null | head -1; }
+
+# omarchy-version asks pacman for the omarchy package, and this image vendors
+# Omarchy from a pinned commit instead of installing it (vm/build-disk.sh), so
+# it exits 1 with nothing printed. Upstream's own version file is no better: at
+# v4.0.3 it reads 4.0.0.alpha. The pin the image was built from is recorded in
+# the release file (vm/configure.sh), so that answers first; the version file
+# is the last resort, for an image built before the pin was recorded.
+omarchy_version() {
+  local v ref
+  v=$(omarchy-version 2>/dev/null) && [[ -n $v ]] && { echo "$v"; return; }
+  v=$(release OMARCHY_VERSION)
+  ref=$(release OMARCHY_REF)
+  if [[ -n $v ]]; then
+    echo "${v#v}${ref:+ (${ref:0:7})}"
+    return
+  fi
+  cat "${OMARCHY_PATH:-/usr/share/omarchy}/version" 2>/dev/null
+}
+
+# A real board names itself in the device tree; a VM does it in DMI.
+device() {
+  local d
+  d=$(tr -d '\0' </proc/device-tree/model 2>/dev/null)
+  [[ -n $d ]] || d=$(cat /sys/class/dmi/id/product_name 2>/dev/null)
+  echo "${d:-unknown}"
+}
+
+this_image() {
+  local v c
+  v=$(release VERSION)
+  c=$(release COMMIT)
+  [[ -n $v ]] && echo "$v${c:+ (${c:0:7})}"
+}
+
+field() { # name, value -- an empty value is skipped rather than shown blank (N2)
+  [[ -n ${2:-} ]] || return 0
+  printf '%s\t%s\n' "$1" "$2"
+}
+
+collect() {
+  field "Omarchy"        "$(omarchy_version)"
+  field "omarchy-mobile" "$(this_image)"
+  field "Device"         "$(device)"
+  field "Kernel"         "$(uname -r)"
+  field "Compositor"     "$(hyprctl version -j 2>/dev/null | jq -r '"Hyprland " + ((.tag // .version // "") | ltrimstr("v"))' 2>/dev/null)"
+  # "Quickshell 0.3.1 (revision , distributed by Arch Linux)": the packaged
+  # build's revision is empty, so the parenthetical is a blank and a comma.
+  field "Shell"          "$(quickshell --version 2>/dev/null | head -1 | sed 's/ (revision.*//')"
+  field "Uptime"         "$(uptime -p 2>/dev/null | sed 's/^up //')"
+  field "Packages"       "$(pacman -Q 2>/dev/null | grep -c .)"
+  field "Memory"         "$(free -h --si 2>/dev/null | awk '/^Mem:/ { print $3 " of " $2 }')"
+  field "Storage"        "$(df -h --output=used,size / 2>/dev/null | awk 'NR==2 { print $1 " of " $2 }')"
+}
+
+case "${1:-}" in
+  rows)
+    collect | jq -R -s '
+      split("\n") | map(select(length > 0)) | to_entries
+      | map((.value | split("\t")) as $f | {
+          id:     ("a" + (.key | tostring)),
+          type:   "info",
+          label:  $f[0],
+          detail: $f[1]
+        })'
+    ;;
+  omarchy) omarchy_version ;;
+  device)  device ;;
+  *)
+    echo "usage: omarchy-mobile-about {rows|omarchy|device}" >&2
+    exit 2
+    ;;
+esac

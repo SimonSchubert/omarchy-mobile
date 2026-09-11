@@ -3,8 +3,8 @@
 #
 # This file is documentation, not input -- nothing reads it. It exists because
 # a package set with silent holes is a package set nobody can audit, and
-# because the interesting question about an aarch64 port is exactly which 27
-# names did not survive.
+# because the interesting question about an aarch64 port is exactly which names
+# did not survive: 27 are not in Arch Linux ARM, and 26 of those are left out.
 #
 # Checked against Arch Linux ARM's aarch64 core/extra with `pacman -Si`.
 
@@ -28,13 +28,17 @@ tobi-try        # scratch runner
 ttfx            # font tool
 
 # --- in the AUR, not in Arch Linux ARM ------------------------------------
-# All four have PKGBUILDs that build cleanly for aarch64 -- moarchy already
-# builds every one of them in its own container. They are omitted here rather
-# than blocked: wiring pkgbuilds/ into the disk build is phase 1b, and until
-# then nothing in the session tier depends on them.
+# All three have PKGBUILDs that build cleanly for aarch64 -- moarchy already
+# builds every one of them in its own container. They are omitted rather than
+# blocked: vm/build-packages.sh builds any [pkg.*] the manifest pins, so adding
+# one is a pin and a line in vm/packages/apps.
+#
+# xdg-terminal-exec was the fourth, and left this list on 2026-09-11: every
+# terminal Omarchy opens goes through it, and Settings bridges forty-odd rows
+# that way. It is [pkg.xdg-terminal-exec] in the manifest and installed with the
+# apps tier.
 mise-bin              # dev tool version manager
 ttf-ia-writer         # the theme fonts want it; noto covers the gap
-xdg-terminal-exec     # xdg terminal dispatch; foot is wired directly instead
 yay                   # AUR helper -- nothing to help with inside this image yet
 ufw-docker            # needs docker+ufw integration we are not exercising
 tzupdate              # geo timezone; the VM's clock comes from the host

@@ -8,9 +8,10 @@
 # goes to /pkgs, which vm/build-disk.sh then turns into a local pacman
 # repository placed ahead of ALARM's.
 #
-# This exists for one reason today (hyprland; see [pkg.hyprland] in the
-# manifest) but it is written as a loop over [pkg.*] because ALARM falling
-# behind on a package is a recurring hazard for an aarch64 port, not a one-off.
+# It began with one package (hyprland; see [pkg.hyprland] in the manifest) and
+# is written as a loop over [pkg.*] because ALARM falling behind on a package,
+# or never carrying it, is a recurring hazard for an aarch64 port, not a
+# one-off. xdg-terminal-exec, from the AUR, was the second.
 set -euo pipefail
 
 PKGS=${PKGS:-/pkgs}
@@ -51,7 +52,7 @@ for name in $(manifest_pkgs); do
   git config --global --add safe.directory "$WORK/$name"
   git -C "$WORK/$name" checkout --quiet "$ref" || die "no such commit in $name: $ref"
 
-  # Arch's packaging repos put the PKGBUILD at the root.
+  # Arch's packaging repos and the AUR both put the PKGBUILD at the root.
   [ -f "$WORK/$name/PKGBUILD" ] || die "$name has no PKGBUILD at its root"
 
   # An earlier build of the same package is not a duplicate, it is ambiguity:

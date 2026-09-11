@@ -1,11 +1,13 @@
 # Settings — specification
 
 > **Copied from moarchy** — `docs/settings.md` at `d0e5dd2` (2026-09-09), with
-> every AC id and every line of text unchanged. Nothing in it is implemented
-> here yet; [`../acceptance.md`](../acceptance.md) carries the status. It
-> depends on gestures.md K (Settings is a window), which depends on the shell
-> being able to map its own toplevels -- worth checking under the 4.0.3 plugin
-> sandbox before any of this is started.
+> every AC id and every line of text unchanged. It is implemented here as a
+> screen of `mobile.shell` (`SettingsScreen.qml`, `Pages.js`), and
+> [`../acceptance.md`](../acceptance.md) says which criteria hold and where this
+> port changes the mechanism or the answer. Where the text names a moarchy file
+> -- `Pages.js`, `bin/moarchy-*`, `moarchy.settings` -- read the port's
+> counterpart: the same `Pages.js`, `omarchy-mobile-*` in `~/.local/bin`, and
+> `mobile.settings`.
 
 What the phone's Settings UI must do. Present tense, normative. Which upstream
 menu entry lands where is recorded in `docs/menu-coverage.md`; the archaeology of

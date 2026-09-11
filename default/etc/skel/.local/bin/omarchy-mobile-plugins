@@ -1,0 +1,55 @@
+#!/bin/bash
+# The shell's plugins as switch rows, for Settings > Shell & plugins > Plugins
+# (docs/spec/settings.md M). Ported from moarchy-plugins.
+#
+#   omarchy-mobile-plugins rows      provider.json rows
+#   omarchy-mobile-plugins summary   "<n> of <m> on", the detail line
+#
+# Upstream's enable and disable are two launches of a select box, and neither
+# shows which plugins are already on. A list of switches is the same thing
+# without the round trip, and the one place you can see what is on.
+#
+# The state rides along on each row (`state`) rather than each row carrying a
+# `read` for the guard batch: one listing answers for all forty-odd plugins,
+# where a read apiece is a fork apiece (M3).
+set -uo pipefail
+
+PLUGIN_GLYPH=$'\U000f0431'
+
+# The shell is the source of truth, and it is running, since it is the thing
+# asking.
+listing() { omarchy-shell shell listPlugins 2>/dev/null; }
+
+case "${1:-}" in
+  rows)
+    listing | jq --arg glyph "$PLUGIN_GLYPH" '
+      # canDisable false is not a setting (M2). It covers mobile.shell, which is
+      # this phone UI, and omarchy.bar, which would replace the phone bar with
+      # the desktop one -- a switch that costs you the status bar is worse than
+      # no switch.
+      map(select(.canDisable))
+      | sort_by(.name | ascii_downcase)
+      | map({
+          id:     ("p-" + .id),
+          type:   "switch",
+          glyph:  $glyph,
+          label:  .name,
+          detail: .id,
+          state:  .enabled,
+          on:     ("omarchy-plugin-enable "  + (.id | @sh)),
+          off:    ("omarchy-plugin-disable " + (.id | @sh))
+        })
+      | if length == 0
+        then [{ id: "none", type: "info", glyph: $glyph, label: "No plugins",
+                detail: "The shell reported none it can turn on or off" }]
+        else . end'
+    ;;
+  summary)
+    listing | jq -r 'map(select(.canDisable))
+                     | "\([.[] | select(.enabled)] | length) of \(length) on"'
+    ;;
+  *)
+    echo "usage: omarchy-mobile-plugins {rows|summary}" >&2
+    exit 2
+    ;;
+esac

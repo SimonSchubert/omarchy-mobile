@@ -2,11 +2,11 @@
 # Check the mobile shell against its acceptance criteria, in the running VM.
 #
 #   ./scripts/vm-selftest.sh              every section
-#   ./scripts/vm-selftest.sh A E S        only those (W A B C D E H S K)
+#   ./scripts/vm-selftest.sh A E S        only those (W A B C D E H S K settings)
 #
 # Every line of output names the AC it proves, from docs/spec/gestures.md,
-# shade.md and windows.md, so an AC with no check here is visible by its
-# absence -- docs/acceptance.md is the other half of that ledger.
+# shade.md, windows.md and settings.md, so an AC with no check here is visible
+# by its absence -- docs/acceptance.md is the other half of that ledger.
 #
 # It drives the guest the way a finger would, through scripts/vm-drag.sh, and
 # reads back what the shell believes over IPC and what the compositor did over
@@ -112,6 +112,7 @@ case $1 in
     omarchy-shell drawer close >/dev/null; omarchy-shell recents close >/dev/null
     omarchy-shell shade close >/dev/null
     omarchy-shell wifi quit >/dev/null; omarchy-shell bluetooth quit >/dev/null
+    omarchy-shell settings quit >/dev/null; omarchy-shell settings dryRun 0 >/dev/null
     # Only the windows this suite opened.
     hyprctl -j clients | jq ".[] | select($ours) | .pid" | xargs -r kill 2>/dev/null
     for _ in $(seq 1 60); do
@@ -119,6 +120,9 @@ case $1 in
       sleep 0.1
     done
     focus_ws empty; sleep 0.4 ;;
+  # A command in the session's environment, for the Settings checks that
+  # compare a row with the reader behind it. `bash -lc`, as Settings runs them.
+  sh) shift; bash -lc "$*" </dev/null ;;
   *) echo "unknown: $1" >&2; exit 2 ;;
 esac
 HELPER
@@ -481,12 +485,15 @@ section_S() {
   check S11 "and portrait comes back" is "$(g transform)" 0
 
   ipc shade open >/dev/null; sleep 0.6
-  read -r x y _ <<<"$(ipc shade target gear)"; tap "$x" "$y"; sleep 0.8
-  check S2 "the gear puts the shade away and opens the Omarchy menu" \
-    is "$(ipc shade state) $(g menu_mapped)" "closed 1"
-  tap $MID_X 650; sleep 0.6
-  check S2 "and a tap outside puts the menu away (HyprlandFocusGrab works here)" \
-    is "$(g menu_mapped)" 0
+  read -r x y _ <<<"$(ipc shade target gear)"; tap "$x" "$y"; sleep 1
+  check S2 "the gear puts the shade away and opens Settings, not the Omarchy menu" \
+    is "$(ipc shade state) $(ipc settings state) $(g menu_mapped)" "closed open 0"
+  ipc settings quit >/dev/null; sleep 0.6
+  ipc shade open >/dev/null; sleep 0.6
+  read -r x y _ <<<"$(ipc shade target power)"; tap "$x" "$y"; sleep 1
+  check S3 "power opens Settings at its Power page" \
+    is "$(ipc shade state) $(ipc settings page)" "closed system.power"
+  ipc settings quit >/dev/null; sleep 0.6
 
   g set_dnd off
   for i in 1 2 3; do g notify "selftest $i" "Body of selftest notification $i"; sleep 0.2; done
@@ -602,8 +609,255 @@ section_K() {
   ipc bluetooth quit >/dev/null
 }
 
+# docs/spec/settings.md. Its ids reuse gestures.md's letters, so they print
+# with an `s.` in front: s.A1 is Settings' A1, not the strip's.
+#
+# What it activates for real is harmless and put back: a reminder set and
+# cancelled, the battery flag flipped and restored, the default terminal
+# written as the one it already is, and one terminal opened on a prompt and
+# closed. A row that would reboot, log out, install or reconfigure the VM is
+# activated only once `dryRunState` has said dry run is on.
+section_settings() {
+  echo "-- settings: the Settings screen"
+  reset_session
+  st() { ipc settings "$@"; }
+  has() { [[ "$1" == *"$2"* ]]; }
+  matches() { [[ "$1" =~ $2 ]]; }
+  count() { awk -F'\t' "$1" <<<"$2" | grep -c .; }
+  local x y rows
+
+  ipc shade open >/dev/null; sleep 0.6
+  read -r x y _ <<<"$(ipc shade target gear)"; tap "$x" "$y"; sleep 1.2
+  check s.A1 "the gear opens Settings at the root and puts the shade away" \
+    is "$(st state) $(st page) $(ipc shade state)" "open root closed"
+  local win; win=$(g titled Settings)
+  # gestures.md K, applied to Settings, so no `s.`: settings.md's K is audio.
+  check K1 "Settings maps as an ordinary window, alone on its workspace, filling it" \
+    is "$(jq -r .class <<<"$win") $(jq -c .rect <<<"$win") $(g ws_windows)" \
+       "org.quickshell $(g usable) 1"
+  check K5 "its card names the screen" is "$(ipc recents list | grep -c '^mobile.settings')" 1
+
+  # A real tap on a row, aimed with `rowTarget` plus where Hyprland put the
+  # window -- the path a finger takes, where every other check here takes IPC.
+  local wx wy; read -r wx wy <<<"$(g win_at Settings)"
+  read -r x y <<<"$(st rowTarget appearance)"
+  tap $(( wx + x )) $(( wy + y )); sleep 1.2
+  check s.B1 "tapping a nav row pushes exactly its page" \
+    is "$(st page) $(st stack | grep -c .)" "appearance 2"
+  # The chevron at its window-local centre (12 + 38/2, 8 + 44/2), as K's
+  # Wi-Fi check aims it.
+  tap $(( wx + 31 )) $(( wy + 30 )); sleep 1
+  check s.B2 "and the header chevron pops it" is "$(st page)" root
+
+  st quit >/dev/null; sleep 0.6
+  ipc shade open >/dev/null; sleep 0.6
+  read -r x y _ <<<"$(ipc shade target power)"; tap "$x" "$y"; sleep 1.2
+  check s.A3 "the power glyph opens Settings at Power, not the Omarchy menu" \
+    is "$(st page) $(g menu_mapped)" "system.power 0"
+  check s.B2 "back walks up from a deep link and closes at the root" \
+    is "$(st back) $(st back) $(st back)" "system root closed"
+  sleep 0.6
+
+  ipc drawer open >/dev/null; sleep 0.5
+  st open >/dev/null; sleep 1
+  check s.A2 "opening Settings puts the drawer away" \
+    is "$(ipc drawer state) $(ipc shade state) $(ipc recents state)" "closed closed closed"
+  check s.A4 "openAt goes to a page by id" is "$(st openAt appearance.bar) $(st page)" "ok appearance.bar"
+  check s.A4 "and refuses an unknown one" is "$(st openAt nope)" "unknown page: nope"
+
+  g open_app sel-a
+  st open >/dev/null; sleep 1
+  check s.A7 "summoned from another workspace it comes back on its page, as one window" \
+    is "$(g active_title | cut -c1-8) $(st page) $(ipc recents list | grep -c '^mobile.settings')" \
+       "Settings appearance.bar 1"
+  local ws; ws=$(g ws_id)
+  DX=-150 drag $MID_X $STRIP_Y 0
+  DX=150 drag $MID_X $STRIP_Y 0
+  check K2 "swiped off and back, it is still there on the same page" \
+    is "$(g ws_id) $(g active_title | cut -c1-8) $(st page)" "$ws Settings appearance.bar"
+
+  st quit >/dev/null; sleep 0.6; st open >/dev/null; sleep 1
+  check s.A6 "closing and reopening lands on the root" is "$(st page)" root
+  st goto appearance >/dev/null; st goto appearance >/dev/null
+  check s.B6 "pushing the page already on top is a no-op" \
+    is "$(st stack | tr '\n' ' ')" "root appearance "
+
+  st openAt apps.default.browser >/dev/null; sleep 1.5
+  check s.B8 "a row whose guard fails is not drawn: Chromium is, Firefox is not" \
+    is "$(st rows | awk -F'\t' '$1 == "chromium" || $1 == "firefox" { print $1 "=" $4 }' | tr '\n' ' ')" \
+       "chromium=1 firefox=0 "
+  st openAt system.power >/dev/null; sleep 1.5
+  local pw; pw=$(g sh 'passwd -S "$USER" | cut -d" " -f2')
+  check s.B8 "Lock is offered only with a password to unlock it (passwd -S says $pw)" \
+    is "$(st rows | awk -F'\t' '$1 == "lock" { print $4 }')" "$([ "$pw" = P ] && echo 1 || echo 0)"
+
+  st openAt tools.reminders >/dev/null; sleep 1.5
+  st quit >/dev/null; sleep 0.6
+  st openAt appearance.font >/dev/null; sleep 2.5
+  rows=$(st rows)
+  check s.B9 "a provider page opened after another paints its own rows" \
+    bash -c "! grep -q 'No reminders set' <<<\"\$1\"" _ "$rows"
+  local want; want=$(g sh '{ omarchy-font-list; omarchy-font-current; } | awk NF | sort -u | grep -c .')
+  check s.D6 "the font page is the provider's list ($want) with the font in use ticked" \
+    is "$(grep -c . <<<"$rows") $(count '$5 == 1' "$rows")" "$want 1"
+
+  st openAt net.dns >/dev/null; sleep 1.5
+  local dns; dns=$(g sh omarchy-dns)
+  check s.D1 "exactly one DNS row is ticked, the one omarchy-dns names ($dns)" \
+    is "$(count '$5 == 1' "$(st rows)") $(st value net.dns)" "1 $dns"
+  st back >/dev/null; sleep 1.5
+  check s.D5 "the row that opens it shows the same value" \
+    is "$(st rows | awk -F'\t' '$1 == "dns" { print $6 }')" "$dns"
+
+  st openAt appearance.theme >/dev/null; sleep 2.5
+  check s.D1 "one theme is ticked, the one omarchy-theme-current names" \
+    is "$(st rows | awk -F'\t' '$5 == 1 { print $3 }')" "$(g sh omarchy-theme-current)"
+  st openAt appearance.background >/dev/null; sleep 2.5
+  check s.D7 "one wallpaper is ticked, and the reader is the path the rows carry" \
+    is "$(count '$5 == 1' "$(st rows)") $(st value appearance.background)" \
+       "1 $(g sh 'readlink -f "$HOME/.local/state/omarchy/current/background"')"
+
+  st openAt apps.default.terminal >/dev/null; sleep 1.5
+  if [ "$(g sh omarchy-default-terminal)" = foot ]; then
+    st set foot x >/dev/null; sleep 2
+    check s.D4 "a choice written through the page moves the tick to what the reader says" \
+      is "$(st value apps.default.terminal) $(st rows | awk -F'\t' '$5 == 1 { print $1 }')" "foot foot"
+  else
+    skip s.D4 "the default terminal is not foot, and this suite does not change it"
+  fi
+
+  local pct0; pct0=$(g sh 'omarchy-toggle-enabled battery-percentage-off && echo off || echo on')
+  st openAt appearance.bar >/dev/null; sleep 1.2
+  g sh 'omarchy-toggle battery-percentage-off on' >/dev/null
+  st refresh >/dev/null; sleep 1.5
+  check s.C2 "a present negative-polarity flag reads as the switch off" is "$(st value battery)" off
+  st set battery on >/dev/null; sleep 2
+  check s.C3 "setting it re-reads it, and the flag file is gone" \
+    is "$(st value battery) $(g sh 'omarchy-toggle-enabled battery-percentage-off && echo present || echo absent')" \
+       "on absent"
+  check s.C4 "and the bar hears of it ($(ipc bar metrics | grep -o 'pct=[a-z]*'))" has "$(ipc bar metrics)" "pct=on"
+  st set battery off >/dev/null; sleep 2
+  check s.C4 "both ways ($(ipc bar metrics | grep -o 'pct=[a-z]*'))" has "$(ipc bar metrics)" "pct=off"
+  [ "$pct0" = on ] && { st set battery on >/dev/null; sleep 1.5; }
+
+  st openAt display >/dev/null; sleep 1.5
+  check s.C1 "Stay awake reads its reader" is "$(st value stayawake)" \
+    "$([ "$(g sh 'omarchy-toggle-idle status | jq -r .enabled')" = true ] && echo on || echo off)"
+  st openAt security >/dev/null; sleep 1.5
+  check s.C8 "Remote access reads systemctl" is "$(st value ssh)" \
+    "$(g sh 'systemctl is-enabled --quiet sshd && echo on || echo off')"
+  check s.O15 "Authorize SSH keys says how many keys are authorized" \
+    is "$(st rows | awk -F'\t' '$1 == "sshkeys" { print $6 }')" \
+       "$(g sh 'echo "$(grep -c "^[a-z]" "$HOME/.ssh/authorized_keys" 2>/dev/null || echo 0) authorized"')"
+
+  st dryRun 1 >/dev/null
+  check s.E1 "dry run reads back as on before anything is activated under it" is "$(st dryRunState)" 1
+  if [ "$(st dryRunState)" = 1 ]; then
+    st openAt tools >/dev/null; sleep 1.2
+    local n0; n0=$(g nwin)
+    st activate emoji >/dev/null; sleep 0.6
+    check s.E1 "a bridged row records upstream's command and runs nothing" \
+      is "$(st lastLaunch) $(g nwin)" "omarchy-menu-emoji $n0"
+    st activate screenshot >/dev/null
+    check s.E1 "Screenshot takes the whole screen" is "$(st lastLaunch)" "omarchy-capture-screenshot fullscreen"
+    st openAt system.power >/dev/null; sleep 1.2
+    st activate reboot >/dev/null
+    local asked; asked=$(st confirmText)
+    st confirm >/dev/null
+    check s.E1 "Restart asks first, and Continue runs upstream's reboot" \
+      is "${asked:+asked} $(st lastLaunch)" "asked omarchy-system-reboot"
+  fi
+  st dryRun 0 >/dev/null
+
+  st openAt apps.webapps >/dev/null; sleep 1.2
+  local feet0 n1 p new=()
+  feet0=" $(g pids foot) "; n1=$(g nwin)
+  st activate add >/dev/null
+  for _ in $(seq 1 25); do [ "$(g nwin)" -gt "$n1" ] && break; sleep 0.2; done
+  check s.E6 "a bridged row opens its terminal, and Settings keeps running beside it" \
+    is "$(( $(g nwin) - n1 )) $(st state) $(ipc recents list | grep -c '^mobile.settings')" "1 open 1"
+  for p in $(g pids foot); do [[ "$feet0" == *" $p "* ]] || new+=("$p"); done
+  [ ${#new[@]} -gt 0 ] && g kill_pids "${new[@]}"
+
+  local r0; r0=$(g sh 'omarchy-mobile-reminders count')
+  st openAt tools.reminders.new >/dev/null; sleep 1
+  check s.J8 "Set reminder is inert until a duration is typed" \
+    is "$(st rows | awk -F'\t' '$1 == "custom" { print $7 }') $(st activate custom)" "0 not ready"
+  st set message 'selftest reminder' >/dev/null
+  st set minutes 7 >/dev/null
+  st activate custom >/dev/null; sleep 3
+  rows=$(st rows)
+  check s.J3 "a reminder set here is on the list the Set screen returns to" \
+    is "$(st page) $(count '$3 == "selftest reminder"' "$rows")" "tools.reminders 1"
+  local rid; rid=$(awk -F'\t' '$3 == "selftest reminder" { print $1; exit }' <<<"$rows")
+  if [ -n "$rid" ]; then
+    st activate "$rid" >/dev/null
+    local q; q=$(st confirmText)
+    check s.J4 "tapping it asks before cancelling it, and the timer is still there" \
+      is "${q:+asked} $(g sh 'omarchy-mobile-reminders count')" "asked $(( r0 + 1 ))"
+    st confirm >/dev/null; sleep 2.5
+    check s.J4 "and Continue cancels it" is "$(g sh 'omarchy-mobile-reminders count')" "$r0"
+  fi
+  st goto tools.reminders.new >/dev/null; sleep 0.5
+  check s.J12 "the Set screen starts empty when it is come back to" is "$(st value message)" ""
+
+  st openAt sound.output >/dev/null; sleep 2
+  rows=$(st rows)
+  check s.K2 "one output row per sink, with the default ticked" \
+    is "$(count '$2 == "choice"' "$rows") $(count '$5 == 1' "$rows")" \
+       "$(g sh 'pactl list short sinks | grep -c .') 1"
+
+  st openAt system.time.zone.Europe >/dev/null; sleep 2.5
+  rows=$(st rows)
+  local tz; tz=$(g sh 'timedatectl show -p Timezone --value')
+  check s.L1 "a region lists as many cities as timedatectl has" \
+    is "$(grep -c . <<<"$rows")" "$(g sh "timedatectl list-timezones | grep -c '^Europe/'")"
+  check s.L2 "a city row is labelled by its city" is "$(count '$3 == "Berlin"' "$rows")" 1
+  check s.L3 "the zone in use ($tz) is ticked only on its own region" \
+    is "$(count '$5 == 1' "$rows")" "$([[ $tz == Europe/* ]] && echo 1 || echo 0)"
+  st openAt system.time.zone >/dev/null; sleep 1.5
+  check s.L4 "UTC is a choice row, not a region" \
+    is "$(st rows | awk -F'\t' '$1 == "utc" { print $2 }')" choice
+
+  st openAt shell.plugins >/dev/null; sleep 3
+  rows=$(st rows)
+  check s.M1 "one switch per plugin the shell can turn off" \
+    is "$(count '$2 == "switch"' "$rows")" \
+       "$(g sh "omarchy-shell shell listPlugins | jq '[.[] | select(.canDisable)] | length'")"
+  check s.M2 "and none for the phone UI or the desktop bar" \
+    is "$(count '$1 == "p-mobile.shell" || $1 == "p-omarchy.bar"' "$rows")" 0
+  st back >/dev/null; sleep 1.5
+  check s.M5 "the Plugins row says how many are on" \
+    matches "$(st rows | awk -F'\t' '$1 == "plugins" { print $6 }')" '^[0-9]+ of [0-9]+ on$'
+
+  st openAt about.omarchy >/dev/null; sleep 3
+  rows=$(st rows)
+  check s.N2 "every row on About Omarchy has a value" is "$(count '$6 == ""' "$rows")" 0
+  check s.N3 "and it names both Omarchy and omarchy-mobile" \
+    is "$(count '$3 == "Omarchy" || $3 == "omarchy-mobile"' "$rows")" 2
+
+  # One guest call for the whole tree, not fifty-odd.
+  local radios; radios=$(g sh 'for p in $(omarchy-shell settings pages); do omarchy-shell settings rowsOn "$p"; done' |
+    awk -F'\t' '$2 == "switch" && tolower($3) ~ /^(wi-?fi|bluetooth|airplane|brightness|volume|silent|torch|rotate)/' | grep -c .)
+  check s.H1 "no switch anywhere in Settings repeats a shade control" is "$radios" 0
+
+  st openAt appearance >/dev/null; sleep 1
+  drag $MID_X $STRIP_Y -200
+  if [[ "$(ipc recents list | head -1)" == mobile.settings* ]]; then
+    local cx cy; read -r cx cy _ <<<"$(ipc recents cardTarget 0)"
+    drag "$cx" "$cy" -200; sleep 1
+    check K6 "flicking its card closes Settings" is "$(st state) $(g titled Settings | jq .n)" "closed 0"
+    st open >/dev/null; sleep 1
+    check K6 "and it opens again at the root" is "$(st state) $(st page)" "open root"
+  else
+    check K6 "the Settings card leads the carousel" false
+    ipc recents close >/dev/null
+  fi
+  st quit >/dev/null
+}
+
 SECTIONS=("$@")
-[ ${#SECTIONS[@]} -gt 0 ] || SECTIONS=(W A B C D E H S K)
+[ ${#SECTIONS[@]} -gt 0 ] || SECTIONS=(W A B C D E H S K settings)
 for s in "${SECTIONS[@]}"; do
   "section_$s"
 done

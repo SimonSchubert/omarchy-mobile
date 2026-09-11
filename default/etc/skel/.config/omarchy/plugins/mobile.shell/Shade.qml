@@ -20,10 +20,10 @@
 //   clearing      The notifications proxy carries doNotDisturb and nothing that
 //                 clears, so Clear all and absorbing toasts on open go through
 //                 the service's own public IPC, `omarchy-shell notifications`.
-//   the gear      Opens upstream's Omarchy menu, and power opens it at
-//                 `system`, until Settings exists (S2, S3). moarchy moved off
-//                 that menu because under Sway it had no tap-outside dismiss;
-//                 HyprlandFocusGrab works here, and it does.
+//   the gear      Opens Settings, and power opens it at its Power page (S2,
+//                 S3, settings.md A1, A3). Until Settings existed both opened
+//                 upstream's Omarchy menu, which on Hyprland at least
+//                 dismissed on a tap outside it.
 //   rotate        hl.monitor({ transform }) through hyprctl eval (S11).
 //   brightness    Hidden with no backlight to drive, the way the torch is
 //                 (S10). This VM has none.
@@ -657,15 +657,15 @@ Item {
       "position = \\\"$pos\\\", scale = $scale, transform = $n })\""])
   }
 
-  // S2, S3. Upstream's Omarchy menu, reached through the bar facade -- the
-  // host lets a bar-kind plugin summon any menu. Settings takes these over
-  // when it exists.
-  function openMenu(route) {
+  // S2, S3. Settings, at the root or at its Power page (settings.md A1, A3).
+  // The gear names no page, so a Settings already running on another
+  // workspace comes back on the page it was left on (A7); power names one, and
+  // goes there whatever Settings was showing.
+  function openSettings(page) {
     root.close()
-    root.lastAction = "menu"
-    root.lastLaunch = "omarchy.menu:" + route
-    if (root.shell && typeof root.shell.summon === "function")
-      root.shell.summon("omarchy.menu", JSON.stringify({ menu: route }))
+    root.lastAction = "settings"
+    root.lastLaunch = "settings:" + (page || "root")
+    if (root.host) root.host.openScreen("settings", "", page || "")
   }
 
   // ---------------------------------------------------- notification history
@@ -1317,12 +1317,12 @@ Item {
             RoundButton {
               id: gearButton
               glyph: "\ue615"
-              onActivated: root.openMenu("root")
+              onActivated: root.openSettings("")
             }
             RoundButton {
               id: powerButton
               glyph: "\uf011"
-              onActivated: root.openMenu("system")
+              onActivated: root.openSettings("system.power")
             }
           }
         }
