@@ -92,6 +92,41 @@ tag     = "0.14.3-1"
 ref     = "a52e8f23c0be7d482b944c6cf5ddee172da171e4"
 
 # ---------------------------------------------------------------------------
+# mise, and the reason a coding agent is a tap rather than a research project.
+#
+# The agent machinery is already on the image: upstream's whole bin/ lands in
+# /usr/bin, so omarchy-agent, omarchy-default-agent and omarchy-mise-install
+# are all there, and Pages.js already draws Apps > AI agent. Every one of those
+# paths runs on mise:
+#
+#   grok) agent="grok"; agent_package="npm:@xai-official/grok"
+#   ...
+#   agent_install() { user_install || mise use -g "$agent_package"; }
+#
+# and mise is the single piece Arch Linux ARM does not have. aarch64/extra
+# carries nodejs and npm and no mise at all, which is why this is a pin rather
+# than a name in vm/packages/apps alone. Upstream Omarchy installs this same
+# AUR package.
+#
+# Until this landed the AI agent row was guarded off (`when: omarchy-cmd-present
+# mise`), which meant the drawer's settings index withheld it too: typing
+# "agent" into the drawer answered nothing at all. That guard stays, because it
+# is still the honest answer for a --session-only build; what changes is that
+# on a full image it now says yes.
+#
+# A -bin package, and legitimately so: the PKGBUILD declares
+# arch=('x86_64' 'aarch64') and fetches mise-v$pkgver-linux-arm64.tar.xz with
+# its own sha256, which was checked against the tarball when this pin was taken.
+# Its package() runs the arm64 binary to generate shell completions, which is
+# fine in a native arm64 builder and is one more reason [builder] stays pinned
+# to one rather than to an emulated image.
+# ---------------------------------------------------------------------------
+[pkg.mise-bin]
+url     = "https://aur.archlinux.org/mise-bin.git"
+tag     = "2026.9.5-1"
+ref     = "00e537b20b8968c09bb3023236475cb2ce7b757c"
+
+# ---------------------------------------------------------------------------
 # The on-screen keyboard: moarchy's, at the commit moarchy pins, for the reason
 # [omarchy] gives -- two ports of one phone UI that type through two different
 # keyboards are two projects.

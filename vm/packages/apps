@@ -97,6 +97,18 @@ fcitx5-qt
 # of what Settings' bridged rows do.
 xdg-terminal-exec
 
+# The one thing standing between this image and a coding agent. Every path to
+# one runs on mise: omarchy-default-agent's `mise use -g "$agent_package"`, the
+# ~/.local/bin wrappers omarchy-mise-install writes, and the `mise where` probe
+# that decides whether an agent is already installed. ALARM has no mise at all,
+# so it is built here from its AUR PKGBUILD, pinned as [pkg.mise-bin].
+#
+# In this tier and not the session tier, which is what keeps the `when:` guard
+# on Settings' AI agent row honest: a `--session-only` image has no mise, the
+# guard says no, and the row stays hidden rather than offering thirteen taps
+# that fail. 7 MB, one static binary.
+mise-bin
+
 # --- moarchy's default apps -----------------------------------------------
 # Notes (moarchy-keep) and the App Store (moarchy-store), built by
 # vm/build-packages.sh from [pkg.moarchy-keep] and [pkg.moarchy-store-git] and

@@ -283,6 +283,18 @@ Type=oneshot
 # on a system where /usr/share/omarchy/themes/tokyo-night plainly exists. A
 # login shell sources the profile drop-in that upstream ships for exactly this.
 ExecStart=/bin/bash -lc 'omarchy-theme-set tokyo-night'
+# The coding-agent tile, and the mise wrappers behind the agent names
+# (docs/spec/settings.md P). Here rather than in a unit of its own because it
+# wants exactly what the theme wants: once, on first login, in a login shell.
+# `seed` writes eleven five-line wrappers and one .desktop and downloads
+# nothing, so it costs a few milliseconds even though nobody has picked an
+# agent yet.
+#
+# Leading `-`, so a wrapper that cannot be written does not abort the unit
+# before the two lines below it run. Without it a failed seed leaves the
+# first-run stamp unwritten, and every subsequent login re-applies the theme
+# over whatever the user has since chosen.
+ExecStart=-/bin/bash -lc 'omarchy-mobile-agent seed'
 ExecStart=/usr/bin/mkdir -p %h/.local/state/omarchy/done
 ExecStart=/usr/bin/touch %h/.local/state/omarchy/done/first-run
 RemainAfterExit=yes

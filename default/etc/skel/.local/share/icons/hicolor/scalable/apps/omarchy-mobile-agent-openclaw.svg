@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Three slashes, which is the one claw a stroke can draw. A talon has a
+       width that varies along it and SVG Tiny has no variable stroke, so a
+       drawn claw would have to be filled outlines: four of them, each a
+       crescent, and at 42px four crescents are a smear. The mark a claw leaves
+       is three lines, and that is legible at any size.
+       Fanned rather than parallel, and each a different length. Three evenly
+       spaced strokes of one length is a Roman numeral, not a scratch. -->
+  <defs>
+    <linearGradient id="openclawTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F87171"/>
+      <stop offset="1" stop-color="#7F1D1D"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#openclawTile)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="11" stroke-linecap="round">
+    <path d="M26 34C34 58 44 80 54 100"/>
+    <path d="M54 26C62 50 72 72 82 94"/>
+    <path d="M82 32C88 50 94 64 100 78"/>
+  </g>
+</svg>

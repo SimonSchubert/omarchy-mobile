@@ -2,7 +2,7 @@
 # Check the mobile shell against its acceptance criteria, in the running VM.
 #
 #   ./scripts/vm-selftest.sh              every section
-#   ./scripts/vm-selftest.sh A E S        only those (W A B C D G E H L S K settings keyboard apps)
+#   ./scripts/vm-selftest.sh A E S        only those (W A B C D G E H L S K settings keyboard apps agent)
 #
 # Every line of output names the AC it proves, from docs/spec/gestures.md,
 # shade.md, windows.md and settings.md, so an AC with no check here is visible
@@ -1489,8 +1489,210 @@ section_apps() {
     g sh 'sudo pacman-key --list-keys builder@archlinuxarm.org 2>/dev/null | grep -q "\[ *full *\]"'
 }
 
+section_agent() {
+  echo "-- agent: the coding agent tile (settings.md P)"
+
+  # P is about two files that record somebody's choice -- the default agent and
+  # the tile naming it -- and this VM is shared. Both are moved aside here and
+  # put back at the end, whatever the checks do to them in between. So is
+  # ~/.local/bin/claude, which P7 deliberately puts a decoy at.
+  local ENTRY='~/.local/share/applications/omarchy-mobile-agent.desktop'
+  g sh 'for f in ~/.config/omarchy/defaults/agent \
+                 ~/.local/share/applications/omarchy-mobile-agent.desktop \
+                 ~/.local/bin/claude; do
+          [ -e "$f" ] && mv -f "$f" "$f.selftest-saved"
+        done; true'
+
+  local has_mise=no a
+  g sh 'command -v mise >/dev/null' && has_mise=yes
+
+  # What was in ~/.local/bin before any of this ran. The seed below writes
+  # eleven wrappers, and on a shared VM they must not be left behind -- but nor
+  # may a wrapper the user already had be deleted, so the two are told apart by
+  # this list rather than by name.
+  local bin_before
+  bin_before=$(g sh 'ls ~/.local/bin 2>/dev/null | tr "\n" " "')
+
+  # One key out of the tile. Every P below reads the file this way, and a key
+  # that is not there answers empty rather than the line before it.
+  entry_key() { g sh "sed -n 's/^$1=//p' $ENTRY"; }
+
+  # --- P5: one list, checked against upstream rather than against itself -----
+  # Four copies of the same thirteen names: this script's, upstream's own
+  # `omarchy:args=` line, the choice rows on the page, and the icons that ship.
+  # All four are compared to upstream's, so an agent upstream adds fails here
+  # instead of quietly arriving with no icon.
+  local ours upstream icons rows
+  ours=$(g sh 'omarchy-mobile-agent list | sort | tr "\n" " "')
+  upstream=$(g sh "sed -n 's/.*omarchy:args=\[\(.*\)\].*/\1/p' /usr/bin/omarchy-default-agent \
+                   | tr '|' '\n' | sort | tr '\n' ' '")
+  icons=$(g sh 'ls ~/.local/share/icons/hicolor/scalable/apps/omarchy-mobile-agent-*.svg 2>/dev/null \
+                | sed "s|.*/omarchy-mobile-agent-||; s|\.svg$||" | sort | tr "\n" " "')
+  rows=$(ipc settings rowsOn apps.default.agent | awk -F'\t' '$2 == "choice" { print $1 }' | sort | tr '\n' ' ')
+
+  check P5 "omarchy-mobile-agent list is upstream's own agent list" is "$ours" "$upstream"
+  check P5 "the choice rows on apps.default.agent are that same list" is "$rows" "$upstream"
+  check P5 "one icon ships per agent, and no icon without an agent" is "$icons" "$upstream"
+  # Set aside from the list above because it is the one file there that is not
+  # an agent, which is exactly how it could go missing unnoticed.
+  check P5 "the setup tile's own icon ships" \
+    g sh 'test -f ~/.local/share/icons/hicolor/scalable/apps/omarchy-mobile-agent.svg'
+
+  # --- P3, P10, P11: the tile before anything is picked ---------------------
+  # Twice: with no defaults file at all, and with a word in it that is not an
+  # agent. A tile named after whatever ended up in that file is worse than one
+  # that offers the picker.
+  local junk
+  for junk in "" "not-an-agent"; do
+    if [ -z "$junk" ]; then
+      g sh 'rm -f ~/.config/omarchy/defaults/agent'
+    else
+      g sh 'mkdir -p ~/.config/omarchy/defaults; echo not-an-agent >~/.config/omarchy/defaults/agent'
+    fi
+    g sh 'omarchy-mobile-agent entry'
+    check P3 "with ${junk:-no} defaults/agent the tile is the setup tile" \
+      is "$(entry_key Name)" "AI Agent"
+    check P3 "and it says so in X-Omarchy-Mobile-Agent" \
+      is "$(entry_key X-Omarchy-Mobile-Agent)" none
+  done
+
+  # P10. The Exec is the IPC the plugin entries already use to raise a shell
+  # surface, and it is checked by running it rather than by reading it: the
+  # string being right and the page existing are two different claims.
+  check P10 "the setup tile opens the picker rather than installing anything" \
+    is "$(entry_key Exec)" "omarchy-shell settings openAt apps.default.agent"
+  check P10 "running that Exec answers ok" is "$(ipc settings openAt apps.default.agent)" ok
+  check P10 "and leaves Settings on the page that lists the thirteen" \
+    is "$(ipc settings page)" apps.default.agent
+  check P10 "with all thirteen choice rows drawn" \
+    is "$(ipc settings rows | awk -F'\t' '$2 == "choice" && $4 == "1"' | wc -l | tr -d ' ')" 13
+  ipc settings close >/dev/null
+
+  # P11, and the whole reason this section exists. Searching the drawer for
+  # "agent" answered nothing at all before the tile: no entry matched, and the
+  # settings row that would have matched is guarded on mise, which the drawer
+  # honours (O7). Both halves are checked -- the word for the category, and the
+  # name of an agent nobody has installed.
+  # Read once and compared here rather than looped over in the guest: every
+  # command `g` sends crosses three parsers (printf %q, the login shell ssh
+  # hands it to, and the helper's own `bash -lc`), and a loop with a `$a` and a
+  # quoted pattern in it is where that silently starts testing something else.
+  local keywords missing="" q
+  keywords=$(entry_key Keywords)
+  for q in $(g sh 'omarchy-mobile-agent list'); do
+    case ";$keywords" in *";$q;"*) ;; *) missing="$missing $q" ;; esac
+  done
+  check P11 "the setup tile carries every agent name as a keyword" is "$missing" ""
+  for q in agent claude opencode; do
+    ipc drawer type "$q" >/dev/null
+    check P11 "drawer type $q finds the agent tile in the grid" \
+      contains omarchy-mobile-agent.desktop "$(ipc drawer entries)"
+  done
+  ipc drawer type "" >/dev/null
+
+  # --- P1, P2, P4: the tile once an agent is picked --------------------------
+  # `entry <name>` rather than `open <name>`: open's last act is to exec
+  # omarchy-default-agent, which installs an agent over the network and opens a
+  # terminal on it. The tile is written by write_entry either way, and that is
+  # the half P1, P2 and P4 are about.
+  g sh 'omarchy-mobile-agent entry claude; omarchy-mobile-agent entry opencode'
+  check P1 "two agents opened, one tile in the grid" \
+    is "$(g sh 'ls ~/.local/share/applications/omarchy-mobile-agent*.desktop | xargs -n1 basename | tr "\n" " "')" \
+       "omarchy-mobile-agent.desktop "
+  check P2 "the tile names whichever agent was picked last" is "$(entry_key Name)" OpenCode
+  check P2 "its Exec comes back through this script, not upstream's" \
+    is "$(entry_key Exec)" "omarchy-mobile-agent open opencode"
+  check P2 "and X-Omarchy-Mobile-Agent agrees with both" \
+    is "$(entry_key X-Omarchy-Mobile-Agent)" opencode
+  # P4. A themed name, which is where this port reverses moarchy -- and the
+  # claim is not that the string is right but that it resolves, so the file it
+  # names is what gets checked.
+  check P4 "the icon is a themed name under this project's own prefix" \
+    is "$(entry_key Icon)" omarchy-mobile-agent-opencode
+  check P4 "and that name resolves to a file that ships" \
+    g sh "test -f ~/.local/share/icons/hicolor/scalable/apps/$(entry_key Icon).svg"
+
+  # --- P9: the default set behind this script's back -------------------------
+  # The write is the one omarchy-default-agent makes -- `printf '%s\n' codex`
+  # into that file -- rather than a run of it, which would install Codex. What
+  # P9 is about is the repair, and the repair reads the file.
+  g sh 'mkdir -p ~/.config/omarchy/defaults; echo codex >~/.config/omarchy/defaults/agent'
+  check P9 "a default set behind the script's back leaves the tile stale" \
+    is "$(entry_key X-Omarchy-Mobile-Agent)" opencode
+  g sh 'omarchy-mobile-agent entry'
+  check P9 "and entry with no argument repairs it from the file" \
+    is "$(entry_key X-Omarchy-Mobile-Agent)" codex
+
+  # --- P6, P7, P8: the wrappers ---------------------------------------------
+  if [ "$has_mise" = no ]; then
+    # Not a failure: the wrapper's whole body is a mise call, so writing one on
+    # an image without mise puts names on PATH that cannot run and makes
+    # omarchy-cmd-present lie. The tile is still written, and that is the half
+    # that matters most on an image with no installer.
+    skip P6 "no mise in this image, so no wrapper is written -- by design"
+    skip P7 "needs mise: without it write_shim returns before it reads the file"
+    skip P8 "needs mise: nothing is written for any agent, Hermes included"
+    g sh 'omarchy-mobile-agent seed' >/dev/null
+    check P6 "seed still writes the tile on an image with no mise" \
+      g sh "test -f $ENTRY"
+    # `ls` of the one directory, intersected here: same reason as P11 above.
+    local present="" onpath
+    onpath=$(g sh 'ls ~/.local/bin 2>/dev/null')
+    for a in $(g sh 'omarchy-mobile-agent list'); do
+      case " $onpath " in *" $a "*) present="$present $a" ;; esac
+    done
+    check P6 "and writes no wrapper for any agent" is "$present" ""
+  else
+    # P7's decoy goes in before the seed, since the seed is what must not take
+    # it. Written to look nothing like a mise wrapper, which is the only thing
+    # write_shim looks at.
+    g sh 'mkdir -p ~/.local/bin; printf "#!/bin/sh\necho a real claude\n" >~/.local/bin/claude; chmod +x ~/.local/bin/claude'
+    g sh 'omarchy-mobile-agent seed' >/dev/null
+
+    check P7 "a hand-placed binary in ~/.local/bin survives the seed" \
+      is "$(g sh 'cat ~/.local/bin/claude')" "$(printf '#!/bin/sh\necho a real claude')"
+    # P8. Neither is shimmed, and the reason is upstream's: each has an
+    # installer that owns that path and treats anything foreign as the user's.
+    for a in hermes openclaw; do
+      check P8 "$a is left to its own installer, not shimmed" \
+        g sh "test ! -e ~/.local/bin/$a"
+    done
+    # P6. Everything else, less the decoy at claude, resolves and says mise.
+    # One `grep -l mise` over the directory, and the comparison here. The
+    # decoy at claude is excluded because P7 is the check that it survived;
+    # hermes and openclaw because P8 is the check that they were skipped.
+    local wrapped expected="" a2
+    wrapped=$(g sh 'grep -l mise ~/.local/bin/* 2>/dev/null | xargs -n1 basename | sort | tr "\n" " "')
+    for a2 in $(g sh 'omarchy-mobile-agent list | sort'); do
+      case $a2 in hermes|openclaw|claude) continue ;; esac
+      expected="$expected$a2 "
+    done
+    check P6 "every other agent name is on PATH and resolves to a mise wrapper" \
+      is "$wrapped" "$expected"
+  fi
+
+  # The wrappers the seed wrote, and only those: any agent name that is in
+  # ~/.local/bin now and was not there when this section started.
+  local stale=""
+  for a in $(g sh 'omarchy-mobile-agent list'); do
+    case " $bin_before " in *" $a "*) continue ;; esac
+    stale="$stale ~/.local/bin/$a"
+  done
+  [ -n "$stale" ] && g sh "rm -f$stale"
+
+  # Everything back the way it was found, including the tile, which is rewritten
+  # from whatever default was there before this ran rather than left on codex.
+  g sh 'for f in ~/.config/omarchy/defaults/agent \
+                 ~/.local/share/applications/omarchy-mobile-agent.desktop \
+                 ~/.local/bin/claude; do
+          rm -f "$f"
+          [ -e "$f.selftest-saved" ] && mv -f "$f.selftest-saved" "$f"
+        done; true'
+  unset -f entry_key
+}
+
 SECTIONS=("$@")
-[ ${#SECTIONS[@]} -gt 0 ] || SECTIONS=(W A B C D G E H L S K settings keyboard apps)
+[ ${#SECTIONS[@]} -gt 0 ] || SECTIONS=(W A B C D G E H L S K settings keyboard apps agent)
 for s in "${SECTIONS[@]}"; do
   "section_$s"
 done

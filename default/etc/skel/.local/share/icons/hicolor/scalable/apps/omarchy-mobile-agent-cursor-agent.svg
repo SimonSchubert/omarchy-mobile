@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- One of the four tiles moarchy never had to draw: upstream Omarchy grew
+       Cursor, Hermes, Muse and OpenClaw after moarchy's nine were made, so
+       these are this project's own rather than a port.
+       The pointer, not Cursor's cube. The cube is three faces meeting at a
+       vertex, and at 42px on a dark sheet the two shaded faces close up into
+       one blob; a pointer is a silhouette and survives being small. -->
+  <defs>
+    <linearGradient id="cursorTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBBF24"/>
+      <stop offset="1" stop-color="#B45309"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#cursorTile)"/>
+  <path d="M42 24L42 98L59 82L70 104L83 98L72 76L95 76Z"
+        fill="#ffffff" stroke="#ffffff" stroke-width="6" stroke-linejoin="round"/>
+</svg>

@@ -4,7 +4,7 @@
 # This file is documentation, not input -- nothing reads it. It exists because
 # a package set with silent holes is a package set nobody can audit, and
 # because the interesting question about an aarch64 port is exactly which names
-# did not survive: 27 are not in Arch Linux ARM, and 26 of those are left out.
+# did not survive: 27 are not in Arch Linux ARM, and 25 of those are left out.
 #
 # Checked against Arch Linux ARM's aarch64 core/extra with `pacman -Si`.
 
@@ -37,7 +37,13 @@ ttfx            # font tool
 # terminal Omarchy opens goes through it, and Settings bridges forty-odd rows
 # that way. It is [pkg.xdg-terminal-exec] in the manifest and installed with the
 # apps tier.
-mise-bin              # dev tool version manager
+#
+# mise-bin was the fifth, and left it on 2026-09-12. Every route to a coding
+# agent runs through mise -- omarchy-default-agent installs with it, and
+# omarchy-mise-install's wrappers resolve through it -- so while it was omitted
+# the AI agent row was guarded off and the drawer had nothing to offer for
+# "agent" at all. It is [pkg.mise-bin] in the manifest and installed with the
+# apps tier.
 ttf-ia-writer         # the theme fonts want it; noto covers the gap
 yay                   # AUR helper -- nothing to help with inside this image yet
 ufw-docker            # needs docker+ufw integration we are not exercising

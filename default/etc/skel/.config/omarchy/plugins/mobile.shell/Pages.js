@@ -383,40 +383,63 @@ var PAGES = {
     covers: { "setup.default.editor.vim": "B" } }
 ]},
 
-// Upstream's thirteen, in upstream's order, each writing upstream's own
-// action. No glyphs: six of upstream's icons are drawn from Omarchy's own font
-// rather than the Nerd Font every row here is set in, and would come out as
-// whatever the Nerd Font has at those code points.
+// Upstream's thirteen, each writing this project's own wrapper around
+// upstream's action. No glyphs: six of upstream's icons are drawn from
+// Omarchy's own font rather than the Nerd Font every row here is set in, and
+// would come out as whatever the Nerd Font has at those code points.
+//
+// The write is `omarchy-mobile-agent open <name>` rather than
+// `omarchy-default-agent <name>` for one reason: it writes the drawer tile
+// first. An agent reachable only from this page is four taps deep and invisible
+// in the grid, which is settings.md P and the whole of why that script exists.
+// Everything after the tile is upstream's: omarchy-mobile-agent execs
+// omarchy-default-agent, which installs through mise (or, for Hermes and
+// OpenClaw, through their own installers), writes
+// ~/.config/omarchy/defaults/agent and launches.
+//
+// One tile, not one per agent. omarchy-mobile-agent.desktop is REWRITTEN by
+// every tap on this page -- name, icon and Exec -- so picking a second agent
+// moves the tile rather than adding one. This page is also the only thing that
+// keeps the tile honest: `omarchy-default-agent <name>` typed into a terminal
+// sets the default without coming through here and leaves the tile naming the
+// agent before it; `omarchy-mobile-agent entry` with no argument is the repair.
+//
+// The same thirteen, in the same order, are omarchy-mobile-agent's `agents()`
+// and the thirteen agent icons in
+// ~/.local/share/icons/hicolor/scalable/apps/omarchy-mobile-agent-*.svg. Three
+// lists, and vm-selftest.sh asserts all three against upstream's own
+// `omarchy:args=` line rather than against each other, so an agent upstream
+// adds fails loudly here instead of quietly arriving with no icon.
 "apps.default.agent": { title: "AI agent", reader: "omarchy-default-agent", rows: [
   { id: "how", type: "info", glyph: "\u{F06A9}", label: "Tap one to install it",
     detail: "The first run downloads the agent, then opens it" },
   { id: "claude", type: "choice", label: "Claude", value: "claude",
-    write: "omarchy-default-agent claude", covers: { "setup.default.agent.claude": "B" } },
+    write: "omarchy-mobile-agent open claude", covers: { "setup.default.agent.claude": "B" } },
   { id: "codex", type: "choice", label: "Codex", value: "codex",
-    write: "omarchy-default-agent codex", covers: { "setup.default.agent.codex": "B" } },
+    write: "omarchy-mobile-agent open codex", covers: { "setup.default.agent.codex": "B" } },
   { id: "copilot", type: "choice", label: "Copilot", value: "copilot",
-    write: "omarchy-default-agent copilot", covers: { "setup.default.agent.copilot": "B" } },
+    write: "omarchy-mobile-agent open copilot", covers: { "setup.default.agent.copilot": "B" } },
   { id: "crush", type: "choice", label: "Crush", value: "crush",
-    write: "omarchy-default-agent crush", covers: { "setup.default.agent.crush": "B" } },
+    write: "omarchy-mobile-agent open crush", covers: { "setup.default.agent.crush": "B" } },
   { id: "cursor-agent", type: "choice", label: "Cursor CLI", value: "cursor-agent",
-    write: "omarchy-default-agent cursor-agent",
+    write: "omarchy-mobile-agent open cursor-agent",
     covers: { "setup.default.agent.cursor-agent": "B" } },
   { id: "gemini", type: "choice", label: "Gemini", value: "gemini",
-    write: "omarchy-default-agent gemini", covers: { "setup.default.agent.gemini": "B" } },
+    write: "omarchy-mobile-agent open gemini", covers: { "setup.default.agent.gemini": "B" } },
   { id: "grok", type: "choice", label: "Grok", value: "grok",
-    write: "omarchy-default-agent grok", covers: { "setup.default.agent.grok": "B" } },
+    write: "omarchy-mobile-agent open grok", covers: { "setup.default.agent.grok": "B" } },
   { id: "hermes", type: "choice", label: "Hermes", value: "hermes",
-    write: "omarchy-default-agent hermes", covers: { "setup.default.agent.hermes": "B" } },
+    write: "omarchy-mobile-agent open hermes", covers: { "setup.default.agent.hermes": "B" } },
   { id: "muse", type: "choice", label: "Muse Code", value: "muse",
-    write: "omarchy-default-agent muse", covers: { "setup.default.agent.muse": "B" } },
+    write: "omarchy-mobile-agent open muse", covers: { "setup.default.agent.muse": "B" } },
   { id: "omp", type: "choice", label: "omp", value: "omp",
-    write: "omarchy-default-agent omp", covers: { "setup.default.agent.omp": "B" } },
+    write: "omarchy-mobile-agent open omp", covers: { "setup.default.agent.omp": "B" } },
   { id: "openclaw", type: "choice", label: "OpenClaw", value: "openclaw",
-    write: "omarchy-default-agent openclaw", covers: { "setup.default.agent.openclaw": "B" } },
+    write: "omarchy-mobile-agent open openclaw", covers: { "setup.default.agent.openclaw": "B" } },
   { id: "opencode", type: "choice", label: "OpenCode", value: "opencode",
-    write: "omarchy-default-agent opencode", covers: { "setup.default.agent.opencode": "B" } },
+    write: "omarchy-mobile-agent open opencode", covers: { "setup.default.agent.opencode": "B" } },
   { id: "pi", type: "choice", label: "Pi", value: "pi",
-    write: "omarchy-default-agent pi", covers: { "setup.default.agent.pi": "B" } }
+    write: "omarchy-mobile-agent open pi", covers: { "setup.default.agent.pi": "B" } }
 ]},
 
 "apps.webapps": { title: "Web apps", rows: [

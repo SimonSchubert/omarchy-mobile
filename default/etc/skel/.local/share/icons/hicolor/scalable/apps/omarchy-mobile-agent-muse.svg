@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- The loop, drawn as one unbroken stroke rather than two tangent rings.
+       Two rings meet at a point, and a point where two 11px strokes cross is a
+       dark knot at tile size; a lemniscate crosses itself once and reads as a
+       ribbon instead. -->
+  <defs>
+    <linearGradient id="museTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#14B8A6"/>
+      <stop offset="1" stop-color="#115E59"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#museTile)"/>
+  <path d="M30 64C30 46 52 46 64 64C76 82 98 82 98 64C98 46 76 46 64 64C52 82 30 82 30 64Z"
+        fill="none" stroke="#ffffff" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

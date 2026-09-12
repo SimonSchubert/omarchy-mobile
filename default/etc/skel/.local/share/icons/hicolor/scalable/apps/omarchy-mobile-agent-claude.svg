@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Every agent tile in this set is a coloured square with a white mark, and
+       that is a deliberate break from the rest of the drawer: the Adwaita apps
+       around them are objects on the surface, and these thirteen are one family
+       that has to read as one family at 42px. See omarchy-mobile-settings.svg
+       for the other side of that argument, which is why Settings is bare grey.
+       (No em dashes in here: XML forbids a double hyphen inside a comment, and
+       xmllint rejects the file rather than the comment.) -->
+  <defs>
+    <linearGradient id="claudeTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#D97757"/>
+      <stop offset="1" stop-color="#9A3412"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#claudeTile)"/>
+  <g stroke="#ffffff" stroke-width="12" stroke-linecap="round">
+    <path d="M64 30V98"/>
+    <path d="M34.6 47L93.4 81"/>
+    <path d="M34.6 81L93.4 47"/>
+  </g>
+</svg>

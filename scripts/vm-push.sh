@@ -135,6 +135,19 @@ if [ -d "$STAGE/local/bin" ]; then
   echo "pushed $(ls "$STAGE"/local/bin | tr '\n' ' ')to /usr/local/bin"
 fi
 
+# The coding-agent tile, which the image build seeds from the first-run user
+# unit (vm/configure.sh). A guest that has already had its first login never
+# runs that unit again, so a push has to seed it here or the grid stays without
+# an agent on every device this project has ever built (docs/spec/settings.md
+# P). Idempotent: it rewrites the one .desktop and leaves a wrapper it did not
+# write alone.
+#
+# After /usr/local/bin above, because the script it runs is one of the files
+# that block just installed. Not fatal: a guest with no mise still gets the
+# setup tile, which is the tile that matters most on one.
+omarchy-mobile-agent seed || echo "!! the agent tile was not seeded" >&2
+echo "seeded the coding-agent tile"
+
 # The icons QtSvg cannot clip. The repairs live in /usr/local/share/icons and
 # are generated from what pacman has put under /usr/share, so they are made
 # here rather than shipped: a guest built before this landed has none, and one

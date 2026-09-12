@@ -77,9 +77,10 @@ iteration on the session itself.
   modules of the container doing the build, and names the virtio drivers
   instead.
 - **The package set.** 120 of upstream's 147 base packages exist for aarch64 in
-  Arch Linux ARM. Of the other 27, one is built here from the AUR:
-  xdg-terminal-exec, which every terminal Omarchy opens goes through. The other
-  26 are listed with reasons in [`vm/packages/omitted`](vm/packages/omitted),
+  Arch Linux ARM. Of the other 27, two are built here from the AUR:
+  xdg-terminal-exec, which every terminal Omarchy opens goes through, and
+  mise-bin, which every coding agent installs through. The other
+  25 are listed with reasons in [`vm/packages/omitted`](vm/packages/omitted),
   along with eight that do exist and are left out on purpose.
   [`session`](vm/packages/session) is what Hyprland and the shell need to start;
   [`apps`](vm/packages/apps) is the rest, plus GNOME's phone apps.
@@ -207,8 +208,16 @@ it on.
   [`Pages.js`](default/etc/skel/.config/omarchy/plugins/mobile.shell/Pages.js),
   its rows run upstream's own commands, and it has native pages where a
   terminal was the wrong shape: audio routing, reminders, time zone, plugins,
-  and Theme, Wallpaper and Font. A row this image cannot run (Lock, AI agent,
-  installing from the AUR) is hidden until it can.
+  and Theme, Wallpaper and Font. A row this image cannot run (Lock, installing
+  from the AUR) is hidden until it can -- as AI agent was, until `mise-bin`
+  became a pin.
+- **The coding agent is an app**, not only a Settings row four taps deep
+  (settings.md P). Picking one on Apps & defaults > Default apps > AI agent
+  writes a single drawer tile that carries whichever agent was picked last, and
+  a phone that has picked none draws a setup tile that opens that page and
+  answers a drawer search for any of the thirteen agents by name.
+  `omarchy-mobile-agent` is the whole of it, and everything behind the tile is
+  upstream's own `omarchy-default-agent`.
 - **The on-screen keyboard** is moarchy's,
   [moarchy-keyboard](https://github.com/SimonSchubert/moarchy-keyboard), built
   from its pin in `manifest.toml` like any package ALARM lacks. It rises by
@@ -278,9 +287,9 @@ All measured, and the surface layout is shaped around them.
 | `default/etc/skel/.config/hypr/mobile.lua` | One app per workspace, filling it, no layer animation on the shell's own sheets, and the on-screen keyboard started and bound to Super+I -- a user override loaded after upstream's defaults |
 | `default/etc/skel/.config/omarchy/themed/gtk.css.tpl` | The active theme's palette for GTK4 and libadwaita apps. Upstream's own template engine renders it on every theme set, because it sits in the user template directory it already reads; `~/.config/gtk-4.0/gtk.css` is a symlink to the result, and `hooks/theme-set.d/50-gtk-apps.sh` restarts the app daemons that parse it once at startup |
 | `default/etc/skel/.local/bin/` | `omarchy-mobile-*`, the helpers behind Settings' native pages: audio routing, reminders, time zone, plugins, About; and the keyboard toggle |
-| `default/etc/skel/.local/share/` | Desktop entries and icons for the Wi-Fi, Bluetooth and Settings screens. Only Settings shows in the drawer. Also a copy of mpv's entry that hides it from the drawer |
+| `default/etc/skel/.local/share/` | Desktop entries and icons for the Wi-Fi, Bluetooth and Settings screens. Only Settings shows in the drawer. Also a copy of mpv's entry that hides it from the drawer, and the fourteen `omarchy-mobile-agent-*` icons the coding-agent tile draws itself with |
 | `default/etc/skel/.config/mimeapps.list` | The default handlers, named rather than left to the mimeinfo cache: GNOME Web for http/https, Evince for PDFs |
-| `default/usr/local/bin/` | Shadows of upstream `omarchy-*` scripts that assume a Chromium-family browser -- `/usr/local/bin` comes before `/usr/bin` in the guest's PATH, so this overrides without patching the vendored tree. Also `omarchy-mobile-app-remove`, which the drawer's long-press card asks what an app is and what removing it would take; it lives here rather than in `~/.local/bin` so that a caller with no login shell can name it without a path |
+| `default/usr/local/bin/` | Shadows of upstream `omarchy-*` scripts that assume a Chromium-family browser -- `/usr/local/bin` comes before `/usr/bin` in the guest's PATH, so this overrides without patching the vendored tree. Also `omarchy-mobile-app-remove`, which the drawer's long-press card asks what an app is and what removing it would take, and `omarchy-mobile-agent`, which puts the chosen coding agent in the app grid (settings.md P); both live here rather than in `~/.local/bin` so that a caller with no login shell -- a `.desktop` `Exec`, for one -- can name them without a path |
 | `patches/` | Fixes to the vendored upstream. Applied with `--fuzz=0`, so a moved upstream fails the build |
 | `scripts/vm-*.sh` | Build, run, ssh, screenshot, drag, push the overlay into a running guest, selftest |
 | `docs/spec/` | moarchy's acceptance criteria, copied with their ids unchanged |
@@ -314,11 +323,18 @@ account, dead ends included.
   `default/usr/share/polkit-1/rules.d/49-moarchy-store.rules` to the same path
   in the guest. Or rebuild. The image build itself was never affected, since it
   verifies against the builder's keyring.
-- Settings search from the drawer (settings.md O) and the coding-agent tile
-  (P).
+- Settings search from the drawer (settings.md O) is in, but the quiet open O4
+  needs -- `quietOpen`, `settlePending` and the floor under a guard batch that
+  never answers -- has no `vm-selftest.sh` line yet.
 - An image built before 2026-09-11 has no xdg-terminal-exec, and on it every
   Settings row that opens a terminal shows nothing. Rebuild, or install the
   package.
+- An image built before 2026-09-12 has no coding-agent tile at all and no mise
+  behind the AI agent row (settings.md P). `./scripts/vm-push.sh` puts the
+  script and its icons into a running guest and seeds the tile, which is enough
+  for the setup tile and for the drawer to answer a search for "agent"; the
+  agents themselves cannot install until the image is rebuilt around
+  `[pkg.mise-bin]`.
 - An image built before 2026-09-12 has Chromium and neither GNOME Web nor
   Evince, so the browser is the one that has no narrow layout and PDFs open in
   it. Rebuild, or in the guest `pacman -S epiphany evince`, then
@@ -340,9 +356,11 @@ account, dead ends included.
 - The phone bar hosts no widgets, so upstream's weather panel logs
   `Cannot read property 'foreground' of null` a few times a minute. Noise, not
   breakage.
-- `yay`, `ttf-ia-writer` and `mise-bin` are omitted, and Settings hides the rows
-  that need yay and mise. `vm/build-packages.sh` builds any `[pkg.*]` the
-  manifest pins, as it does xdg-terminal-exec, so each is a pin away.
+- `yay` and `ttf-ia-writer` are omitted, and Settings hides the rows that need
+  yay. `vm/build-packages.sh` builds any `[pkg.*]` the manifest pins, as it does
+  xdg-terminal-exec, so each is a pin away -- which is how `mise-bin` stopped
+  being on this list on 2026-09-12, and with it the AI agent row and the
+  coding-agent tile (settings.md P).
 - On upstream's bar at phone width, the centred clock overlaps the workspace
   list. It is unpatched because the fix is a design call: elide the centre, or
   shift it the way `PopupCard.onAnchoring` shifts popups.
