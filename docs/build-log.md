@@ -3232,20 +3232,22 @@ banner reading *"Download WhatsApp for Mac -- Get the app"*. There is nothing
 to switch to. YouTube is the contrast, on the same mechanism: a completely
 different, narrow page.
 
-### The lever for a site like that
+### There is a lever, and this image does not pull it
 
 Epiphany's zoom is per web app, on the same relocatable schema the agent is on,
-so it is one setting and it sticks:
+so `default-zoom-level 0.5` on that one profile makes the whole login card fit
+the 360px screen -- QR, all three steps, the footer, nothing clipped. Tried on
+the device, and reset again, because that is not a thing this image should
+carry.
 
-    gsettings set "org.gnome.Epiphany.web:/org/gnome/epiphany/web-apps/\
-      org.gnome.Epiphany.WebApp_whatsapp_com/web/" default-zoom-level 0.5
+**No per-site fixes.** Every mechanism here is a rule that holds for all of
+them: one user agent, from one schema default; a window rule matched on a class
+prefix; a colour read out of whatever the site itself states. A number tuned
+for one host is a different kind of thing -- it belongs to that site's layout
+on this week's design, nothing checks it when the site changes, and the next
+site wants a different one. A site with no phone layout has given its answer,
+and the phone's answer is a tile you can hold and remove.
 
-At 0.5 the whole login card fits the 360px screen with margin -- QR, all three
-steps, "Log in with phone number" and the footer, nothing clipped. The card is
-about 530 CSS px wide, so ~0.67 is where it starts touching the edges and 0.6
-is the comfortable maximum.
-
-Not shipped as a default: this image ships no WhatsApp entry (upstream's is
-what `omarchy-refresh-applications` copies), and the right number is a property
-of the site, not of the phone. It is written down here as the answer for any
-web app whose page was never drawn for a phone.
+So this entry is a finding and not a fix: WhatsApp is wide because
+web.whatsapp.com is wide, on every browser, and the user agent had nothing to
+do with it.
