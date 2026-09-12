@@ -87,7 +87,25 @@ hold = float(os.environ.get("HOLD", "0"))
 dx = int(os.environ.get("DX", "0"))
 
 move_to(startx, starty)
-time.sleep(0.2)
+# One pixel out and back before pressing. Arriving is not the same as being
+# noticed: move_to stops as soon as it is within a pixel of the target, and the
+# press that followed sometimes landed on whatever surface had the pointer
+# before -- the drawer, when the drawer was open -- leaving the edge surface's
+# MouseArea unpressed and `gestures status` reading `idle` through a gesture
+# whose cursor arrived exactly where it was aimed. The jiggle guarantees a
+# motion event at the destination, so the compositor sends leave/enter and the
+# press goes where the finger is.
+#
+# A mitigation and not a cure, measured on A7 -- the one check that drags the
+# strip with the drawer open, and so the one that races this. Six repetitions
+# each: 1/3 passed with the bare 0.2s wait this replaces, 4/5 with the jiggle,
+# 4/6 with the jiggle and a 0.5s wait. Settling longer buys nothing; what is
+# left is the emulated pointer racing a compositor on a loaded host, and a real
+# finger does not warp across the screen before it touches down.
+emit(EV_REL, REL_X, 1)
+time.sleep(0.05)
+emit(EV_REL, REL_X, -1)
+time.sleep(0.25)
 emit(EV_KEY, BTN_LEFT, 1)
 time.sleep(0.05)
 
