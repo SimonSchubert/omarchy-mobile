@@ -260,6 +260,21 @@ say "icons QtSvg cannot clip"
 /usr/local/bin/omarchy-mobile-icon-repair
 
 # ---------------------------------------------------------------------------
+say "settings the phone overrides"
+# The overlay drops .gschema.override files into /usr/share/glib-2.0/schemas
+# (today: the mobile user agent Epiphany sends, docs/build-log.md). An override
+# is only read out of the compiled gschemas.compiled beside it, and pacstrap
+# compiled that before the overlay existed, so it is compiled again here.
+#
+# pacman's own glib2 hook does this for every transaction that touches a
+# schema, which is what keeps the override alive across an upgrade; this is the
+# same catch-up the icon repair above needs, for the same reason.
+if compgen -G "/usr/share/glib-2.0/schemas/*.gschema.override" >/dev/null; then
+  glib-compile-schemas /usr/share/glib-2.0/schemas
+  info "$(ls /usr/share/glib-2.0/schemas/*.gschema.override | wc -l) override(s) compiled"
+fi
+
+# ---------------------------------------------------------------------------
 say "theme bootstrap"
 # The whole shell reads its palette from ~/.local/state/omarchy/current/theme.
 # Until some theme has been applied that path does not exist, and a shell that

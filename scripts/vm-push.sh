@@ -40,7 +40,7 @@ ssh "${SSH_OPTS[@]}" -p "$PORT" "$USER_NAME@127.0.0.1" \
 scp "${SSH_OPTS[@]}" -P "$PORT" -rq \
   "$SKEL/omarchy/plugins" "$SKEL/hypr/mobile.lua" "$SKEL/omarchy/themed" \
   "$SKEL/omarchy/hooks" "$SKEL/mimeapps.list" default/etc/skel/.local \
-  default/usr/local default/etc/pacman.d patches vm/packages/session \
+  default/usr/local default/usr/share default/etc/pacman.d patches vm/packages/session \
   "$USER_NAME@127.0.0.1:.cache/omarchy-mobile-push/"
 
 ssh "${SSH_OPTS[@]}" -p "$PORT" "$USER_NAME@127.0.0.1" bash -s <<'GUEST'
@@ -133,6 +133,17 @@ if [ -d "$STAGE/local/bin" ]; then
   sudo install -d /usr/local/bin
   sudo install -m755 "$STAGE"/local/bin/* /usr/local/bin/
   echo "pushed $(ls "$STAGE"/local/bin | tr '\n' ' ')to /usr/local/bin"
+fi
+
+# The settings this image overrides for somebody else's app: today the mobile
+# user agent (docs/build-log.md). An override is read out of the compiled
+# gschemas.compiled beside it, so dropping the file is only half of it -- the
+# same two steps vm/configure.sh does at image build.
+if [ -d "$STAGE/share/glib-2.0/schemas" ]; then
+  sudo install -Dm644 "$STAGE"/share/glib-2.0/schemas/*.gschema.override \
+    -t /usr/share/glib-2.0/schemas
+  sudo glib-compile-schemas /usr/share/glib-2.0/schemas
+  echo "pushed $(ls "$STAGE"/share/glib-2.0/schemas | tr '\n' ' ')and recompiled the schemas"
 fi
 
 # The coding-agent tile, which the image build seeds from the first-run user

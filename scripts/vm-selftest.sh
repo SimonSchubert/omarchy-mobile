@@ -1777,6 +1777,13 @@ section_apps() {
       g sh "omarchy-mobile-app-remove plan $entry | grep -q 'Removes the launcher'"
   done
 
+  # What a web app tells the site it is. The override is on the schema, so the
+  # browser's path and every web app's path resolve to it; this reads the one
+  # that decides what a tile fetches. Without it YouTube serves a page with no
+  # viewport meta on it at all (docs/build-log.md).
+  check apps "a web app's user agent says it is a phone" \
+    g sh "gsettings get 'org.gnome.Epiphany.web:/org/gnome/epiphany/web-apps/org.gnome.Epiphany.WebApp_spotify_com/web/' user-agent | grep -q 'iPhone.*Mobile'"
+
   # The store installs through pkexec, which cannot authenticate an account the
   # image locks. pkcheck asks polkit what pkexec will, as this user and from a
   # session with no seat, which the rule is written not to care about.

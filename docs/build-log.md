@@ -3005,3 +3005,91 @@ that started them disconnected: `omarchy-shell drawer launch` from a login
 shell leaves the app in that session's tree. `nohup setsid` in front of it, and
 the same launch sat at `fullscreenClient: 2` for two minutes and more. Worth
 knowing before reading anything into a web app that "crashed" during a test.
+
+
+## 2026-09-12 -- the phone says it is a phone
+
+"It still doesn't seem to fetch the mobile optimized version." It does not, and
+the reason is one string. Epiphany sends
+
+    Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/605.1.15 (KHTML, like Gecko)
+    Version/60.5 Safari/605.1.15
+
+measured out of a web app rather than read off a wiki: a three-line HTTP server
+on localhost, launched as a web app, logging the `User-Agent` it is fetched
+with. That string says X11 and Linux and nothing else, so a site that decides
+its layout from the agent rather than from a media query serves a desktop.
+
+### What the sites actually do with it
+
+Same three sites, `curl` with that agent against `curl` with an iPhone one:
+
+| | desktop agent | iPhone agent |
+| --- | --- | --- |
+| youtube.com | 924 KB, **no `<meta name="viewport">` at all** | 368 KB, `width=device-width` |
+| open.spotify.com | 162 KB | 306 KB, a different bundle |
+| x.com | 33 KB | 35 KB, responsive either way |
+
+YouTube is the case that settles it. With the desktop agent the page carries no
+viewport meta, so a 360px screen is handed a layout drawn for a window it does
+not have -- which is the "clipped on the right" this log recorded for WhatsApp
+and Spotify, seen from the server's end rather than the window's.
+
+### An iPhone, not an Android
+
+Epiphany is WebKitGTK: WebKit2 -- UI process, WebProcess, NetworkProcess --
+with JavaScriptCore and a GTK4/libadwaita shell. Safari's engine, a different
+port of it. So the agent to send is Safari's: a site that branches on the agent
+then hands a WebKit browser the code it tests against WebKit. A
+Chrome-on-Android string would ask for the Blink path and be told to run code
+this engine may not have. The lie is picked to be the smallest one that is
+still true about the renderer.
+
+### Where it is set, and why there
+
+`org.gnome.Epiphany.web` is a **relocatable** schema. There is no single global
+copy of it: the browser gets `/org/gnome/epiphany/web/` and every web app gets
+`/org/gnome/epiphany/web-apps/<app id>/web/`, which is why
+`gsettings set org.gnome.Epiphany.web user-agent ...` answers *"Schema is
+relocatable (path must be specified)"*.
+
+That turns out to be the good case. A `.gschema.override` sets the **schema's
+default**, and a relocated instance inherits it, so one stanza in
+`default/usr/share/glib-2.0/schemas/99-omarchy-mobile.gschema.override` reaches
+the browser and every web app at once -- checked at both paths -- while a user
+who wants one site back on the desktop layout writes that app's own key and
+nothing else moves.
+
+It has to sit in `/usr/share/glib-2.0/schemas` rather than beside this
+project's other overrides under `/usr/local`, because an override is compiled
+together with the schema it overrides and Epiphany's schema is there.
+`vm/configure.sh` compiles it at image build, `vm-push.sh` installs and
+compiles it on a running guest, and pacman's own glib2 hook recompiles that
+directory on every transaction that touches a schema, so an upgrade does not
+quietly drop it.
+
+### Checked in the running guest
+
+The echo server again, with the override in place: a web app now fetches with
+`Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) ... Mobile/15E148
+Safari/604.1`. And YouTube, relaunched, comes up as the mobile site -- the
+narrow header, the consent sheet, and Home / Shorts / You along the bottom --
+edge to edge under the bar, with no browser chrome anywhere on it.
+
+`vm-selftest.sh apps`: 26 passed, 1 skipped (the store was already open).
+
+### The toast, again
+
+Reported from the device: *"right after opening it says press F11 to exit full
+screen"*. That is real and it is this log's earlier claim that was too strong --
+one screendump at map, one at three seconds and one at six is not a
+measurement.
+
+Eighteen screendumps at 1.2s across a whole launch, with the centre band's mean
+luminance printed for each, say the same thing the sparse ones did: the band
+sits at 237 on a white page from the frame the window appears to the frame
+twenty-two seconds later, with no dark pill anywhere in it. What did toast is
+the other path -- the three web apps that were already open when the rule
+landed were put into the state by hand, and a live window entering fullscreen
+announces it. If it shows up on a cold launch, it is not from here and it wants
+looking at again.
