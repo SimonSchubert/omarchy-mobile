@@ -2447,9 +2447,21 @@ rendered with `rsvg-convert` and read on a contact sheet, which is how the
 dandelion was caught. P5's four lists were diffed against upstream's
 `omarchy:args=` line.
 
-None of it has run on the phone yet. `vm-selftest.sh agent` is written and
-unexercised, the VM having been another session's for the afternoon
-(`scripts/vm-lease.sh`), and no image has been rebuilt around the mise pin. So
-`docs/acceptance.md` carries P1-P11 as **todo**, and D8 says the row has not
-been seen visible on a built image. The drawer search that started this is the
-first thing to check when the VM frees.
+Then it ran on the phone: `vm-selftest.sh agent`, **26 passed, 3 skipped**. The
+three skips are P6's wrapper half, P7 and P8, all of which need a mise this
+image does not have -- it predates the pin, so they stay SKIP until one is
+rebuilt around it. D8 likewise says the AI agent row has not been seen visible
+on a built image.
+
+The first run was 23/3/3, and all three failures were P11 -- the drawer search,
+which is the thing this whole entry is about. They were the check being wrong,
+not the drawer: `drawer entries` prints desktop **ids**, one per line, and the
+check looked for `omarchy-mobile-agent.desktop`. The drawer had been answering
+correctly the whole time. Typing `agent`, `claude`, `opencode` or `llm` into it
+returns the tile and nothing else.
+
+Worth recording because the same mistake cost a second detour: probing the
+guest by hand afterwards, every `omarchy-shell` call came back empty and looked
+like a dead shell. It was `vm-ssh.sh` running a non-login shell, so `OMARCHY_PATH`
+was unset and `omarchy-shell` had no socket to find. `bash -lc` is the fix, and
+it is the same trap the guest-app-launch notes already name.

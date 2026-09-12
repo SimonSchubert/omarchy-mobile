@@ -1583,10 +1583,14 @@ section_agent() {
     case ";$keywords" in *";$q;"*) ;; *) missing="$missing $q" ;; esac
   done
   check P11 "the setup tile carries every agent name as a keyword" is "$missing" ""
+  # `drawer entries` prints desktop IDS, one per line, not file names -- so the
+  # match is the id exactly, `grep -x`, and not a substring of "...desktop".
+  # Written the wrong way first, and all three of these failed against a drawer
+  # that was in fact answering correctly.
   for q in agent claude opencode; do
     ipc drawer type "$q" >/dev/null
     check P11 "drawer type $q finds the agent tile in the grid" \
-      contains omarchy-mobile-agent.desktop "$(ipc drawer entries)"
+      is "$(ipc drawer entries | grep -cx omarchy-mobile-agent)" 1
   done
   ipc drawer type "" >/dev/null
 
