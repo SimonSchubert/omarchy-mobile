@@ -204,6 +204,15 @@ case $1 in
     omarchy-shell notifications dismissAll >/dev/null
     omarchy-shell drawer close >/dev/null; omarchy-shell recents close >/dev/null
     omarchy-shell shade close >/dev/null
+    # And the on-screen keyboard, for the reason the toasts are above it. A
+    # section that put a finger in a text field -- Wi-Fi's passphrase, the
+    # drawer's search, a reminder's duration -- leaves it up, and its panel is
+    # the bottom 224px: it covers the strip every following section drags from,
+    # and it is what I1a's pixel read at the screen's last row when settings ran
+    # after K rather than alone. Nothing owns sm.puri.OSK0 on an image with no
+    # keyboard, so this is allowed to fail.
+    busctl --user call sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 \
+      SetVisible b false >/dev/null 2>&1 || true
     omarchy-shell wifi quit >/dev/null; omarchy-shell bluetooth quit >/dev/null
     omarchy-shell settings quit >/dev/null; omarchy-shell settings dryRun 0 >/dev/null
     # Only the windows this suite opened.
