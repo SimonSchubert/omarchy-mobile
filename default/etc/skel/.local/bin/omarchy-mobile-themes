@@ -1,0 +1,84 @@
+#!/bin/bash
+# The theme picker's rows, each carrying the colours it names
+# (docs/spec/settings.md D1, and moarchy.themes' own argument).
+#
+#   omarchy-mobile-themes rows      provider.json rows for appearance.theme
+#
+# Why the rows carry a palette at all: a theme list is a column of names, and
+# names are the wrong handle for a choice that is entirely about colour.
+# "Ristretto" and "Miasma" tell you nothing, so picking by name means applying
+# a theme to find out what it is -- at several seconds a go, since
+# omarchy-theme-set regenerates every app's template. Every theme already ships
+# a colors.toml, so the row can simply be drawn in the theme it names.
+#
+# Not the preview.png each theme also ships: those are ~440KB 1800x1012 desktop
+# screenshots, and a 16:9 picture of a tiled desktop is illegible in a 58px row.
+# The colours are the content; the screenshot is a wrapper around them.
+#
+# The names come from omarchy-theme-list rather than from a second walk of the
+# theme directories. It derives the display name from the directory slug
+# ('s/(^|-)([a-z])/\1\u\2/g; s/-/ /g') and omarchy-theme-set looks the directory
+# back up from that name, so "rose-pine" must come back as "Rose Pine" and
+# nothing else. Deriving it again here would be a second implementation of the
+# one transform that has to agree. The slug is recovered from the name instead,
+# which is the exact inverse -- lowercase, spaces to hyphens -- and is used only
+# to find colors.toml.
+#
+# A theme whose colors.toml cannot be read still gets a row, with no palette on
+# it. Dropping it would take a theme out of the picker over its decoration.
+set -uo pipefail
+
+# background, foreground, accent, then the six chips, tab separated. The same
+# `key = "value"` lines the shell's own theme loader reads.
+palette() { # $1 = path to colors.toml
+  [ -n "${1:-}" ] && [ -f "$1" ] || return 0
+  awk '
+    function first(a, b, c) { return a != "" ? a : (b != "" ? b : c) }
+    match($0, /^[[:space:]]*[a-z_]+[[:space:]]*=[[:space:]]*"[^"]+"/) {
+      key = $0; sub(/^[[:space:]]*/, "", key); sub(/[[:space:]]*=.*/, "", key)
+      val = $0; sub(/^[^"]*"/, "", val); sub(/".*/, "", val)
+      c[key] = val
+    }
+    END {
+      # A theme with no background is not drawable, and saying so with an empty
+      # first field is what leaves the row palette-less rather than wrong.
+      if (c["background"] == "") exit 0
+      accent = first(c["accent"], c["blue"], "#888888")
+      printf "%s\t%s\t%s", c["background"], first(c["foreground"], "", "#ffffff"), accent
+      printf "\t%s\t%s\t%s", accent, first(c["red"], accent), first(c["green"], accent)
+      printf "\t%s\t%s\t%s\n", first(c["yellow"], accent), first(c["blue"], accent),
+                               first(c["magenta"], accent)
+    }
+  ' "$1"
+}
+
+rows() {
+  omarchy-theme-list 2>/dev/null | awk 'NF' | while IFS= read -r name; do
+    slug=$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+    toml=""
+    for base in "$HOME/.config/omarchy/themes" "${OMARCHY_PATH:-/usr/share/omarchy}/themes"; do
+      if [ -f "$base/$slug/colors.toml" ]; then toml="$base/$slug/colors.toml"; break; fi
+    done
+    printf '%s\t%s\n' "$name" "$(palette "$toml")"
+  done | jq -R -s '
+    split("\n") | map(select(length > 0)) | to_entries
+    | map((.value | split("\t")) as $f | {
+        id:    ("t" + (.key | tostring)),
+        type:  "choice",
+        label: $f[0],
+        value: $f[0],
+        write: ("omarchy-theme-set " + ($f[0] | @sh)),
+        swatch: (if (($f[1] // "") == "") then null else {
+          background: $f[1],
+          foreground: $f[2],
+          accent:     $f[3],
+          chips:      [$f[4], $f[5], $f[6], $f[7], $f[8], $f[9]]
+                      | map(select(. != null and . != ""))
+        } end)
+      })'
+}
+
+case "${1:-}" in
+  rows) rows ;;
+  *) echo "usage: omarchy-mobile-themes rows" >&2; exit 1 ;;
+esac

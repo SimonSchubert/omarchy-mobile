@@ -15,6 +15,8 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui as Ui
 import "Theme.js" as Theme
+import "Guards.js" as Guards
+import "Search.js" as Search
 
 Item {
   id: root
@@ -146,6 +148,8 @@ Item {
       return (root.opened ? "open" : (root.progress > 0 ? "dragging" : "closed"))
         + " progress=" + Math.round(root.progress * 100)
         + " apps=" + root.appRows.length
+        + " settings=" + root.settingsRows.length
+        + " fit=" + root.settingsFit
         + " query=" + JSON.stringify(root.query)
     }
 
@@ -164,7 +168,15 @@ Item {
         // and whether the keyboard is up, as this surface reads it.
         + " margin=" + drawerWindow.margins.bottom
         + " strip=" + root.stripHeight
-        + " gap=" + Math.round(drawerWindow.height - grid.mapToItem(null, 0, grid.height).y)
+        // O11. Off whatever is last on the sheet, which with a query showing
+        // is the settings section and not the grid. The inset that keeps the
+        // last content pixel clear of the home pill belongs to the last thing
+        // there is, so measuring it off the grid would report the gap of
+        // something with a list underneath it.
+        + " gap=" + Math.round(drawerWindow.height
+                               - (settingsSection.visible
+                                  ? settingsSection.mapToItem(null, 0, settingsSection.height).y
+                                  : grid.mapToItem(null, 0, grid.height).y))
         + " kbd=" + (root.keyboardUp ? 1 : 0)
     }
 
@@ -301,6 +313,84 @@ Item {
 
     function detailClose(): string { root.closeDetail(); return "ok" }
 
+    // ------------------------------------------------- settings results (O)
+    //
+    // Typing, without a finger. It writes the field rather than `root.query`
+    // directly, so what a check drives is the same path a keystroke takes --
+    // including the debounce, which is flushed here rather than waited out: a
+    // check that slept out the timer would be asserting the timer, not the
+    // results.
+    function type(text: string): string {
+      searchField.text = String(text || "")
+      queryDebounce.stop()
+      root.query = searchField.text
+      return "ok"
+    }
+
+    // What the section is showing, after the guards. `visible` is always 1 for
+    // a listed row -- a guarded row that has not answered yet is simply not
+    // here -- and it is a column rather than a promise so O7 has something to
+    // read when that changes.
+    function results(): string {
+      var rows = root.settingsRows
+      var out = []
+      for (var i = 0; i < rows.length; i++)
+        out.push([rows[i].key, rows[i].type, rows[i].label,
+                  rows[i].section, "1"].join("\t"))
+      return out.join("\n")
+    }
+
+    // Every hit the query matched, guards ignored. `results` is what is on
+    // screen; this is what the index found, and O7 is the difference between
+    // the two.
+    function matches(): string {
+      var hits = root.settingsHits
+      var out = []
+      for (var i = 0; i < hits.length; i++)
+        out.push(hits[i].key + "\t" + (hits[i].row.when ? "guarded" : "-"))
+      return out.join("\n")
+    }
+
+    // O1, and the store's contract (L9). Every app id the grid is showing, so
+    // a check can say that the settings section put nothing into the list the
+    // store is handed.
+    function entries(): string {
+      var rows = root.appRows
+      var out = []
+      for (var i = 0; i < rows.length; i++) {
+        var entry = rows[i] ? rows[i].entry : null
+        if (entry && entry.id) out.push(String(entry.id))
+      }
+      return out.join("\n")
+    }
+
+    // A tap on one of them, down the same function the delegate calls. Keyed by
+    // `<pageId>/<rowId>`, which is what `results` prints.
+    function activateResult(key: string): string {
+      var rows = root.settingsRows
+      for (var i = 0; i < rows.length; i++)
+        if (rows[i].key === key) { root.activateSetting(rows[i]); return "ok" }
+      // Told apart on purpose: a key the index knows but the guards withheld is
+      // O7 working, and a key nothing matched is a query that was never typed.
+      var hits = root.settingsHits
+      for (var j = 0; j < hits.length; j++)
+        if (hits[j].key === key) return "hidden"
+      return "unknown result"
+    }
+
+    // Where result n sits on screen, so a check can aim a real tap at it
+    // rather than call activateResult and prove nothing about the tap. In the
+    // surface's own coordinates, as cellTarget is.
+    function resultTarget(index: string): string {
+      var i = Number(index)
+      if (i < 0 || i >= root.settingsRows.length) return "none"
+      var item = resultRows.itemAt(i)
+      if (!item) return "none"
+      var p = item.mapToItem(null, item.width / 2, item.height / 2)
+      return Math.round(p.x) + " " + Math.round(p.y)
+        + " " + root.settingsRows[i].key
+    }
+
     // G3, L5. Back walks the levels one at a time: from the plan to the card,
     // from the card to the grid, and only then out of the drawer. The
     // left-edge gesture that will drive this is not built yet (G); when it is,
@@ -329,6 +419,175 @@ Item {
   Connections {
     target: root.apps
     function onAppsChanged() { root.appsRevision++ }
+  }
+
+  // ----------------------------------------------------- settings results (O)
+  //
+  // The drawer's field searches the Settings tree as well as the app
+  // catalogue, and a result is the row itself rather than a screen two levels
+  // above it. The index is a walk of Pages.js (Search.js) and the tap goes
+  // through Settings' own activate(), so there is no second list of actions
+  // anywhere -- which is the same rule that keeps Settings out of the
+  // launching business.
+  //
+  // Five, because the sheet has to stay an app grid with a tail rather than a
+  // list with some icons on top. Beyond about five the section is taller than
+  // the two rows of apps above it, and a query broad enough to return more
+  // than five settings rows is a query that was going to be narrowed anyway.
+  readonly property int settingsLimit: 5
+
+  // The height a settings result is drawn at, named here because the fit below
+  // has to do arithmetic with it and a number in two places is a number that
+  // drifts. The height a Settings row is, because this is one -- read here,
+  // tapped there, and a person should not be able to tell which list they are
+  // looking at by its rhythm.
+  readonly property int settingsRowHeight: Style.space(58)
+
+  // A fixed square slot for a result's glyph, the same derivation SettingsRow
+  // uses: five heterogeneous rows with a ragged left edge read as five lists.
+  readonly property int glyphSlot: Math.round(Style.font.iconLarge * 1.35)
+
+  // How many of them there is actually room for. `settingsLimit` is the
+  // editorial answer and the comment above is still the reason for it; this is
+  // the physical one, and with the on-screen keyboard up the two are very
+  // different numbers.
+  //
+  // Without this the section takes its natural height first and the grid is
+  // left the remainder -- so typing one letter with the keyboard raised
+  // collapses the apps to a strip of icons clipped through their tops, with
+  // five timezone rows laid out underneath. That is the "list with some icons
+  // on top" the limit above exists to prevent; it just cannot see the keyboard
+  // coming.
+  //
+  // No binding loop: this reads sheetColumn.height and grid.y, and grid.y is
+  // fixed by the search pill above the grid rather than by the height this
+  // goes on to decide. The empty note is read by height only, for the same
+  // reason -- its y is below the grid.
+  readonly property int settingsFit: {
+    if (!sheetColumn || !grid || !settingsCaption) return root.settingsLimit
+    var below = sheetColumn.height - grid.y
+    if (below <= 0) return root.settingsLimit
+    // One full row of apps survives whenever the query matched any, so the
+    // sheet cannot become a settings list wearing a search field.
+    var keep = root.appRows.length > 0 ? grid.cellHeight
+             : (emptyNote && emptyNote.visible ? emptyNote.height : 0)
+    var room = below - keep - sheetColumn.spacing - settingsCaption.height
+    var per = root.settingsRowHeight + Style.space(4)
+    return Math.max(0, Math.min(root.settingsLimit, Math.floor(room / per)))
+  }
+
+  // The whole of the matching. Everything else on this side is about which of
+  // these the guards allow on screen.
+  readonly property var settingsHits: Search.search(root.query, root.settingsLimit)
+
+  // What the last guard batch answered, keyed by `<pageId>/<rowId>`. A row with
+  // no `when:` is never in here and never needs to be.
+  property var settingsGuards: ({})
+  property int guardGeneration: 0
+
+  // O7. A guarded row is withheld until its guard says yes, rather than shown
+  // and then taken away. `when` hides only on an explicit 0 in Settings because
+  // there the page is already up and a row appearing late is the lesser fault;
+  // in a list that is being retyped every keystroke, a row that flickers in and
+  // out under the thumb is the worse one.
+  readonly property var settingsRows: {
+    var hits = root.settingsHits
+    var answers = root.settingsGuards
+    var fit = root.settingsFit
+    var out = []
+    for (var i = 0; i < hits.length && out.length < fit; i++) {
+      var h = hits[i]
+      if (h.row.when && answers[h.key] !== true) continue
+      out.push(h)
+    }
+    return out
+  }
+
+  // One bash for the whole result set, the same bargain Guards.js strikes for a
+  // page: a fork costs far more than the tests inside it, and this runs on a
+  // settled keystroke rather than on a screen being opened.
+  //
+  // Guards.build answers "" when nothing carries a `when:`, and most queries
+  // are exactly that -- so most keystrokes cost no process at all (O7).
+  function readSettingsGuards(): void {
+    var hits = root.settingsHits
+    var rows = []
+    for (var i = 0; i < hits.length; i++) {
+      if (!hits[i].row.when) continue
+      // Guards.js keys its output by `id`, and a row id is unique only within
+      // its page. The composite key is what makes a batch that spans pages
+      // parseable at all; the parser splits on the first two colons, so the
+      // slash in it survives.
+      rows.push({ id: hits[i].key, when: hits[i].row.when })
+    }
+
+    // Bumped before the early return, not after it. A query with nothing to ask
+    // still has to invalidate a batch that is already in flight -- otherwise
+    // "record" starts one, "emoji" clears the map without moving the
+    // generation, and the first batch lands afterwards and is believed.
+    root.guardGeneration += 1
+
+    var script = Guards.build(rows, "")
+    if (!script) { root.settingsGuards = ({}); return }
+
+    settingsGuardProc.wanted = root.guardGeneration
+    if (settingsGuardProc.running) settingsGuardProc.running = false
+    settingsGuardProc.command = ["bash", "-lc", script]
+    settingsGuardProc.running = true
+  }
+
+  onSettingsHitsChanged: root.readSettingsGuards()
+
+  Process {
+    id: settingsGuardProc
+    property int wanted: 0
+    stdout: StdioCollector {
+      onStreamFinished: {
+        // A batch for a query that has already been retyped is not a late
+        // answer, it is the wrong answer.
+        if (settingsGuardProc.wanted !== root.guardGeneration) return
+        root.settingsGuards = Guards.parse(String(text || "")).when
+      }
+    }
+  }
+
+  // A tap on a settings result. The drawer decides *where* to send it and
+  // SettingsScreen decides what that means -- which is the whole reason there
+  // is no command line anywhere in this file.
+  //
+  //   nav                       open the page it points at. Set a reminder is a
+  //                             row on Reminders and a screen of its own, and
+  //                             the screen is the thing being asked for (O5).
+  //   action, link, plugin      fire it, quietly. Settings stands the page up,
+  //                             runs the row and never maps (O4).
+  //   switch, choice, info      open the page it lives on. A radio flipped from
+  //                             a search result is a value changed by something
+  //                             that never showed it to you (O6).
+  //
+  // A row that turns out to be hidden or not ready lands on its page instead of
+  // doing nothing, and that decision is Settings' too (O9).
+  function activateSetting(hit): void {
+    if (!hit || !root.host) return
+
+    var extra = null
+    var page = ""
+    if (hit.type === "nav") {
+      page = String(hit.row.page)
+    } else if (hit.type === "action" || hit.type === "link"
+               || hit.type === "plugin") {
+      page = hit.pageId
+      extra = { activate: hit.rowId, quiet: true }
+    } else {
+      page = hit.pageId
+    }
+
+    // A hand-off, so the keyboard stays where it is (I5d): Settings is about to
+    // stand up a page that may have a field on it. Dismissing first is belt to
+    // the braces of Settings' own open(), which puts the sheets away itself --
+    // except on a quiet open, which has no screen to make room for.
+    root.handingOff = true
+    root.dismiss()
+    root.host.openScreen("settings", "", page, extra)
   }
 
   function launch(entry): void {
@@ -803,6 +1062,7 @@ Item {
       }
 
       Column {
+        id: sheetColumn
         anchors {
           top: handleStrip.bottom
           left: parent.left
@@ -810,6 +1070,9 @@ Item {
           bottom: parent.bottom
           leftMargin: Style.space(10)
           rightMargin: Style.space(10)
+          // I4, O11. The strip's clearance is the column's, not the last
+          // child's, so it keeps holding whatever ends up last -- the grid, the
+          // empty note, or the settings section.
           bottomMargin: Style.space(10) + root.stripHeight
         }
         spacing: Style.space(10)
@@ -849,7 +1112,7 @@ Item {
             // The control is taller than its line, so it has to be told where
             // that line goes; at the default the text renders against the top.
             verticalAlignment: TextInput.AlignVCenter
-            placeholderText: "Search apps"
+            placeholderText: "Search apps and settings"
             background: null
             verticalPadding: 0
             foreground: drawerWindow.textOnSurface
@@ -876,7 +1139,18 @@ Item {
           // there -- a Flickable takes the press whether or not it has anything
           // to show at that point. Capped, the sheet's own drag area gets
           // those touches.
-          height: Math.min(parent.height - searchPill.height - Style.space(10),
+          //
+          // Minus whatever the settings section below is taking. Without that
+          // term the grid still measures itself against the whole sheet and the
+          // section is drawn off the bottom of it -- and it is the section, not
+          // the grid, that is under the thumb when a query is showing. Gated on
+          // `visible`: a Column leaves an invisible child out of its layout but
+          // the child still reports a height, so reading it unguarded would
+          // take the caption's height off the grid on every screen with no
+          // query at all.
+          height: Math.min(parent.height - y
+                           - (settingsSection.visible
+                              ? settingsSection.height + parent.spacing : 0),
                            Math.ceil(count / root.columns) * cellHeight)
 
           cellWidth: Math.floor(width / root.columns)
@@ -978,6 +1252,7 @@ Item {
         }
 
         Text {
+          id: emptyNote
           width: parent.width
           horizontalAlignment: Text.AlignHCenter
           topPadding: Style.space(24)
@@ -986,6 +1261,136 @@ Item {
           font.family: Style.font.family
           font.pixelSize: Style.font.body
           color: drawerWindow.subdued
+        }
+
+        // ---------------------------------------------- settings results (O)
+        //
+        // A list and not more grid cells, for two reasons that both come down
+        // to what a cell can hold. A settings row needs to say where it lives
+        // -- "Wi-Fi" under System is a different thing from "Wi-Fi networks"
+        // under Network & internet, and the section name is the only thing
+        // that tells them apart -- and a cell has no room for a second line
+        // under a label that already wraps to two. The other reason is that a
+        // glyph in a grid of app icons reads as an app.
+        //
+        // Not in `appRows` either, and that is not a layout decision: that
+        // property feeds `drawer entries` and `drawer launch`, which
+        // moarchy-store calls and the selftest asserts (L9, L9a). A settings
+        // row in there would be an id the store could be handed and would try
+        // to launch.
+        Column {
+          id: settingsSection
+          width: parent.width
+          spacing: Style.space(4)
+          visible: root.settingsRows.length > 0
+
+          Text {
+            id: settingsCaption
+            leftPadding: Style.space(6)
+            topPadding: Style.space(6)
+            bottomPadding: Style.space(2)
+            text: "SETTINGS"
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            font.weight: Font.DemiBold
+            // Wide enough to read as a divider rather than as a row with a very
+            // short label. Through Style.space like every other length, so it
+            // tracks the theme's scale (style.md A2).
+            font.letterSpacing: Style.space(1)
+            color: drawerWindow.subdued
+          }
+
+          Repeater {
+            id: resultRows
+            model: root.settingsRows
+
+            delegate: Item {
+              id: resultRow
+              required property var modelData
+
+              width: settingsSection.width
+              height: root.settingsRowHeight
+
+              // Like the app cells above: the row has no chrome of its own, so
+              // the veil is the chrome (style.md H8). Guarded on `dragging`,
+              // because this MouseArea is also the sheet's drag handle and
+              // `pressed` stays true for the whole gesture -- unguarded, a
+              // thumb dragging the sheet shut lights every row it passes over
+              // (H6).
+              PressVeil {
+                anchors.fill: parent
+                radius: root.radiusCard
+                on: resultArea.pressed && !root.dragging
+              }
+
+              // Through Ui.OpticalGlyph and in a slot, exactly as the same row
+              // is drawn in Settings: a glyph centred in a box is centred on
+              // its *painted* bounds, not on the em square, and a plain Text
+              // sits visibly high in a slot (style.md B5, E5).
+              Ui.OpticalGlyph {
+                id: resultGlyph
+                // Drawn only when there is one, but the slot is kept either
+                // way: five heterogeneous rows with a ragged left edge read as
+                // five lists, and an invisible Item still holds its anchors.
+                visible: text !== ""
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(16)
+                anchors.verticalCenter: parent.verticalCenter
+                width: root.glyphSlot
+                height: root.glyphSlot
+                text: resultRow.modelData.glyph
+                fontFamily: Style.font.family
+                fontSize: Style.font.iconLarge
+                color: drawerWindow.textOnSurface
+              }
+
+              Text {
+                id: resultSection
+                anchors.right: parent.right
+                anchors.rightMargin: Style.space(14)
+                anchors.verticalCenter: parent.verticalCenter
+                text: resultRow.modelData.section
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.weight: Font.DemiBold
+                color: drawerWindow.subdued
+                elide: Text.ElideRight
+                // Never more than its share: the label is what was searched
+                // for and the section is where it happens to live.
+                width: Math.min(implicitWidth, parent.width * 0.35)
+                horizontalAlignment: Text.AlignRight
+              }
+
+              Text {
+                anchors.left: resultGlyph.right
+                anchors.leftMargin: Style.space(14)
+                anchors.right: resultSection.left
+                anchors.rightMargin: Style.space(10)
+                anchors.verticalCenter: parent.verticalCenter
+                text: resultRow.modelData.label
+                font.family: Style.font.family
+                font.pixelSize: Style.font.body
+                font.weight: Font.DemiBold
+                color: drawerWindow.textOnSurface
+                elide: Text.ElideRight
+              }
+
+              // The same four handlers the app cells carry, for the same
+              // reason: this MouseArea holds the exclusive grab for the whole
+              // gesture, so a downward drag that starts on a settings row can
+              // only close the sheet (H1) if it is this area that drags it.
+              MouseArea {
+                id: resultArea
+                anchors.fill: parent
+                onPressed: mouse => root.sheetPress(this, mouse)
+                onPositionChanged: mouse => root.sheetMove(this, mouse)
+                onReleased: root.sheetRelease()
+                onCanceled: root.sheetCancel()
+                onClicked: if (!root.sheetWasDrag)
+                             root.activateSetting(resultRow.modelData)
+              }
+            }
+          }
         }
       }
 

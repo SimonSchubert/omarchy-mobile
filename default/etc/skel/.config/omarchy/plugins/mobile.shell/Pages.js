@@ -57,6 +57,14 @@
 // `covers` maps an upstream menu id to N(ative) or B(ridged), and is what
 // `omarchy-shell settings coverage` emits.
 //
+// Two fields exist only for the drawer's search (spec/settings.md section O).
+// `keywords` is extra words it matches on, for the cases where the word a
+// person types is not in the label -- "timer" for Reminders, "capture" for
+// Screenshot. It is a handful of rows and not a discipline; a label that says
+// what it is needs none. `unlisted: true` keeps a row out of that search while
+// leaving it in Settings, and one shape needs it: a nav row whose only
+// destination is a page a provider builds, which search cannot see into.
+//
 // ---------------------------------------------------------------------------
 // Glyphs are escapes
 // ---------------------------------------------------------------------------
@@ -118,8 +126,10 @@ var PAGES = {
   // and neither has an upstream id, because a desktop joins a network from a
   // bar applet.
   { id: "wifi", type: "plugin", plugin: "wifi", glyph: "\u{F16BE}", label: "Wi-Fi networks",
+    keywords: "wlan wireless internet connect",
     detailCmd: "omarchy-mobile-network-name wifi" },
   { id: "bluetooth", type: "plugin", plugin: "bluetooth", glyph: "\u{F00AF}",
+    keywords: "pair headset",
     label: "Bluetooth devices" },
   { id: "qr", type: "action", glyph: "\u{F0432}", label: "Wi-Fi QR code",
     when: "[[ $(omarchy-network-status) == wifi* ]]",
@@ -208,10 +218,18 @@ var PAGES = {
 // prints the names omarchy-theme-list does, so the tick needs no translation.
 // omarchy-theme-set recolours the shell in place; it restarts terminals, not
 // the shell, so this screen survives its own write.
+//
+// A `json` provider rather than a `list` one, and that is the whole of what
+// makes this a picker rather than a column of names: each row carries the
+// palette of the theme it names, and the list draws it in those colours. The
+// argument is moarchy.themes' -- "Ristretto" and "Miasma" tell you nothing, so
+// picking by name means applying a theme to find out what it is -- and the
+// rows are built by omarchy-mobile-themes, which explains how it recovers each
+// theme's colors.toml without deriving a name omarchy-theme-set would not
+// recognise. The row's `write` comes built for the same reason.
 "appearance.theme": { title: "Theme",
   reader: "omarchy-theme-current",
-  provider: { list: "omarchy-theme-list" },
-  write: "omarchy-theme-set",
+  provider: { json: "omarchy-mobile-themes rows" },
   rows: [] },
 
 // The rows are paths, so the reader is a path: omarchy-theme-bg-current
@@ -295,7 +313,8 @@ var PAGES = {
     covers: { "setup.default": "N" } },
   { id: "webapps", type: "nav", page: "apps.webapps", glyph: "", label: "Web apps" },
   { id: "tuis", type: "nav", page: "apps.tuis", glyph: "", label: "Terminal apps" },
-  { id: "packages", type: "nav", page: "apps.packages", glyph: "\u{F08C7}", label: "Packages" }
+  { id: "packages", type: "nav", page: "apps.packages", glyph: "\u{F08C7}",
+    keywords: "install remove software pacman", label: "Packages" }
 ]},
 
 "apps.default": { title: "Default apps", rows: [
@@ -535,6 +554,7 @@ var PAGES = {
   // when sshd came up and no key was ever authorized (O14). The detail answers
   // what the switch cannot, and a missing file counts 0 rather than blank (O15).
   { id: "sshkeys", type: "action", glyph: "\u{F0306}", label: "Authorize SSH keys",
+    keywords: "github remote login publickey",
     detailCmd: "echo \"$(grep -c '^[a-z]' $HOME/.ssh/authorized_keys 2>/dev/null || echo 0) authorized\"",
     run: PRESENT + " omarchy-setup-security-sshd" },
   // vm/configure.sh already grants wheel NOPASSWD, so upstream's timed rule
@@ -561,6 +581,7 @@ var PAGES = {
   // means the screen. What it captures is this screen, which is the honest
   // outcome of a window photographing its own output.
   { id: "screenshot", type: "action", glyph: "", label: "Screenshot",
+    keywords: "capture grab screen",
     run: "omarchy-capture-screenshot fullscreen",
     covers: { "trigger.capture.screenshot": "B", "trigger.capture": "N" } },
   { id: "record", type: "nav", page: "tools.record", glyph: "", label: "Screen record",
@@ -571,6 +592,7 @@ var PAGES = {
   // `trigger.reminder.show` is this row: the page is the list, so opening it
   // is the whole of showing them (J1).
   { id: "reminders", type: "nav", page: "tools.reminders", glyph: "\u{F088C}", label: "Reminders",
+    keywords: "timer alarm",
     detailCmd: "omarchy-mobile-reminders summary",
     covers: { "trigger.reminder": "N", "trigger.reminder.show": "N" } },
   { id: "tests", type: "nav", page: "tools.tests", glyph: "\u{F04C5}", label: "Speed tests",
@@ -656,6 +678,7 @@ var PAGES = {
   // pkgs.omarchy.org's aarch64 tree (a 404) and snapshots. It is the plain
   // upgrade, and claiming the id would promise what that script does.
   { id: "update", type: "action", glyph: "\u{F06B0}", label: "Update system",
+    keywords: "upgrade pacman packages",
     detail: "pacman -Syu in a terminal",
     run: "sudo pacman -Syu", launch: "tui" },
   { id: "power", type: "nav", page: "system.power", glyph: "\u{F0425}", label: "Power" }
@@ -767,8 +790,14 @@ var TZ_REGIONS = ["Africa", "America", "Antarctica", "Arctic", "Asia", "Atlantic
 for (var _t = 0; _t < TZ_REGIONS.length; _t++) {
     var _region = TZ_REGIONS[_t];
     PAGES["system.time.zone"].rows.push(
+        // `unlisted`, so the drawer's search does not answer "a" with Asia,
+        // Africa, Arctic and America. The page each of these opens is built by
+        // the provider below, and provider rows are not in the search index by
+        // design (Search.js, O10) -- so these lead only where search cannot
+        // follow. Findable by walking Settings, which is how a region was ever
+        // meant to be reached.
         { id: "r" + _t, type: "nav", page: "system.time.zone." + _region,
-          glyph: "\u{F05F0}", label: _region });
+          glyph: "\u{F05F0}", label: _region, unlisted: true });
     // `label: "city"` keeps the whole zone as the row's value -- what
     // timedatectl takes and what the reader answers -- while showing the half
     // a person is looking for (L2).

@@ -460,7 +460,11 @@ Item {
   // its rows did. `page` is Settings' alone, and names the page to open at.
   readonly property var screens: [wifiScreen, bluetoothScreen, settingsScreen]
 
-  function openScreen(name, returnTo, page): bool {
+  // `extra` is the rest of the payload, for the one caller that needs more than
+  // a page: the drawer's search asks Settings to fire a row without showing
+  // itself (`activate` and `quiet`, settings.md O4). Optional, so the three
+  // callers that want a page and nothing else are unchanged.
+  function openScreen(name, returnTo, page, extra): bool {
     var s = name === "wifi" ? wifiScreen
           : name === "bluetooth" ? bluetoothScreen
           : name === "settings" ? settingsScreen : null
@@ -470,7 +474,9 @@ Item {
     // window may already be up and focused, in which case no toplevel moves
     // and nothing else would ever take the splash down.
     splash.finish()
-    s.open(JSON.stringify({ returnTo: returnTo || "", page: page || "" }))
+    var payload = { returnTo: returnTo || "", page: page || "" }
+    if (extra) for (var k in extra) payload[k] = extra[k]
+    s.open(JSON.stringify(payload))
     return true
   }
 

@@ -8,17 +8,19 @@
 //   0 ---- 40% -------- 75% ---- 100%   of a 0.45 * screen-height travel
 //   app    RECENTS       HOME
 //
-// Two things are not ported yet. Shell apps (K) do not exist here, so a card
-// is a window and nothing else. And the still of the app being put away (J)
-// is left for later: it is decoration on A1-A4, and J8 says the gesture must
-// do the same thing without it.
+// The still of the app being put away (J) is here, and it is a capture of the
+// whole output rather than of a window: wlr-screencopy, the protocol grim
+// uses, which both compositors implement. That is what makes it cheap enough
+// to arm on every gesture, and it is why moarchy could have this section on
+// Sway while it could not have per-card pictures.
 //
-// Cards are icons, not thumbnails, and on this compositor that is a choice
-// rather than a constraint. moarchy could not have them: Sway implements no
-// per-window capture and does not render a hidden workspace. Hyprland
-// implements hyprland-toplevel-export-v1, which is the protocol Quickshell's
-// ScreencopyView takes a Toplevel through -- unmeasured here, and the cost has
-// to be measured before a card grows a picture.
+// Cards themselves are still icons rather than thumbnails, and here that is a
+// choice rather than a constraint. A picture per card needs a capture per
+// window -- Hyprland implements hyprland-toplevel-export-v1, which is what
+// Quickshell's ScreencopyView takes a Toplevel through, and Sway implements
+// nothing of the kind -- and on a 360px screen an icon and a name are more
+// legible than a 62%-scale screenshot anyway. The cost would have to be
+// measured before a card grows one.
 //
 // ToplevelManager, not hyprctl: zwlr-foreign-toplevel-management-v1 gives the
 // app id, the title, which window is active, a closed() signal, and the two
@@ -68,6 +70,90 @@ Item {
     NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
   }
 
+  // ------------------------------------------------------------- the preview
+  //
+  // J. A still of the app you are leaving, shrinking onto the leading card, so
+  // that an up-swipe reads as "put away". Without it A4 (hide) and E3 (close)
+  // look identical from the outside: the app vanishes behind a rising sheet
+  // either way.
+  //
+  // Armed when the drag latches rather than when the finger lands. The capture
+  // needs this surface mapped to build its buffers against, and the surface is
+  // `visible: progress > 0`, so there is nothing to capture into until the
+  // drag has started regardless.
+  property bool previewArmed: false
+
+  // Set the moment the gesture ends, and separate from `previewArmed`, which
+  // stays true long enough afterwards for the fade to play against a surface
+  // that is still mapped.
+  property bool previewReleasing: false
+
+  // 0 at full screen, 1 landed on the card. Follows `progress` directly for
+  // the whole drag -- the preview has to track the finger, not lag it -- so
+  // the Behavior below is gated off except across the two moments that are
+  // genuinely animations: the capture arriving, and a cancelled gesture
+  // putting the app back.
+  property real previewTrack: 0
+  property bool previewEasing: false
+
+  Behavior on previewTrack {
+    enabled: root.previewEasing
+    NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
+  }
+
+  function armPreview(): void {
+    if (root.previewArmed && !root.previewReleasing) return
+    previewDisarm.stop()
+    previewEase.stop()
+    root.previewReleasing = false
+    root.previewEasing = false
+    root.previewTrack = 0
+    root.previewArmed = true
+  }
+
+  // J4. Content arrives a capture behind the arm -- ~145ms on moarchy's phone,
+  // and this VM's renderer is llvmpipe, so no faster. It arrives at full size,
+  // pixel-aligned with the app already on screen, and eases from there to
+  // wherever the finger has got to: what appears mid-drag is a fade between two
+  // pictures of the same thing at the same size, never a jump to a smaller one.
+  function beginPreviewCatchUp(): void {
+    if (!root.previewArmed || root.previewReleasing) return
+    root.previewEasing = true
+    root.previewTrack = root.progress
+    previewEase.restart()
+  }
+
+  // `restore` is the difference between J5 and J6. A gesture that changed
+  // nothing puts the app back at full size; one that hid it leaves the preview
+  // where the finger left it and fades. Always called, including for gestures
+  // that never got a frame: a capture that cannot complete -- a blanked output
+  // delivers no frame and reports no error (J7) -- has to be dropped at the end
+  // of the gesture rather than waited on.
+  function disarmPreview(restore): void {
+    if (!root.previewArmed) return
+    root.previewReleasing = true
+    if (restore) {
+      root.previewEasing = true
+      root.previewTrack = 0
+      previewEase.restart()
+    }
+    previewDisarm.restart()
+  }
+
+  Timer { id: previewEase; interval: 200; onTriggered: root.previewEasing = false }
+
+  // Outlives the fade, so the surface is still mapped while it plays.
+  Timer {
+    id: previewDisarm
+    interval: 260
+    onTriggered: {
+      root.previewArmed = false
+      root.previewReleasing = false
+      root.previewEasing = false
+      root.previewTrack = 0
+    }
+  }
+
   // One sample per frame while a drag is in flight, read back over IPC. A drag
   // that jumped straight to open leaves two or three samples; one that
   // followed the finger leaves a ramp (A1).
@@ -88,6 +174,8 @@ Item {
   onHomeHintChanged: root.noteRetire()
   onDraggingChanged: if (root.dragging) { root.dragTrace = []; root.retireTrace = [] }
   onProgressChanged: {
+    // J1. The preview follows the same number the sheet does.
+    if (root.previewArmed && !root.previewReleasing) root.previewTrack = root.progress
     root.noteRetire()
     if (!root.dragging) return
     var next = root.dragTrace.slice()
@@ -290,6 +378,21 @@ Item {
 
     function retireTrace(): string { return root.retireTrace.join(" ") }
 
+    // J1-J4. The shrink is over in a few hundred milliseconds, so like
+    // dragTrace this is the record it leaves rather than something a poll
+    // could catch mid-gesture.
+    function preview(): string {
+      return "progress=" + Math.round(root.progress * 100)
+           + " armed=" + root.previewArmed
+           + " releasing=" + root.previewReleasing
+           + " content=" + shot.hasContent
+           + " track=" + Math.round(root.previewTrack * 100)
+           + " scale=" + Math.round(appPreview.currentScale * 100)
+           + " landed=" + Math.round(appPreview.landedScale * 100)
+           + " opacity=" + Math.round(appPreview.opacity * 100)
+           + " cardh=" + Math.round(cards.height)
+    }
+
     // One line per card, so a dismissal is assertable by counting (E1, E3). A
     // screen prints its own id rather than its app id, which names the shell
     // process and not the screen (K9).
@@ -350,7 +453,7 @@ Item {
     // won none -- the trace stayed at 5 samples -- and a card from an earlier
     // gesture showed through the shade in the next screenshot. Hyprland's own
     // fade on map, the other cost, is off for this namespace (hypr/mobile.lua).
-    visible: root.progress > 0 || root.opened
+    visible: root.progress > 0 || root.opened || root.previewArmed
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
 
@@ -599,6 +702,83 @@ Item {
           }
         }
       }
+    }
+
+    // ------------------------------------------------------------ J. preview
+    //
+    // Above the sheet, so handing off to card 0 is this fading out to reveal
+    // the card already drawn underneath rather than two things swapping. Above
+    // the scrim too, so the preview keeps its brightness while the workspace
+    // behind it dims (J9) -- the other order makes the preview look like it
+    // brightens the screen when it arrives mid-drag.
+    //
+    // A ScreencopyView handles no input, so sitting on top costs the cards and
+    // the dismiss-tap nothing. The surface's mask is the other half of that:
+    // it is empty for the whole drag (nothing here is tappable until the
+    // carousel settles), so the preview cannot take a touch even in principle.
+    Item {
+      id: appPreview
+      anchors.fill: parent
+      visible: root.previewArmed
+
+      readonly property bool shown:
+        root.previewArmed && !root.previewReleasing && shot.hasContent
+
+      // Two opacities, deliberately. `fadeIn` hides the capture's arrival and
+      // is animated; `fadeOut` is the hand-off to card 0 and is a straight
+      // function of the drag. Folding them into one property with a Behavior
+      // would put that animation on every frame of the drag, and the preview
+      // would trail the finger instead of following it.
+      property real fadeIn: appPreview.shown ? 1 : 0
+      Behavior on fadeIn { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+
+      readonly property real fadeOut:
+        Math.max(0, Math.min(1, 1 - (root.progress - 0.82) / 0.18))
+
+      opacity: appPreview.fadeIn * appPreview.fadeOut
+
+      // J3. Where it lands: inside card 0's slot, uniform, fitted to whichever
+      // of the card's dimensions runs out first. On this 1:2 panel that is the
+      // height, so it settles a little narrower than the card.
+      readonly property real landedScale: Math.min(
+        cards.cardWidth / Math.max(1, recentsWindow.width),
+        cards.height / Math.max(1, recentsWindow.height))
+
+      readonly property real currentScale:
+        1 - (1 - appPreview.landedScale) * root.previewTrack
+
+      ScreencopyView {
+        id: shot
+        anchors.fill: parent
+        live: false
+        paintCursor: false
+
+        // The whole output, uncropped and unscaled: at track 0 it is
+        // pixel-aligned with what is already on screen, which is the entire
+        // reason its arrival can be invisible (J4). Cropping the bar and the
+        // strip out would cost that alignment for a band the snapshot shares
+        // with the screen anyway.
+        //
+        // The output, not the toplevel. wlr-screencopy is what grim uses and
+        // both compositors implement it, where the per-window protocol is
+        // Hyprland's alone -- and one capture of the screen is one capture
+        // however many windows are behind it.
+        captureSource: root.previewArmed ? recentsWindow.screen : null
+
+        onHasContentChanged: if (hasContent) root.beginPreviewCatchUp()
+      }
+
+      transform: [
+        Scale {
+          origin.x: appPreview.width / 2
+          origin.y: appPreview.height / 2
+          xScale: appPreview.currentScale
+          yScale: appPreview.currentScale
+        },
+        // Card 0's centre sits one verticalCenterOffset above the middle of
+        // the sheet, so the preview has to arrive there and not at the centre.
+        Translate { y: -Style.space(14) * root.previewTrack }
+      ]
     }
   }
 }

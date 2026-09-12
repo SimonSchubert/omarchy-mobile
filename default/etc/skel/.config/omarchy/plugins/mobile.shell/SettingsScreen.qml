@@ -218,6 +218,69 @@ Item {
     return root.inputValue(String(row.requires)) !== ""
   }
 
+  // ------------------------------------------------- a row's own palette
+  //
+  // The theme picker's rows arrive carrying the colours they name
+  // (omarchy-mobile-themes), and are drawn in them: the card is the theme's
+  // background, the label its foreground, the tick its accent. That is
+  // moarchy's tile flattened into a row, and it is what makes this a picker of
+  // colours rather than a column of names.
+  //
+  // Decided here rather than in SettingsRow, which takes every colour as a
+  // property precisely so the list can decide the palette once per row. A row
+  // with no swatch answers the page's own colours, which is every other row on
+  // every other page.
+  function rowSwatch(row) {
+    return (row && row.swatch) ? row.swatch : null
+  }
+
+  function rowFill(row) {
+    var sw = root.rowSwatch(row)
+    return sw ? sw.background : root.container
+  }
+
+  function rowInk(row) {
+    var sw = root.rowSwatch(row)
+    return sw ? sw.foreground : root.textOnSurface
+  }
+
+  // Measured against the theme's own ground, which is the point of computing it
+  // rather than reaching for one alpha: a flat 0.6 falls below AA on a third of
+  // these palettes, and this list now paints all 22 of them.
+  //
+  // Through Qt.color first, and that is not decoration. A swatch arrives as
+  // JSON, so its colours are strings, and Theme.readableOn does channel
+  // arithmetic -- it reads `.r` off its arguments. Handed the string it reads
+  // undefined, the luminance is NaN, the comparison is false for every step of
+  // the walk and the function returns the foreground unchanged. The symptom
+  // would be a second line at full strength on 22 rows and no error anywhere.
+  // Every other swatch colour here is assigned to a `color` property, which
+  // coerces on its own; this one is the exception because it is arithmetic.
+  function rowSubdued(row) {
+    var sw = root.rowSwatch(row)
+    return sw ? Theme.readableOn(Qt.color(sw.background), Qt.color(sw.foreground),
+                                 0.55, 4.5)
+              : root.subdued
+  }
+
+  function rowAccent(row) {
+    var sw = root.rowSwatch(row)
+    return sw ? sw.accent : root.accent
+  }
+
+  // A swatched row needs an edge and no other row does: a theme whose
+  // background is the page's own -- the one in use, always -- would otherwise
+  // have no boundary at all and read as a gap in the list.
+  function rowBorder(row) {
+    var sw = root.rowSwatch(row)
+    return sw ? Util.alpha(sw.foreground, 0.25) : "transparent"
+  }
+
+  function rowChips(row) {
+    var sw = root.rowSwatch(row)
+    return (sw && sw.chips) ? sw.chips : []
+  }
+
   function rowChecked(row) {
     if (!row) return false
     if (row.type === "switch") {
@@ -247,26 +310,135 @@ Item {
   // column inline and ask nothing.
   function rowDetail(row) {
     if (!row) return ""
+    // The write this row asked for is still running. Ahead of everything else:
+    // the row is the only place that can say so, and what it would otherwise
+    // show is a value that has not changed yet.
+    if (row.type === "choice" && root.applyingValue !== ""
+        && root.applyingValue === String(row.value !== undefined ? row.value : ""))
+      return "Applying\u2026"
     // A switch's `read` answers `checked`, not the second line.
     if (row.type === "switch") return String(row.detail || "")
     if (row.read || row.detailCmd) return String(root.valueMap[row.id] || "")
     return String(row.detail || "")
   }
 
+  // ----------------------------------------------------------- the quiet open
+  //
+  // O4. A row activated from the drawer's search runs without this screen ever
+  // appearing. "Not appearing" and not "appearing briefly": Screenshot is one
+  // of those rows, and the surface it would photograph is the one the drawer
+  // was just on.
+  //
+  // So the page is stood up, its guards are read, the row is fired -- and only
+  // then is it decided whether there is anything to look at. A row that ran
+  // somewhere else leaves nothing (dropQuiet); one that pushed a page, armed a
+  // question or is a kind whose whole answer is its own screen leaves the
+  // screen up (showQuiet).
+  property bool quietOpen: false
+
+  // The stack and the mapping this open found, so a quiet one that leaves
+  // nothing can put both back. A quiet open from the drawer must not close a
+  // Settings that was sitting on another workspace, nor move it off its page.
+  property var quietStack: []
+  property bool quietWasMapped: false
+
+  // The row to fire once the page it lives on has answered. Cleared by
+  // settlePending, which is the only thing that reads it.
+  property string pendingRow: ""
+
+  // There is something to look at after all.
+  function showQuiet() {
+    if (!root.quietOpen) return
+    root.quietOpen = false
+    // A2, deferred from open(): the sheets are put away by the screen that
+    // actually appears, not by one that was only ever going to run a command.
+    if (root.host) root.host.hideSheets()
+    settingsWindow.show()
+  }
+
+  // Nothing to look at: the row is already running somewhere else. Put back the
+  // stack the open found, and leave the window as mapped or unmapped as it was.
+  function dropQuiet() {
+    if (!root.quietOpen) return
+    root.quietOpen = false
+    root.stack = root.quietStack
+    root.resetReadState()
+    root.resetFields()
+    if (root.quietWasMapped) return
+    root.close()
+  }
+
+  // After activating this row from a quiet open, is there a screen worth
+  // showing? Derived from the row rather than from what activate() did, because
+  // under `dryRun` it does nothing and the answer must be the same either way.
+  //
+  // `inline` counts as nothing to show even though it keeps the screen up
+  // normally: what it keeps up is the page you were standing on, and from a
+  // quiet open you were not standing anywhere. The command is running and the
+  // notification is the feedback.
+  function quietLeavesNothing(row) {
+    if (!row) return false
+    if (row.type === "plugin") return true
+    return row.type === "action" || row.type === "link"
+  }
+
+  // A quiet open holds a window the user cannot see. Every path out of
+  // settlePending() ends it, but a guard batch that never answers is a path out
+  // of nothing -- and the symptom would be a drawer tap that appears to do
+  // nothing at all, which is worse than either outcome it is choosing between.
+  // So the wait has a floor: give up and show the page.
+  Timer {
+    id: quietTimeout
+    interval: 3000
+    onTriggered: {
+      if (!root.quietOpen) return
+      root.pendingRow = ""
+      root.showQuiet()
+    }
+  }
+
+  // O4-O9. Called once the page the row lives on has answered its guards, from
+  // every path that ends a refresh: the batch's own handler, and the early
+  // return refresh() takes on a page with nothing to ask.
+  function settlePending() {
+    if (!root.pendingRow) return
+    quietTimeout.stop()
+    var id = root.pendingRow
+    root.pendingRow = ""
+
+    var row = root.rowById(id)
+    // Gone, hidden by its guard, or not ready. The drawer offered it, so doing
+    // nothing at all would be exactly the silent failure O9 exists to stop:
+    // show the page and let the screen explain itself.
+    if (!row || !root.rowVisible(row) || !root.rowEnabled(row)) {
+      root.showQuiet()
+      return
+    }
+
+    root.activate(row)
+
+    // A question was armed rather than answered. Arming one is only worth
+    // anything if somebody sees it (O8).
+    if (root.confirmText !== "") { root.showQuiet(); return }
+
+    if (root.quietLeavesNothing(row)) { root.dropQuiet(); return }
+
+    root.showQuiet()
+  }
+
   // ------------------------------------------------------------ lifecycle
   //
   // Payload fields, all optional: `page` opens at that page, `returnTo` names
-  // the surface the root page's back chevron hands back to, and `resume`
-  // asks for the screen as it was left.
+  // the surface the root page's back chevron hands back to, `resume` asks for
+  // the screen as it was left, and `activate` names a row to fire once the page
+  // has answered -- with `quiet`, without showing the screen to do it (O4).
   function open(payloadJson) {
-    // A2. Sheets only: Wi-Fi and Bluetooth are windows on their own workspaces,
-    // and putting them away would be closing them.
-    if (root.host) root.host.hideSheets()
-
     root.returnTo = ""
     var start = "root"
     var named = false
     var resume = false
+    var pending = ""
+    var quiet = false
     try {
       var payload = JSON.parse(String(payloadJson || "{}")) || ({})
       if (payload.returnTo) root.returnTo = String(payload.returnTo)
@@ -275,9 +447,26 @@ Item {
         named = true
       }
       resume = payload.resume === true
+      if (payload.activate) pending = String(payload.activate)
+      // `quiet` with no row to fire is a window that would never map and never
+      // do anything, so the two are one option.
+      quiet = payload.quiet === true && pending !== ""
     } catch (e) {
       // A malformed payload is not worth refusing to open over.
     }
+
+    // A2. Sheets only: Wi-Fi and Bluetooth are windows on their own workspaces,
+    // and putting them away would be closing them. Held back for a quiet open,
+    // which has no screen to make room for -- showQuiet() does it if one turns
+    // out to be needed.
+    if (!quiet && root.host) root.host.hideSheets()
+
+    // Read before the stack is rebuilt below, so the way back is the state this
+    // open found rather than the one it made.
+    root.quietWasMapped = root.opened
+    root.quietStack = root.stack
+    root.quietOpen = quiet
+    root.pendingRow = pending
 
     // A7, K12. A summon that names no page and finds the window already mapped
     // is somebody asking for the screen they were on -- the gear tapped from
@@ -300,7 +489,8 @@ Item {
     root.confirmText = ""
     root.confirmRow = null
     // show() focuses the window when it is already mapped (K12).
-    settingsWindow.show()
+    if (!quiet) settingsWindow.show()
+    if (quiet) quietTimeout.restart(); else quietTimeout.stop()
     // Deferred, always. See note 1 in the header.
     Qt.callLater(root.refresh)
   }
@@ -400,7 +590,9 @@ Item {
       return
     }
     var script = Guards.build(root.currentRows, p.reader || "")
-    if (!script) return
+    // A page with nothing to ask has already answered, so a quiet open's row
+    // settles here rather than waiting for a batch that will never run.
+    if (!script) { root.settlePending(); return }
     root.generation += 1
     guardProc.wanted = root.generation
     if (guardProc.running) guardProc.running = false
@@ -507,6 +699,7 @@ Item {
         root.pageValue = parsed.value["__page"] !== undefined
                          ? String(parsed.value["__page"]) : ""
         root.revealChecked()
+        root.settlePending()
       }
     }
   }
@@ -571,12 +764,31 @@ Item {
   // half applied.
   property string pendingChoice: ""
 
+  // Which row's write is in flight, by value, so the row can say so. A theme
+  // costs several seconds -- omarchy-theme-set regenerates every app's
+  // template -- and for that whole time the tick is still on the old theme,
+  // correctly (D4), with nothing to say the tap landed.
+  //
+  // The rows around it are deliberately NOT dimmed or disabled, which is where
+  // this parts company with moarchy's picker. Dimming is what moarchy does
+  // because it refuses a second tap while a write runs; this queues it instead
+  // (the note above), and a row that is still going to act must not look like
+  // one that cannot.
+  property string applyingValue: ""
+  property string queuedValue: ""
+
   function writeChoice(row) {
     var cmd = root.commandFor(row)
     if (!cmd) return
     root.lastLaunch = cmd
     if (root.dryRun) return
-    if (choiceProc.running) { root.pendingChoice = cmd; return }
+    var value = String(row.value !== undefined ? row.value : "")
+    if (choiceProc.running) {
+      root.pendingChoice = cmd
+      root.queuedValue = value
+      return
+    }
+    root.applyingValue = value
     choiceProc.command = ["bash", "-lc", cmd]
     choiceProc.running = true
   }
@@ -587,10 +799,14 @@ Item {
       if (root.pendingChoice !== "") {
         var next = root.pendingChoice
         root.pendingChoice = ""
+        root.applyingValue = root.queuedValue
+        root.queuedValue = ""
         choiceProc.command = ["bash", "-lc", next]
         choiceProc.running = true
         return
       }
+      root.applyingValue = ""
+      root.queuedValue = ""
       Qt.callLater(root.refresh)
     }
   }
@@ -959,7 +1175,7 @@ Item {
             SettingsRow {
               width: parent.width
               height: Style.space(58)
-              color: root.container
+              color: root.rowFill(slot.modelData)
               rowType: slot.modelData.type
               glyph: slot.modelData.glyph || ""
               label: slot.modelData.label || ""
@@ -970,9 +1186,11 @@ Item {
               numeric: slot.modelData.numeric === true
               inputText: slot.modelData.type === "input"
                          ? root.inputValue(slot.modelData.id) : ""
-              textColor: root.textOnSurface
-              subduedColor: root.subdued
-              accentColor: root.accent
+              textColor: root.rowInk(slot.modelData)
+              subduedColor: root.rowSubdued(slot.modelData)
+              accentColor: root.rowAccent(slot.modelData)
+              borderColor: root.rowBorder(slot.modelData)
+              chips: root.rowChips(slot.modelData)
               onActivated: root.activate(slot.modelData)
               onEdited: function (value) { root.setInput(slot.modelData.id, value) }
               // The id, not a bool: two fields on one page, and clearing the

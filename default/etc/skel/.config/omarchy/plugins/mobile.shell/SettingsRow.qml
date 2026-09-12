@@ -37,6 +37,24 @@ Rectangle {
   property color subduedColor: "grey"
   property color accentColor: "white"
 
+  // The theme picker's rows are painted in the theme they name, so they need an
+  // edge: the row for the theme in use is the page's own background, and with
+  // no border it reads as a gap in the list rather than as a row. Transparent
+  // everywhere else, which is every other row on every other page.
+  property color borderColor: "transparent"
+
+  // The theme's own palette, drawn where the glyph would go. A theme has no
+  // glyph worth having -- its colours are what it is -- and putting them in the
+  // glyph's slot is what keeps every label on this list starting at the same x.
+  property var chips: []
+
+  readonly property bool hasChips: card.chips !== null && card.chips !== undefined
+                                   && card.chips.length > 0
+
+  // One slot, either a glyph or the chips, so the column beside it is measured
+  // the same way for both.
+  readonly property bool hasLeading: card.glyph !== "" || card.hasChips
+
   component PressVeil: Veil { ink: card.textColor }
 
   // Matches the bar and the other screens (Bar.qml carries the measurements
@@ -60,6 +78,8 @@ Rectangle {
   height: Style.space(58)
   radius: card.radiusCard
   opacity: card.rowEnabled ? 1 : 0.45
+  border.width: card.borderColor.a > 0 ? Math.max(1, Style.space(1)) : 0
+  border.color: card.borderColor
 
   // The card's first child, so it sits over the fill and under everything the
   // row draws (docs/spec/style.md H8).
@@ -86,6 +106,32 @@ Rectangle {
       color: card.textColor
     }
 
+    // Six colours in the glyph's slot, three across and two down. Rounded, and
+    // spaced, because six touching rectangles read as one striped block.
+    Grid {
+      id: chipGrid
+      anchors.verticalCenter: parent.verticalCenter
+      visible: card.hasChips
+      width: card.glyphSlot
+      columns: 3
+      rows: 2
+      spacing: Math.max(1, Style.space(2))
+
+      readonly property int cell:
+        Math.floor((card.glyphSlot - 2 * chipGrid.spacing) / 3)
+
+      Repeater {
+        model: card.hasChips ? card.chips : []
+        Rectangle {
+          required property var modelData
+          width: chipGrid.cell
+          height: chipGrid.cell
+          radius: Math.max(1, Style.space(2))
+          color: modelData
+        }
+      }
+    }
+
     // input. The placeholder is the label -- a 58px row has no room for both.
     //
     // Behind a Loader: this is the delegate for every row on every page, and an
@@ -97,7 +143,7 @@ Rectangle {
       id: fieldSlot
       active: card.rowType === "input"
       visible: active
-      width: parent.width - (card.glyph !== "" ? card.glyphSlot + Style.space(14) : 0)
+      width: parent.width - (card.hasLeading ? card.glyphSlot + Style.space(14) : 0)
              - trailing.width
       height: parent.height
       sourceComponent: fieldComponent
@@ -108,7 +154,7 @@ Rectangle {
       anchors.verticalCenter: parent.verticalCenter
       // Exact rather than estimated: a label that runs under the switch reads
       // as a layout bug even when the elide is doing its job.
-      width: parent.width - (card.glyph !== "" ? card.glyphSlot + Style.space(14) : 0)
+      width: parent.width - (card.hasLeading ? card.glyphSlot + Style.space(14) : 0)
              - trailing.width
       spacing: 0
 

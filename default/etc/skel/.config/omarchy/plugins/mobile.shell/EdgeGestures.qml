@@ -222,6 +222,33 @@ Item {
     root.lastT = now
   }
 
+  // ------------------------------------------------------------- J. preview
+  //
+  // The carousel paints a still of the app being put away (spec/gestures.md J).
+  // Armed at the latch rather than at the press: the capture needs the
+  // carousel's surface mapped, and that only happens once progress leaves 0.
+  function armPreview(): void {
+    if (root.dragMode !== "recents" || !root.carousel) return
+
+    // A6 -- a second drag with the carousel already up -- is a drag over the
+    // switcher, and the app it would capture is already behind it.
+    if (root.carousel.opened) return
+
+    // K11. A shell app is a window, so this one question covers Settings,
+    // Wi-Fi and Bluetooth too. Nothing to picture means nothing to arm: a
+    // bare home screen reaches here only through A9, which stops the gesture
+    // earlier, but a workspace whose window has just closed does not.
+    if (!root.host.focusedToplevel()) return
+    root.carousel.armPreview()
+  }
+
+  // `restore` true means the gesture changed nothing and the app goes back to
+  // full size (J5); false means it was put away and the preview stays where
+  // the finger left it (J6).
+  function disarmPreview(restore): void {
+    if (root.carousel) root.carousel.disarmPreview(restore)
+  }
+
   // A7, A8. A sheet is covering the screen, so the release clears it rather
   // than raising anything -- the shade and the drawer both. The carousel is not
   // in this list: a second drag continues it into the home band (A6) rather
@@ -286,6 +313,13 @@ Item {
     if (root.dragMode === "none" && root.pendingMode === "recents"
         && root.dy < -root.slop && Math.abs(root.dy) > Math.abs(root.dx)) {
       root.dragMode = "recents"
+      // Before `dragging`, and that order is the whole of A6. The carousel's
+      // `opened` is `progress >= 1 && !dragging`, so setting dragging first
+      // makes an already-open carousel read shut and armPreview's A6 guard
+      // never fires -- measured: a second drag over the switcher armed a
+      // capture and took it. Invisible, because the preview's fade is zero
+      // past 82% of the travel, and wasted on every second drag.
+      root.armPreview()
       root.carousel.dragging = true
     }
 
@@ -319,11 +353,18 @@ Item {
       // of snapping it to 0 while progress is still on its way out (F4).
       root.carousel.dragging = false
       if (root.pull >= root.homeCommit) {
+        // J6. The app was put away, so the preview stays where the finger
+        // left it and fades -- it has already landed on the card by here.
+        root.disarmPreview(false)
         root.carousel.close()
         root.host.goHome()
       } else if (root.pull >= root.recentsCommit || root.velocity >= root.fling) {
+        root.disarmPreview(false)
         root.carousel.open()
       } else {
+        // A2, J5: nothing happened, so the app comes back at full size rather
+        // than appearing to have been put somewhere.
+        root.disarmPreview(true)
         root.carousel.close()
       }
     } else {
@@ -335,6 +376,10 @@ Item {
   function stripCanceled(): void {
     if (root.dragMode === "recents") {
       root.carousel.dragging = false
+      // A dropped touch changed nothing, so the app goes back (J5). This is
+      // also the path the watchdog takes, and so the one that catches a
+      // capture which never arrived (J7, J8).
+      root.disarmPreview(true)
       root.carousel.close()
     }
     root.reset()

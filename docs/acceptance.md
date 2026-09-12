@@ -55,7 +55,7 @@ Hyprland 0.56.2 at 360x720 logical.
 | --- | --- | --- |
 | B1 | pass | `hl.dsp.focus({ workspace = "e+1" })`, which wraps, as `next_on_output` did |
 | B2 | pass | A 150px swipe drifting 50px up |
-| B3 | pass | Checked for the drawer and for the shade. There is no theme picker yet |
+| B3 | pass | Checked for the drawer and for the shade, which are the two sheets there are. The theme picker is a page of a window here rather than a sheet of its own (K10), so there is no third surface for this to clear |
 
 ### C. Strip — press and hold
 
@@ -155,7 +155,22 @@ already does, for the same measured reason.
 
 | AC | Status | Note |
 | --- | --- | --- |
-| J1–J10 | todo | Not built. The constraint behind J10 ("no window thumbnails, except the app you are leaving") is Sway's: Hyprland implements `hyprland-toplevel-export-v1`, so every card *could* carry a picture. Measure the cost before deciding |
+| J1 | holds | Built. Measured mid-drag with a held gesture: at `progress=50` the preview reads `armed=true content=true track=50 scale=78`, and 78 is exactly `1 - (1 - 0.56) * 0.5`. The shrunken still is on screen in the screenshot, the app's own clock and keyboard inside it |
+| J2 | holds | `live: false`, so the capture is one frame per gesture. The cost is not measured here -- moarchy's numbers are a Mali-400's |
+| J3 | holds | `landed=56` and `cardh=403` agree exactly: `0.56 * 720 = 403`, the card slot's height. Read off `recents preview`, not from a pixel |
+| J4 | holds | Enters at `scale=100` and eases from wherever the finger has got to, through `beginPreviewCatchUp`. That it never draws before `hasContent` is by construction -- `shown` requires it -- and is not separately checked |
+| J5, J6 | holds | The two `disarmPreview` calls, `true` on a spring-back and on a cancel, `false` past either commit. The 200ms restore itself is too short to sample from outside, as `homeHint`'s is (F4) |
+| J7, J8 | holds | The disarm is unconditional and runs on every path out, the watchdog included, so a capture that never arrives is dropped rather than waited on. Not exercised against a blanked output |
+| J9 | holds | Declaration order: `appPreview` is the last child of the surface, above both the scrim and the sheet |
+| J10 | holds | **Changed:** the reason, not the answer. Only the app you are leaving gets a picture, and here that is a choice -- Hyprland implements `hyprland-toplevel-export-v1`, so a card *could* carry one. Sway implements nothing of the kind, which is why it was moarchy's constraint. The cost of a capture per card is still unmeasured |
+
+**Not moarchy's mechanism, and it is the same one.** The capture is of the whole
+output through `wlr-screencopy` -- what `grim` uses -- and not of a window. That
+is why moarchy could have this section on Sway at all, and it is what makes the
+arrival invisible: at track 0 the still is pixel-aligned with what is already on
+screen. The dmabuf error this VM logs at startup (`Failed to find render device:
+no render or primary node found`) does not stop it; `content=true` on every
+gesture measured.
 
 ### K. Settings is an app
 
@@ -208,7 +223,7 @@ rather than five, which is the half of that this file can fix.
 | --- | --- | --- |
 | The strip reserves 20px off every window | holds | `hyprctl monitors`: `reserved: 0 26 0 20`. **Changed:** the band surface reserves it, from Bottom, and the strip only draws the pill (I6) |
 | Only the left edge may take touch ahead of an app | holds | Nothing takes touch ahead of an app yet; the edge surface's input region is the strip's band at rest (`gestures geometry`: `input=band`) |
-| No window thumbnails except the app you are leaving | open | See J |
+| No window thumbnails except the app you are leaving | holds | The preview is the one picture of a window this shell draws, and every card is icon and title (J10). On this compositor that is a decision rather than a limit |
 | One app per workspace | holds | A window rule, not a daemon: `hypr/mobile.lua` |
 
 ---
@@ -319,7 +334,7 @@ command. The helpers moarchy calls `bin/moarchy-*` are `omarchy-mobile-*` in
 | B5 | todo | **Not reachable unpatched**, unlike the rest of G. moarchy dismisses a vendored popup by reading the host's `openPanelIds` and calling `shell.hide(id)` for any `omarchy.` id, and gets both by patching `shell.qml` to hand its own namespace the trusted host. Omarchy 4.0.3's third-party facade has no `openPanelIds` at all, and its `_hide` resolves every request to the caller's own id (`owns(requestedId) ? ... : false`, shell.qml:719). So back cannot see a vendored popup here, let alone put one away. The other half of B5's premise still holds -- `HyprlandFocusGrab` is stubbed, so none of them dismisses on tap-outside |
 | B4 | partial | The carousel rises over Settings with its card leading (the K6 check does exactly that); the home band leaving it running is not checked |
 | B6 | pass | |
-| B7 | holds | **Changed:** Theme is a page here, not a plugin, so it returns to where it was opened from by being popped |
+| B7 | holds | **Changed:** Theme is a page here, not a plugin, so it returns to where it was opened from by being popped. Its rows are drawn in the themes they name -- see D1 |
 | B8 | pass | Chromium's and Firefox's rows hidden with neither installed, GNOME Web's drawn; and Lock, below |
 | B9 | pass | |
 | C1 | pass | Stay awake against `omarchy-toggle-idle status` |
@@ -331,6 +346,7 @@ command. The helpers moarchy calls `bin/moarchy-*` are `omarchy-mobile-*` in
 | C8 | pass | |
 | C9 | partial | Not activated for real, since it changes sshd; E6 shows a bridged terminal leaving Settings running |
 | D1 | pass | DNS, Theme against `omarchy-theme-current`, and Browser against the desktop id the image ships in `mimeapps.list` |
+| D1 (the picker) | holds | **Added here**, and settings.md has no clause for it: each of the 22 theme rows is painted in the theme it names -- its `background` as the card, its `foreground` as the label, its `accent` as the tick, and six of its colours where the glyph would go. moarchy's argument for a picker of colours rather than a column of names, on a list instead of a grid of tiles. The rows come from `omarchy-mobile-themes`, a `provider.json`, and a theme whose `colors.toml` cannot be read still gets a row with no palette on it. Checked in the guest: all 22 answer a background and six chips, the ticked row is the one `omarchy-theme-current` names (s.D1, unchanged), and the row whose write is in flight reads "Applying…" until it exits. Not dimmed or disabled while it runs, unlike moarchy's tiles: this queues a second tap rather than refusing it (D4), and a row that is still going to act must not look like one that cannot |
 | D2 | holds | A choice ticks only on an exact match with the reader. Not checked with a stub |
 | D3 | pass | **Changed:** the GNOME Web row is the image's default browser now, so the mechanism is exercised rather than merely present: `omarchy-default-browser` has no name for Epiphany and prints the raw `org.gnome.Epiphany.desktop`, which is the row's `readValue`, while its `write` goes around that script to `xdg-settings` |
 | D4 | pass | The default terminal, written as the one it already is. Choice writes re-read when the write exits, not when it starts |
@@ -370,8 +386,20 @@ command. The helpers moarchy calls `bin/moarchy-*` are `omarchy-mobile-*` in
 | M4 | todo | Not flipped for real |
 | N1 | holds | |
 | N2, N3 | pass | **Changed:** it names Omarchy and omarchy-mobile, this project's counterpart to moarchy |
-| O1–O12 | todo | Search from the drawer is not ported |
+| O1 | holds | `drawer type ""` answers no results, and `drawer entries` lists fourteen `.desktop` ids and nothing else |
+| O2 | holds | 1..5 results, every field filled. Stronger than the criterion asks: all 144 indexed rows carry a glyph, a label and a section, so no query can produce an empty field. The glyph is the row's own or the one its page is reached by |
+| O3 | holds | Every key in `drawer results` resolves: `settings rowsOn <pageId>` lists its `<rowId>`, walked over the whole index as well as over live queries |
+| O4 | holds | **By a real tap**, with `lastLaunch` primed to something else first so the evidence could not be stale: a tap on the Screenshot result left `lastLaunch` = `omarchy-capture-screenshot fullscreen`, `settings state` = `closed`, `settings running` = `stopped` -- it never mapped -- and the drawer closed. `running` is the load-bearing half |
+| O5 | holds | **By a real tap** on the System result: `settings state` = `open`, `page` = `system`, one `org.quickshell` window titled "Settings — System". Over IPC, `tools.reminders/new` lands on `tools.reminders.new`, the screen and not the page the row lives on |
+| O6 | holds | `display/nightlight` opens `display` and `settings value nightlight` still reads `off` |
+| O7 | holds | Both halves: `drawer type screenshot` leaves no guarded row in `matches`, so `Guards.build` answers "" and nothing forks; `drawer type qr` leaves exactly one (`net/qr guarded`), and with no Wi-Fi device its guard says no, so `results` is empty while `matches` is not |
+| O8 | holds | With a reminder set so the guard says yes: `settings confirmText` reads "Clear every reminder?" with the page shown and nothing run. Withheld and answering `hidden` with no reminders set, which is O7 from the other side |
+| O9 | holds | `tools.reminders.new/custom` with nothing typed opens `tools.reminders.new` and leaves `lastLaunch` untouched -- read as the *previous* command, so an untouched value is visible rather than assumed. `matches` ranks the screen above the inert row |
+| O10 | holds | `drawer type europe` answers nothing, and no query names a city, a font, a wallpaper or a theme. **The spec's arrow is stale here, and moarchy's code is what this follows:** it says "`europe` answers the region nav row", but those eleven rows carry `unlisted: true` in both projects, because a row that leads only where search cannot follow is scaffolding. So the answer is nothing at all |
+| O11 | holds | `gap` >= `strip` with results showing, at both heights: 30 against 20 with five results and the keyboard down, and 30 against 20 with four and the keyboard up. The inset is the sheet column's rather than the last child's, so it holds whatever ends up last |
+| O12 | holds | No `switch` or `choice` row in the whole index has a label matching H1's regex. Checked over the index rather than over a query, so it holds for every query |
 | O13, O14 | holds | Update system and Authorize SSH keys are rows, claiming no upstream id |
+| Search, generally | holds | `Search.js` is moarchy's, unchanged but for the file references. The quiet open O4 needs is `SettingsScreen.qml`'s -- `quietOpen`, `settlePending` and a 3s floor under a guard batch that never answers. None of it has a `vm-selftest.sh` line yet |
 | O15 | pass | |
 | P1–P11 | todo | The coding-agent tile needs mise |
 | Lock | changed | Not in settings.md. Lock is hidden unless `passwd -S` reads `P`: upstream's lock is the shell's lock screen, which asks PAM, and this image locks the account password. The selftest checks it (`s.B8`) |
@@ -379,6 +407,16 @@ command. The helpers moarchy calls `bin/moarchy-*` are `omarchy-mobile-*` in
 ---
 
 ## Found on the way
+
+**`opened` is false the moment a drag latches, and A6 read it.** The carousel's
+`opened` is `progress >= 1 && !dragging`, so the order of two lines at the latch
+decides whether an already-open carousel still looks open: setting `dragging`
+first makes it read shut, and the preview's A6 guard -- "a second drag is a drag
+over the switcher, and the app it would capture is already behind it" -- never
+fires. Measured with a held second drag: `armed=true content=true`, a capture
+taken for nothing. Invisible, because the preview's fade is zero past 82% of the
+travel, which is exactly why it would not have been noticed. moarchy arms before
+`setTargetProgress`, and that is the whole of the difference.
 
 **A drag goes to the topmost surface under the finger.** moarchy's answer to
 A8 cuts the pill's band out of the open shade's input region so that an up-swipe
