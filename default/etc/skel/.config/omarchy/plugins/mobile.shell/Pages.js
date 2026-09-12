@@ -318,11 +318,30 @@ var PAGES = {
 ]},
 
 "apps.default": { title: "Default apps", rows: [
+  // Each of the three carries the disjunction of its page's row guards, which
+  // is F8: a `when:` is a shell string and cannot see the page it names, so a
+  // page guarded row by row needs those guards repeated on the row that opens
+  // it, or F2 goes -- a row that is drawn and opens a screen with nothing on it.
+  //
+  // Editor is in that state on every build of this image: nvim, helix and vim
+  // are all in vm/packages/omitted, so the screen behind that row has never had
+  // a row to draw. Browser and Terminal are one `pacman -Rns` away from it, and
+  // were exactly there on 2026-09-12, when a survey that installed and removed
+  // candidate apps took epiphany and foot -- the image's own two -- with them,
+  // and all three screens came up blank.
+  //
+  // None of the three installs what it lists; they switch between what is
+  // there. So the guard cannot hide its own cure the way it would on the agent
+  // page below (D8): an editor comes from Packages, and installing one there
+  // brings this row back.
   { id: "browser", type: "nav", page: "apps.default.browser", glyph: "", label: "Browser",
+    when: "omarchy-cmd-present epiphany || omarchy-cmd-present chromium || omarchy-cmd-present firefox",
     detailCmd: "omarchy-default-browser", covers: { "setup.default.browser": "N" } },
   { id: "terminal", type: "nav", page: "apps.default.terminal", glyph: "", label: "Terminal",
+    when: "omarchy-cmd-present alacritty || omarchy-cmd-present foot || omarchy-cmd-present kitty",
     detailCmd: "omarchy-default-terminal", covers: { "setup.default.terminal": "N" } },
   { id: "editor", type: "nav", page: "apps.default.editor", glyph: "", label: "Editor",
+    when: "omarchy-cmd-present nvim || omarchy-cmd-present helix || omarchy-cmd-present vim",
     detailCmd: "omarchy-default-editor", covers: { "setup.default.editor": "N" } },
   // The page installs what it lists, through mise, and then runs it -- so a
   // guard on "is the agent installed" would hide the only screen that could
