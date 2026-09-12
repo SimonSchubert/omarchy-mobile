@@ -236,3 +236,37 @@ vnc_port = "5901"
 [guest]
 user     = "omarchy"
 hostname = "omarchy-mobile"
+
+# ---------------------------------------------------------------------------
+# Android, for Waydroid. Installed by scripts/vm-waydroid.sh, which is where
+# the reasoning lives; these are the pins.
+#
+# `device` is the whole point of this section. Waydroid publishes both
+# waydroid_arm64 and waydroid_arm64_only, and on a Mac only the second one
+# boots: Apple Silicon has no AArch32, so every 32-bit binary in the arm64
+# images exits 127, and boringssl_self_test32_vendor carries init's
+# reboot_on_failure -- Android shut itself down 3.2s into every boot. Waydroid
+# detects the CPU ("assuming arm64_only") and builds its channel URL from that
+# string, so this is the channel it asks for and never gets when the images are
+# preinstalled by hand.
+#
+# Pinned by filename AND by the sha256 the OTA channel publishes, because these
+# are 2.3 GB of someone else's binaries arriving over http. Both are checked
+# before the zips are unpacked and again, end to end, after the push into the
+# guest. The channel keeps years of builds, so a pin stays fetchable; when one
+# ages off, the fetch fails loudly rather than quietly taking the newest.
+#
+# Re-resolve with:
+#   curl -s https://ota.waydro.id/system/lineage/waydroid_arm64_only/VANILLA.json
+# ---------------------------------------------------------------------------
+[waydroid]
+channel     = "lineage"
+device      = "waydroid_arm64_only"
+system_type = "VANILLA"
+vendor_type = "MAINLINE"
+# lineage-20.0 is Android 13. VANILLA is the no-Google-apps build, which is the
+# only kind this project would ship.
+system_build  = "lineage-20.0-20260403-VANILLA-waydroid_arm64_only-system.zip"
+system_sha256 = "c3cf6ab5ded7496761bae4a49fe1a6f691923c5b84818755790f3ae4e239127b"
+vendor_build  = "lineage-20.0-20260403-MAINLINE-waydroid_arm64_only-vendor.zip"
+vendor_sha256 = "bad5e84a2a47b877d8a85f6a212720f5562e3eeb26696bfd0e2de50dab1ec3ba"

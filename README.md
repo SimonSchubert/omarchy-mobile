@@ -59,6 +59,7 @@ tty1 straight into Hyprland, so there is nothing to type.
 ./scripts/vm-drag.sh 180 712 -300          # swipe up from the bottom edge
 ./scripts/vm-push.sh                       # the overlay into a running guest, no rebuild
 ./scripts/vm-selftest.sh                   # the gestures, one line per acceptance criterion
+./scripts/vm-waydroid.sh install           # Android in a container, as windows Hyprland manages
 ```
 
 `./scripts/vm-build.sh --session-only` skips the application tier for fast
@@ -272,6 +273,50 @@ All measured, and the surface layout is shaped around them.
   and where the home gesture goes, so the two always agree on which workspace
   is free. moarchy computes that twice, and the two copies drifted.
 
+## Android apps, through Waydroid
+
+`./scripts/vm-waydroid.sh install` puts a whole Android 13 in an LXC container
+beside the session, rendering into the same Wayland compositor, so an Android
+app is a window Hyprland manages like any other — at 360x674, inside the
+status bar and the strip, with the back gesture and the carousel applying to it.
+`start` boots it and shows the launcher; `status` says what it is doing.
+
+Four things made this more than `pacman -S waydroid`, and the script's header
+carries the detail:
+
+- **Binder is already there.** ALARM's `linux-aarch64` has
+  `CONFIG_ANDROID_BINDER_IPC=y` and `CONFIG_ANDROID_BINDERFS=y` built in, so the
+  `binder_linux-dkms` every Waydroid-on-Arch guide opens with is not needed.
+- **The `arm64_only` images, not the `arm64` ones.** Apple Silicon has no
+  AArch32, so every 32-bit binary exits 127 — and `boringssl_self_test32_vendor`
+  carries init's `reboot_on_failure`, which shut Android down 3.2 seconds into
+  every boot. Waydroid already detects the CPU and names the channel it wants;
+  `[waydroid]` in `manifest.toml` pins that channel's build by filename and
+  sha256.
+- **No GPU anywhere in the path.** This VM's virtio-gpu reports `-virgl`, and
+  the QEMU that runs it has no `virtio-gpu-gl` to offer instead, so the guest
+  cannot be given 3D. Waydroid's default gralloc allocates through GBM, and GBM
+  cannot allocate here — a render node refuses dumb buffers by design
+  (`DRM_IOCTL_MODE_CREATE_DUMB failed: Permission denied`), and pointing it at
+  `card0` instead only moves the failure to `gbm_mesa_bo_import`, because
+  kms_swrast can allocate a dumb buffer and cannot import one back. So
+  `ro.hardware.gralloc=default` drops GBM for the ashmem gralloc, Android's EGL
+  resolves to ANGLE, and ANGLE finds `vulkan.pastel.so` — SwiftShader's Vulkan
+  driver, in the image all along. A complete software GPU. Leaving
+  `ro.hardware.vulkan` unset is part of the fix: forcing it to `lvp` picks
+  lavapipe, which segfaults.
+- **Room, and the images fetched on the Mac.** The images need about 2 GB and a
+  built image's root has 3.6 GB free, so the script grows the guest's disk
+  live — QEMU's `block_resize`, `sfdisk -N 2`, `resize2fs`, no reboot, the window
+  on the Mac untouched. They are downloaded on the Mac because SourceForge gives
+  the guest 64 kB/s through slirp and the Mac 20 MB/s, and checked against the
+  channel's sha256 before unpacking and again after the push.
+
+It is software-rendered, so it is slow — the launcher takes its time and
+`com.android.systemui` can ANR on first boot. `waydroid init -f` regenerates
+`waydroid_base.prop` and puts `gralloc=gbm` back, which undoes the third point;
+re-run `./scripts/vm-waydroid.sh props` after any re-init.
+
 ## Layout
 
 | Path | What it is |
@@ -291,7 +336,8 @@ All measured, and the surface layout is shaped around them.
 | `default/etc/skel/.config/mimeapps.list` | The default handlers, named rather than left to the mimeinfo cache: GNOME Web for http/https, Evince for PDFs |
 | `default/usr/local/bin/` | Shadows of upstream `omarchy-*` scripts that assume a Chromium-family browser -- `/usr/local/bin` comes before `/usr/bin` in the guest's PATH, so this overrides without patching the vendored tree. Also `omarchy-mobile-app-remove`, which the drawer's long-press card asks what an app is and what removing it would take, and `omarchy-mobile-agent`, which puts the chosen coding agent in the app grid (settings.md P); both live here rather than in `~/.local/bin` so that a caller with no login shell -- a `.desktop` `Exec`, for one -- can name them without a path |
 | `patches/` | Fixes to the vendored upstream. Applied with `--fuzz=0`, so a moved upstream fails the build |
-| `scripts/vm-*.sh` | Build, run, ssh, screenshot, drag, push the overlay into a running guest, selftest |
+| `scripts/vm-*.sh` | Build, run, ssh, screenshot, drag, push the overlay into a running guest, selftest, and the lease that makes sessions take turns at the VM |
+| `scripts/vm-waydroid.sh` | Android in a container: grows the disk, installs Waydroid, fetches and verifies the pinned images, and configures the one prop that lets it render without a GPU. Its header is the reasoning |
 | `docs/spec/` | moarchy's acceptance criteria, copied with their ids unchanged |
 | `docs/acceptance.md` | Which of those criteria hold here, and how each one is checked |
 | `docs/build-log.md` | The chronological account, including the dead ends |

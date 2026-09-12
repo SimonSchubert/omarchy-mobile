@@ -2465,3 +2465,231 @@ guest by hand afterwards, every `omarchy-shell` call came back empty and looked
 like a dead shell. It was `vm-ssh.sh` running a non-login shell, so `OMARCHY_PATH`
 was unset and `omarchy-shell` had no socket to find. `bash -lc` is the fix, and
 it is the same trap the guest-app-launch notes already name.
+
+## 2026-09-12 -- Android in a container, and the GPU that is not there
+
+`pacman -S waydroid` is one line and it is not the interesting part. ALARM's
+`extra` carries waydroid 1.6.3, lxc, libgbinder, python-gbinder and dnsmasq, so
+the packages are a single transaction against the sync db the image already
+shipped -- no `-Sy`, because refreshing it would risk a partial upgrade of a
+guest nobody asked to update.
+
+The prerequisite everyone warns about was already satisfied. Every
+Waydroid-on-Arch guide opens with `binder_linux-dkms`, and this kernel does not
+need it: ALARM's `linux-aarch64` 7.2.4 has `CONFIG_ANDROID_BINDER_IPC=y`,
+`CONFIG_ANDROID_BINDERFS=y` and `CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"`
+built in. `waydroid init` mounted binderfs and made all three nodes on the first
+try. `veth`, `bridge`, `nf_tables`, `squashfs` and `fuse` are all present as
+modules, `CONFIG_USER_NS=y`, and lxc 7.0.0 lands on waydroid's modern config
+path because `get_lxc_version` reads the first character of `lxc-info --version`
+and `range(3, 5)` then applies both snippets. Nothing to build, nothing to patch.
+
+Three things did need work, and two of them were interesting.
+
+### Where the images come from, and why not from the guest
+
+SourceForge gives the guest 64 kB/s through slirp. The system image is 905 MB,
+which is four hours. The same file to the Mac arrives at 20 MB/s. So the images
+are fetched host-side and pushed in over ssh, gzip -1 on the way to halve what
+crosses the link, and checked against the sha256 the OTA channel publishes --
+once before unpacking, and again end to end after the transfer, host sum against
+`sha256sum` in the guest. They land in `/etc/waydroid-extra/images`, which is
+waydroid's own `preinstalled_images_paths`: finding both images there makes
+`init` set `system_ota = None` and use them where they lie, so the download
+never happens and `waydroid upgrade` is honestly disabled rather than quietly
+broken.
+
+Each image is written to `.img.part` and renamed only once its sum matches,
+because waydroid does not tolerate a directory holding one image and not the
+other -- `setup_config` runs `os.stat` on both paths unguarded and dies on the
+one that is missing.
+
+There was no room for them. The built image's root had 3.6 GB free and the
+partition already filled the 14.7 GB disk, so the images fit with nothing left
+for Android's `/data`. The disk was grown **live**: the QEMU monitor's
+`block_resize` enlarged the raw file, virtio-blk announced the new capacity to
+the guest (`vda: detected capacity change from 28764160 to 67108864`),
+`sfdisk -N 2` moved partition 2's end outward, `partx -u` told the running
+kernel, and `resize2fs` grew a mounted ext4 to 31 GB. No reboot, so the window
+on the Mac stayed where it was. `-N 2` matters: it changes only that partition
+and keeps its uuid, and fstab resolves root by `PARTUUID`, so a regenerated one
+would have left the guest unbootable.
+
+One small trap on the way. HMP's size argument takes a suffix and a bare number
+means **megabytes**, so `block_resize virtio0 34359738368` asks for 34 exabytes:
+
+```
+Error: Could not resize file: File too large
+```
+
+`32G` works.
+
+### The 32-bit binary that rebooted Android
+
+The first boot died after three seconds, with `lxc.console.path = none` hiding
+why. Android's first-stage init creates `/dev/kmsg` itself and logs there, which
+is the host's ring buffer, so `dmesg` has the whole boot -- but only if the node
+is *not* pre-created. Binding `/dev/kmsg` into the container to "help" is what
+broke it the one time it was tried:
+
+```
+init: mknod("/dev/kmsg", S_IFCHR | 0600, makedev(1, 11)) failed File exists
+init: Init encountered errors starting first stage, aborting
+```
+
+With that removed the real cause was in plain text:
+
+```
+init: Service 'boringssl_self_test32_vendor' (pid 13) exited with status 127
+init: Service boringssl_self_test32_vendor has 'reboot_on_failure' option and failed,
+      shutting down system.
+init: Got shutdown_command 'reboot,boringssl-self-check-failed'
+```
+
+Apple Silicon has no AArch32. Every 32-bit binary in the image exits 127, and
+that one service carries init's `reboot_on_failure`, so Android shut itself
+down 3.2 seconds into every boot -- `HandlePowerctlMessage` at the top of the
+stack, not a crash.
+
+Waydroid had already said what to do, in its own first line of output:
+
+```
+[12:02:04] AArch64 CPU does not appear to support AArch32, assuming arm64_only...
+```
+
+`arm64_only` is not a diagnosis, it is a **channel name**: `getDriNode`'s
+sibling `initializer.py` builds `"/waydroid_" + args.arch` and would have
+fetched `waydroid_arm64_only` on its own. Preinstalling the `waydroid_arm64`
+images by hand is what took that choice away. Both `arm64_only` channels exist,
+the images carry no 32-bit ABI at all, and they are smaller for it -- 1.62 GB
+against 1.98. With them the boot reached `sys.boot_completed=1` in 60 seconds,
+`boringssl_self_test64_vendor` exited 0, and init imported
+`init.zygote64.rc` instead of `init.zygote64_32.rc`. `[waydroid]` in
+`manifest.toml` pins that channel's build by filename and by the sha256 the
+channel publishes.
+
+### The GPU that is not there
+
+This is the part that took the longest and is the most worth keeping. The VM's
+virtio-gpu has no 3D:
+
+```
+[drm] features: -virgl +edid -resource_blob -host_visible
+[drm] number of cap sets: 0
+```
+
+and there is no fixing that from the outside: the Homebrew QEMU 11.1.1 that runs
+it offers only `virtio-gpu-pci` and `virtio-gpu-device`, has no
+`virtio-gpu-gl-pci`, and links no virglrenderer or epoxy. There is no device to
+restart the VM with, so the guest cannot be given a GPU at all.
+
+Waydroid's default gralloc allocates through GBM, and SurfaceFlinger crash-looped
+for two minutes on it:
+
+```
+GBM-MESA-WRAPPER: Unable to create BO, size=128x128, fmt=875708993
+[minigbm:gbm_mesa_internals.cpp(368)]: Failed to allocate for scanout, trying non-scanout
+[minigbm:gbm_mesa_internals.cpp(374)]: Failed to allocate buffer
+surfaceflinger: Invalid handle.
+skia: Could not create EGL image, err = (0x3000)
+```
+
+Rather than guess, GBM was asked directly, through ctypes so nothing had to be
+compiled:
+
+```
+/dev/dri/renderD128  gbm_create_device ok, backend=drm
+                     bo_create 128x128 XR24 RENDERING -> FAIL   (all eight combinations)
+                     KMS: DRM_IOCTL_MODE_CREATE_DUMB failed: Permission denied
+/dev/dri/card0       bo_create 128x128 XR24 RENDERING -> OK     (all eight)
+```
+
+That is not a permissions bug to fix. A render node only permits
+`DRM_RENDER_ALLOW` ioctls and `CREATE_DUMB` is not one, and with no virgl there
+is no 3D driver on the render node either -- so the only node that can allocate
+here is the primary one, which is exactly how Hyprland itself runs on llvmpipe.
+
+Waydroid has a knob for that, `drm_device` in `waydroid.cfg`, and it does the
+right two things: `getDriNode` returns it, `generate_nodes_lxc_config` binds it
+into the container, and `make_base_props` writes
+`gralloc.gbm.device=/dev/dri/card0`. SurfaceFlinger came up and stayed up, and
+Android reached `boot_completed` in 60 seconds. Then every app died instead:
+
+```
+#00 gbm_mesa_bo_import(bo*, drv_import_fd_data*)+280  /vendor/lib64/libminigbm_gralloc_gbm_mesa.so
+Cause: null pointer dereference
+    <- CrosGralloc4Mapper::importBuffer <- Gralloc4Mapper::importBuffer <- GraphicBuffer::initWithSize
+```
+
+kms_swrast can allocate a dumb buffer and cannot import one back, so the mapper
+null-derefs on the way in. Allocation was never the whole problem; the dmabuf
+round trip was.
+
+So GBM had to go entirely. `ro.hardware.gralloc=default` selects
+`gralloc.default.so`, the ashmem gralloc, with no dmabuf anywhere in it -- and
+the `@4.0` minigbm service stops claiming the HAL, because its rc is gated
+`on early-init && property:ro.hardware.gralloc=minigbm_gbm_mesa`, leaving
+`vendor.gralloc-2-0` to serve it. The import crashes went to zero.
+
+The EGL half was the surprise. Waydroid's own fallback for a machine with no DRI
+node is `gralloc=default` **and** `egl=swiftshader`, and Lineage-20 ships no
+swiftshader at all -- `/vendor/lib64/egl` holds only `libEGL_mesa.so` and
+`libEGL_angle.so`, and nothing anywhere in the rootfs is named swiftshader. That
+fallback is dead code against a modern image. Forcing `ro.hardware.vulkan=lvp`
+to give ANGLE a software Vulkan got ANGLE running on lavapipe and then
+segfaulted in `__memcpy` inside `vulkan.lvp.so`, on every app, which looks like
+a stride disagreement over ashmem buffers and is not a config away from working.
+
+Leaving `ro.hardware.vulkan` **unset** is the fix. ANGLE then enumerates the
+ICDs the image ships and picks one that was there the whole time:
+
+```
+ANGLE: Version (2.1.20440), Renderer (Vulkan 1.2.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)))
+```
+
+`vulkan.pastel.so` -- "pastel" is what AOSP calls SwiftShader's Vulkan driver,
+sitting in `/vendor/lib64/hw` beside `vulkan.lvp.so` and five real ones. So the
+complete software GPU was in the image from the start, reachable through ANGLE
+rather than through the EGL name waydroid looks for. One property,
+`ro.hardware.gralloc=default`, and not setting a second.
+
+A detour that turned out to be unnecessary is worth recording because it is the
+obvious thing to try next: Lineage-**18.1** does ship swiftshader
+(`libEGL_swiftshader.so`, `libGLESv1_CM_swiftshader.so`,
+`libGLESv2_swiftshader.so`, all in `vendor/lib64/egl`), and those three were
+grafted into the Lineage-20 vendor through `/var/lib/waydroid/overlay/vendor`,
+which is a lowerdir above rootfs and so shadows and extends it. They were never
+loaded -- `ro.hardware.egl` resolves to `angle` regardless, so the loader takes
+`libEGL_angle.so` and never looks at them -- and the thing that actually changed
+was the gralloc prop in the same step. They have been removed. 18.1 would also
+have cost the `arm64_only` fix, since that channel is Lineage-20 only and the
+18.1 `arm64` images carry the same `boringssl_self_test32_vendor` that reboots.
+
+The one lasting sharp edge: `ro.hardware.gralloc=default` is hand-written into
+`waydroid_base.prop`, and `waydroid init -f` regenerates that file from
+`make_base_props()` and puts `gralloc=gbm` back. `vm-waydroid.sh props` re-applies
+it, and the script says so.
+
+### What has and has not been seen run
+
+Seen, on the VM: `waydroid status` reporting `Session: RUNNING` and
+`Container: RUNNING` with an IP on `waydroid0`; `getprop sys.boot_completed` = 1
+about 60 seconds after `session start`; `ro.build.version.release` = 13 and
+`ro.product.model` = "WayDroid arm64 only Device"; `waydroid app list`
+enumerating Lineage's Files, Contacts, Recorder, Gallery and Jelly; zero
+`Failed to create bo` and zero `gbm_mesa_bo_import` in logcat after the gralloc
+change; and `waydroid show-full-ui` mapping a real toplevel that Hyprland
+reports as `class: Waydroid`, `mapped: 1`, `size: 360,674` -- the phone's own
+geometry, inside the status bar and the strip.
+
+Not seen: a screenshot of the launcher actually drawn. The window maps and
+`dumpsys window` names `QuickstepLauncher` as the focused app, but it also
+showed `Application Not Responding: com.android.systemui` on that first boot,
+which is what software rendering on four emulated cores looks like rather than a
+new fault. The lease went to another session mid-verification and the Waydroid
+window was closed and its session stopped rather than left sitting on a shared
+screen during somebody else's catalogue sweep, so the frame itself is still
+owed. Nothing here has been through `vm-selftest.sh`, and none of it is in the
+image build: `vm-waydroid.sh` installs into a running guest, and a rebuilt image
+has no Waydroid and a 14.7 GB disk again. `ROOT_SLACK_MIB=12288` at build time is
+how to get the room in advance.
