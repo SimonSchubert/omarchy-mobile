@@ -138,6 +138,15 @@ a phone image rather than from aarch64:
   expected to have, and libadwaita apps that fit a 360px screen. No music
   player, which `vm/packages/apps` explains and puts a price on. mpv stays
   installed for upstream's scripts, but the drawer's player is Showtime.
+- **Three of them are web apps.** X, Discord and Spotify are in the drawer, and
+  each opens as its own window with no URL bar and no tab strip, through
+  `omarchy-launch-webapp`. Upstream ships entries for the first two that nothing
+  on this image ever copied into a home, and artwork beside them that nothing
+  ever put in an icon theme, so both are done at build time; Spotify is written
+  here, because upstream has no entry for it and because this image has no music
+  player. Each entry names the window class its launch will produce, which is
+  what gives a web app a name and an icon on its recents card rather than
+  `org.gnome.Epiphany.WebApp_x_com`.
 - **Those apps follow the theme.** Upstream themes a GTK app twice -- light or
   dark, and an icon theme -- so Calendar and Contacts would sit in stock Adwaita
   beside a shell drawn in the theme's own colours

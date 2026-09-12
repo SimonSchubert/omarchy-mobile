@@ -209,6 +209,39 @@ install -Dm644 "$WORK/omarchy/etc/profile.d/omarchy.sh" "$ROOTDIR/etc/profile.d/
     "$ROOTDIR/usr/share/fonts/omarchy/omarchy.ttf"
 info "$(du -sh "$ROOTDIR/usr/share/omarchy" | cut -f1) in /usr/share/omarchy"
 
+# Upstream's web app artwork, under the names its own entries ask for.
+#
+# applications/*.desktop name their icons the themed way -- `x`, `youtube`,
+# `omarchy-discord` -- and the artwork sits beside them in applications/icons
+# as `X.png`, `YouTube.png`, `omarchy-discord.png`. Upstream's packaging is
+# what puts those into an icon theme; this image vendors the repo instead, so
+# until now not one of those names resolved to anything here and every web app
+# tile drew the fallback executable.
+#
+# The name is the file's, lowercased with runs of non-alphanumerics collapsed
+# to single dashes: that is omarchy-webapp-install's own safe_icon_name, which
+# is what makes `Disk Usage.png` the icon called `disk-usage`, and it is the
+# rule every Icon= in applications/ was written against.
+#
+# /usr/local/share and not /usr/share/icons, for the reason
+# omarchy-mobile-icon-repair's header gives about the same directory: pacman
+# owns hicolor under /usr/share, XDG_DATA_DIRS in the session reads
+# /usr/local/share first, and the shell's own icon index walks the same list.
+if [ -d "$WORK/omarchy/applications/icons" ]; then
+  icon_dir="$ROOTDIR/usr/local/share/icons/hicolor/256x256/apps"
+  install -d "$icon_dir"
+  icon_count=0
+  for f in "$WORK/omarchy"/applications/icons/*.png; do
+    [ -f "$f" ] || continue
+    icon_name=$(basename "$f" .png | tr '[:upper:]' '[:lower:]' |
+                sed 's;[^[:alnum:]]\{1,\};-;g; s;^-;;; s;-$;;')
+    [ -n "$icon_name" ] || continue
+    install -m644 "$f" "$icon_dir/$icon_name.png"
+    icon_count=$((icon_count + 1))
+  done
+  info "$icon_count web app icons in /usr/local/share/icons"
+fi
+
 # This project's own overlay, on top of upstream and never instead of it.
 if [ -d "$REPO/default" ] && [ -n "$(ls -A "$REPO/default" 2>/dev/null)" ]; then
   say "omarchy-mobile overlay"

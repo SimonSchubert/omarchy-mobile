@@ -109,6 +109,19 @@ Item {
       var tail = id.split(".").pop()
       if (tail && map[tail] === undefined) map[tail] = entry
     }
+    // A window's class need not be its desktop id. A web app arrives as
+    // org.gnome.Epiphany.WebApp_<host>, which is nothing like the `X` or
+    // `Spotify` its entry is called (the entries say so themselves, in
+    // StartupWMClass), and Quickshell hands that key over as `startupClass`.
+    // After every id, because an id is the app naming itself and this is the
+    // app naming its window; before every display name, because a class
+    // answers "which app is this window" and a name only answers "who sent
+    // this notification".
+    for (var k = 0; k < rows.length; k++) {
+      var classed = rows[k].entry
+      var cls = classed ? String(classed.startupClass || "").toLowerCase() : ""
+      if (cls && map[cls] === undefined) map[cls] = classed
+    }
     // A notification's app name is usually the display name -- "Firefox",
     // not "firefox.desktop" -- so names go in too, after every id, so that
     // no name can displace one.

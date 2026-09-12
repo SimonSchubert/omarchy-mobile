@@ -1,0 +1,21 @@
+# Spotify, as a web app. X.desktop beside this one explains StartupWMClass.
+#
+# The one upstream has no entry for, so this one is written rather than
+# repeated, and the two things it needs are written with it: the icon, in
+# ../icons/hicolor/scalable/apps/spotify.svg, and the `open.` in
+# omarchy-launch-webapp's list of host prefixes that say "the web version of".
+# Without that last one the launcher reads open.spotify.com as an app called
+# Open, with an icon called open, in a profile called
+# org.gnome.Epiphany.WebApp_open_spotify_com.
+#
+# This is also the image's answer to having no music player installed
+# (vm/packages/apps puts a price on that): the player is the web one.
+[Desktop Entry]
+Version=1.0
+Name=Spotify
+Exec=omarchy-launch-webapp https://open.spotify.com/
+Terminal=false
+Type=Application
+Icon=spotify
+StartupNotify=true
+StartupWMClass=org.gnome.Epiphany.WebApp_spotify_com

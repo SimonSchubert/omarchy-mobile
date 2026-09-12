@@ -22,6 +22,9 @@
 #     Pages.js, Guards.js                            settings
 #   [pkg.moarchy-keep], [pkg.moarchy-store-git],
 #     49-moarchy-store.rules, `drawer launch`        apps
+#   the X, Discord and Spotify entries,
+#     default/usr/local/bin/omarchy-launch-webapp,
+#     the web app icons build-disk.sh installs       apps
 #   default/usr/local/bin/omarchy-mobile-agent,
 #     the agent icons, [pkg.mise-bin]                agent, and settings
 #                                                      (D8, F8)
@@ -227,6 +230,39 @@ case $1 in
       sleep 0.1
     done
     focus_ws empty; sleep 0.4 ;;
+  # What omarchy-launch-webapp will call a URL's window, asked of the script
+  # rather than recomputed here. The derivation is the script's -- a host with
+  # its www., web., app., open. or m. taken off, every remaining dot an
+  # underscore -- and a second copy of it in this file would agree with it
+  # right up until one of the two changed, which is the failure these checks
+  # are for.
+  #
+  # So the real thing is run, with the two commands it ends in replaced: a
+  # `setsid` that execs its arguments and a `uwsm-app` that prints them. The
+  # answer is in the --profile it was going to hand Epiphany. HOME is a
+  # throwaway as well, because the script writes the profile's `.app` and the
+  # portal's desktop entry on the way past, and this must not put either in
+  # the user's own home for a web app they never opened.
+  webapp_id)
+    tmp=$(mktemp -d) || exit 1
+    mkdir -p "$tmp/bin"
+    printf '#!/bin/sh\nexec "$@"\n' >"$tmp/bin/setsid"
+    printf '#!/bin/sh\nfor a; do printf "%%s\\n" "$a"; done\n' >"$tmp/bin/uwsm-app"
+    chmod +x "$tmp/bin/setsid" "$tmp/bin/uwsm-app"
+    HOME=$tmp PATH="$tmp/bin:$PATH" omarchy-launch-webapp "$2" |
+      sed -n 's;^--profile=.*/;;p' | head -1
+    rm -rf "$tmp" ;;
+  # Whether an icon name resolves to a file, in the directories the shell's own
+  # index walks (AppLibrary.iconIndexScanCommand): the user's first, then every
+  # XDG_DATA_DIRS, apps/ and devices/ only.
+  icon_path)
+    for d in "$HOME/.icons" "$HOME/.local/share/icons" \
+             $(printf '%s' "${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" | tr ':' ' ' |
+               sed 's;\([^ ]*\);\1/icons;g'); do
+      [ -d "$d" ] || continue
+      find "$d" \( -path '*/apps/*' -o -path '*/devices/*' \) \
+           \( -name "$2.svg" -o -name "$2.png" \) 2>/dev/null | head -1
+    done | head -1 ;;
   # A command in the session's environment, for the Settings checks that
   # compare a row with the reader behind it. `bash -lc`, as Settings runs them.
   sh) shift; bash -lc "$*" </dev/null ;;
@@ -1681,6 +1717,47 @@ section_apps() {
   # installed store hands Open to the shell rather than starting it through Gio.
   check L9 "the installed store's launcher.py calls 'omarchy-shell drawer launch'" \
     g sh 'grep -qF "\"drawer\", \"launch\"" "$(pacman -Qlq moarchy-store-git | grep "/launcher\.py$")"'
+
+  # ---------------------------------------------------------------------
+  # The web apps the image ships
+  # ---------------------------------------------------------------------
+  #
+  # Three things have to agree for a web app tile to be a web app tile, and
+  # each is written in a different file: the launcher entry, the icon it names,
+  # and the window class it predicts. The last is the one that can drift on its
+  # own -- the class comes out of omarchy-launch-webapp's host derivation, and
+  # the entry only writes down what that derivation will say -- so it is asked
+  # of the launcher itself rather than recomputed here (`webapp_id`).
+  echo "-- apps: X, Discord and Spotify, as web apps"
+
+  # Quoted, so the tilde survives this shell and is expanded by the guest's,
+  # which is the home the entry is actually in.
+  local apps='~/.local/share/applications'
+  local entry file url class icon
+  for entry in X Discord Spotify; do
+    file=$apps/$entry.desktop
+    check apps "$entry.desktop is in the drawer's own directory, as a web app" \
+      g sh "grep -q '^Exec=omarchy-launch-webapp ' $file"
+
+    url=$(g sh "sed -n 's/^Exec=omarchy-launch-webapp //p' $file")
+    class=$(g sh "sed -n 's/^StartupWMClass=//p' $file")
+    # The entry's prediction against the launcher's answer. Both empty would
+    # pass an `is`, so the prediction has to exist first.
+    check apps "$entry names the window class its launch will produce" \
+      test -n "$class"
+    check apps "$entry's StartupWMClass is what omarchy-launch-webapp derives" \
+      is "$(g webapp_id "$url")" "$class"
+
+    icon=$(g sh "sed -n 's/^Icon=//p' $file")
+    check apps "$entry's icon ($icon) resolves to a file the shell can index" \
+      test -n "$(g icon_path "$icon")"
+
+    # L, from the other end: a web app is the one kind of drawer tile whose
+    # removal takes no package, and these are user files, so the long-press
+    # card has to offer it rather than refuse.
+    check apps "$entry's long-press card offers to remove the launcher" \
+      g sh "omarchy-mobile-app-remove plan $entry | grep -q 'Removes the launcher'"
+  done
 
   # The store installs through pkexec, which cannot authenticate an account the
   # image locks. pkcheck asks polkit what pkexec will, as this user and from a

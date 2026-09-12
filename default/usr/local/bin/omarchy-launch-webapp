@@ -95,7 +95,12 @@ esac
 # XDG_DATA_HOME, rather than somewhere tidier of this project's choosing --
 # that is where Epiphany's own web app list looks.
 if command -v epiphany >/dev/null 2>&1; then
-  host=$(printf '%s' "$url" | sed 's;^[a-z]*://;;; s;[/?#].*$;;; s;^www\.;;; s;^web\.;;; s;^app\.;;; s;^m\.;;')
+  # The stripped prefixes all mean "the web version of", and `open.` is one of
+  # them: open.spotify.com is Spotify's player the way web.whatsapp.com is
+  # WhatsApp's. Left in, it is the label everything below is named after, and
+  # the web app is called Open, with an icon called open, in a profile called
+  # org.gnome.Epiphany.WebApp_open_spotify_com.
+  host=$(printf '%s' "$url" | sed 's;^[a-z]*://;;; s;[/?#].*$;;; s;^www\.;;; s;^web\.;;; s;^app\.;;; s;^open\.;;; s;^m\.;;')
   slug=$(printf '%s' "$host" | sed 's;[^A-Za-z0-9];_;g; s;__*;_;g; s;^_;;; s;_$;;')
   [ -n "$slug" ] || slug=webapp
   # The first label of the host is what upstream's own omarchy-webapp-install

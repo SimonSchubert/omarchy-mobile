@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Spotify, drawn here because upstream has none to borrow.
+
+  Every other web app this image ships takes its artwork from
+  /usr/share/omarchy/applications/icons, which the build installs under the
+  names upstream's own entries ask for. There is no Spotify entry upstream, so
+  there is no Spotify icon either, and the alternative (what
+  omarchy-webapp-install does) is to download the site's apple-touch-icon at
+  install time. Nothing else in this image arrives unpinned over the network,
+  which is what manifest.toml is for, so the mark is drawn instead: a green
+  disc and three arcs, which is all the mark is.
+
+  No clip-path anywhere, on purpose. QtSvg 6.11 ignores clip-path and paints a
+  clipPath declared outside defs, which is the whole reason
+  omarchy-mobile-icon-repair exists; an icon this project writes itself has no
+  business needing repairing.
+
+  An XML comment cannot hold a double hyphen, so the dashes above are words.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <circle cx="32" cy="32" r="32" fill="#1db954"/>
+  <g fill="none" stroke="#ffffff" stroke-linecap="round">
+    <path d="M9 28.5A41.3 41.3 0 0 1 55 28.5" stroke-width="6.8"/>
+    <path d="M13.5 36.5A33.9 33.9 0 0 1 50.5 36.5" stroke-width="5.8"/>
+    <path d="M17.5 44.0A25.6 25.6 0 0 1 46.5 44.0" stroke-width="4.8"/>
+  </g>
+</svg>

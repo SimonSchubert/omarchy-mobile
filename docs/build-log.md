@@ -2781,3 +2781,140 @@ written by `mise-work.sh`, and it is in this guest's home because that script
 was run there by hand earlier in the day -- `/etc/skel` has no `Work`, and no
 unit here runs provisioning, so a fresh image has neither the file nor the
 prompt. `mise trust ~/Work/.mise.toml` clears it where it exists.
+
+
+## 2026-09-12 -- three web apps, and the artwork nothing installed
+
+"Do we already have support for web apps?" Yes, since the browser swap:
+`/usr/local/bin/omarchy-launch-webapp` is the shadow that makes upstream's
+chromium-only launcher work with GNOME Web, and its header is the long version.
+What the image had was support and not a single web app -- nothing in the
+drawer, on any image this project has ever built.
+
+Three separate things were missing, and only the first is obvious.
+
+### The entry nothing copies
+
+Upstream ships thirteen web app launchers in `applications/`, WhatsApp, X,
+Discord, Zoom, the Google ones. `vm/build-disk.sh` copies that directory into
+`/usr/share/omarchy` with the rest of the vendored tree, and there it stops:
+the only thing that puts those files in a home is
+`omarchy-refresh-applications`, which upstream's installer runs and this image
+never does. So they sat in `/usr/share/omarchy/applications` being nothing.
+
+`X.desktop` and `Discord.desktop` are now in `/etc/skel/.local/share/applications`,
+where the drawer reads, with a `Spotify.desktop` written beside them. Upstream
+has no Spotify entry, and this image has no music player at all
+(`vm/packages/apps` prices that decision), so the player is the web one.
+
+### The icon nothing resolves
+
+Every one of upstream's entries names its icon the themed way -- `Icon=x`,
+`Icon=youtube`, `Icon=omarchy-discord` -- and the artwork sits beside them in
+`applications/icons` as `X.png`, `YouTube.png`, `omarchy-discord.png`.
+Installing those into an icon theme is upstream's packaging, which this image
+does not use. So the names resolved to nothing here:
+
+    $ find /usr/share/icons ~/.local/share/icons -iname 'youtube*' -o -iname 'x.png'
+    $
+
+and had this change shipped the two entries alone, both tiles would have drawn
+the fallback executable.
+
+`vm/build-disk.sh` installs them now, under the names the entries ask for. The
+rule is not invented here: `omarchy-webapp-install`'s own `safe_icon_name`
+lowercases and collapses runs of non-alphanumerics to single dashes, and
+running it over the filenames reproduces every `Icon=` upstream wrote --
+`Disk Usage.png` is what `disk-usage` means, `X.png` is `x`,
+`omarchy-discord.png` is itself. All eighteen go in, not the two that are used:
+they are 750 KB, and a user who runs `omarchy-refresh-applications` gets
+thirteen working tiles rather than thirteen fallbacks.
+
+They land in `/usr/local/share/icons` rather than `/usr/share/icons`, for the
+reason `omarchy-mobile-icon-repair`'s header already gives about that
+directory: pacman owns hicolor under `/usr/share`, `XDG_DATA_DIRS` in the
+session reads `/usr/local/share` first, and the shell's icon index walks the
+same list.
+
+Spotify's is drawn, in `/etc/skel/.local/share/icons/hicolor/scalable/apps/spotify.svg`,
+because upstream has no artwork to borrow and the alternative --
+`omarchy-webapp-install`'s trick of downloading the site's `apple-touch-icon`
+-- is an unpinned network fetch, which nothing else in this image does. A green
+disc and three arcs is all the mark is. No `clip-path` in it, which is the
+whole point of the file that repairs other people's icons.
+
+### The window nothing could name
+
+The third is the one that would have been noticed last. `Shell.qml` indexes
+desktop entries so that a window can be turned back into the app that opened it
+-- the recents carousel takes a card's icon and name from it, and the shade
+takes a notification's. It indexed three keys: the desktop id, the last segment
+of a reverse-DNS id, and the display name.
+
+An Epiphany web app is none of those. It arrives as
+`org.gnome.Epiphany.WebApp_x_com`, because a web app's profile directory has to
+be named that (`omarchy-launch-webapp` has the four failures that pinned that
+down), so every web app card would have come up with no icon and
+`org.gnome.Epiphany.WebApp_x_com` for a name.
+
+`StartupWMClass` is the desktop entry's own way of saying which window is
+its own, so `buildEntryIndex` indexes that too, in a pass of its own between
+the ids and the names: after every id, because an id is the app naming itself;
+before every name, because a class answers "which app is this window" and a
+name only answers "who sent this notification". The three entries carry the
+class their launch will produce. It is Epiphany's class, so installing Chromium
+makes the line match nothing, which is what it did before it existed.
+
+### `open.`, which is how Spotify is spelled
+
+`omarchy-launch-webapp` derives everything from the host with `www.`, `web.`,
+`app.` and `m.` taken off -- the app id, the icon name and the title.
+Spotify's player is at `open.spotify.com`, and `open.` means exactly what those
+four mean. Without it the web app is called Open, with an icon called `open`,
+in a profile called `org.gnome.Epiphany.WebApp_open_spotify_com`. One prefix
+more in the same `sed`, and the profile Epiphany actually wrote says:
+
+    Name=Spotify
+    Exec=epiphany --application-mode --profile=.../org.gnome.Epiphany.WebApp_spotify_com https://open.spotify.com/
+    StartupWMClass=org.gnome.Epiphany.WebApp_spotify_com
+    Icon=spotify
+
+### Checked in the running guest
+
+Pushed with `vm-push.sh`, with the icon install done by hand because it is an
+image-build step:
+
+| | |
+| --- | --- |
+| the drawer | Discord, Spotify and X as tiles, each with its own artwork |
+| `drawer launch Spotify` | `org.gnome.Epiphany.WebApp_spotify_com`, the class its entry predicts |
+| `drawer launch X` | `org.gnome.Epiphany.WebApp_x_com` |
+| `drawer launch Discord` | `org.gnome.Epiphany.WebApp_discord_com`, from a URL with a path on it |
+| the recents card | the Spotify mark, "Spotify", and the page title under it |
+| `omarchy-mobile-app-remove plan` | `webapp` for all three: removes the launcher, not a package |
+
+The selftest's `apps` section has all of it, and the class check is the one
+worth describing: it does not recompute the derivation, it runs
+`omarchy-launch-webapp` with `setsid` and `uwsm-app` replaced by stubs that
+print the command instead of running it, and reads the `--profile` it was about
+to hand Epiphany. A copy of the derivation in the test would agree with the
+script right up until one of the two changed. `HOME` is a throwaway for the
+same reason, so the profile and portal entry the script writes on the way past
+do not land in the user's home for a web app nobody opened.
+
+### What is not settled
+
+Two things, and both want a second look on a quiet VM.
+
+Spotify's player is laid out wider than the 360px surface and clipped on the
+right, exactly as WhatsApp was: the same "the browser adapts, the page need
+not" limit this log already records, now with a second example.
+
+Discord loaded -- title `Discord`, no error -- and drew a near-white page with
+its own background illustration and nothing on top of it. Whether that is
+WebKitGTK and Discord disagreeing or the guest being out of room is not
+established, because by then it was out of room: three WebKit app windows at
+once on a 4 GB guest put it into `Under memory pressure, flushing caches` on
+the serial console and stopped answering ssh. That is worth writing down on its
+own -- this VM holds one web app comfortably and not three -- and Discord's
+page is worth opening again, alone, before anything is concluded about it.
