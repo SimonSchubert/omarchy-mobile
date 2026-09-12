@@ -112,8 +112,11 @@ install -d ~/.config/omarchy/themed ~/.config/omarchy/hooks/theme-set.d \
   ~/.config/gtk-4.0 ~/.config/gtk-3.0
 install -m644 "$STAGE/themed/gtk.css.tpl" ~/.config/omarchy/themed/gtk.css.tpl
 install -m644 "$STAGE/themed/gtk3.css.tpl" ~/.config/omarchy/themed/gtk3.css.tpl
-install -m755 "$STAGE/hooks/theme-set.d/50-gtk-apps.sh" \
-  ~/.config/omarchy/hooks/theme-set.d/50-gtk-apps.sh
+# Every hook in the directory rather than one named file: this block carried
+# 50-gtk-apps.sh alone, and 60-icon-theme.sh landing beside it in the overlay
+# would have been pushed nowhere.
+install -m755 "$STAGE"/hooks/theme-set.d/*.sh \
+  -t ~/.config/omarchy/hooks/theme-set.d/
 ln -sfn ../../.local/state/omarchy/current/theme/gtk.css ~/.config/gtk-4.0/gtk.css
 ln -sfn ../../.local/state/omarchy/current/theme/gtk3.css ~/.config/gtk-3.0/gtk.css
 echo "pushed the GTK4 and GTK3 palette templates, hook and symlinks"

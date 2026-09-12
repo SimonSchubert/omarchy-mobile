@@ -264,6 +264,19 @@ case $1 in
          head -1 | sed 's/^class = "//; s/"$//; s/\\\\/\\/g')
     [ -n "$rx" ] || { echo "no rule"; exit 1; }
     if printf '%s\n' "$2" | grep -qxE "$rx"; then echo yes; else echo no; fi ;;
+  # The icon theme GTK has been pointed at, if it is installed, and
+  # `missing:<name>` if it is not. Every one of upstream's themes names a Yaru
+  # and there is no Yaru for aarch64, so this answered `missing:Yaru-blue` on
+  # every image until the theme-set hook landed (docs/build-log.md).
+  icon_theme_ok)
+    want=$(gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null | tr -d "'")
+    [ -n "$want" ] || { echo unset; exit 0; }
+    for d in "$HOME/.icons" "${XDG_DATA_HOME:-$HOME/.local/share}/icons" \
+             $(printf '%s' "${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" | tr ':' ' ' |
+               sed 's;\([^ ]*\);\1/icons;g'); do
+      [ -f "$d/$want/index.theme" ] && { echo "$want"; exit 0; }
+    done
+    echo "missing:$want" ;;
   # Whether an icon name resolves to a file, in the directories the shell's own
   # index walks (AppLibrary.iconIndexScanCommand): the user's first, then every
   # XDG_DATA_DIRS, apps/ and devices/ only.
@@ -1831,6 +1844,14 @@ section_apps() {
   g sh "rm -f $tint_entry"
   g kill_pids $(g pids sel-tint)
   wait_for "g pids sel-tint" ""
+
+  # Every themed icon name in every GTK app depends on this one string being a
+  # theme that exists: GTK answers `image-missing` for all of them when it is
+  # not, which is what Spot drew for its whole sidebar and transport bar.
+  local icontheme
+  icontheme=$(g icon_theme_ok)
+  check apps "the icon theme GTK is pointed at ($icontheme) is installed" \
+    bash -c "[ \"${icontheme%%:*}\" != missing ]"
 
   # What a web app tells the site it is. The override is on the schema, so the
   # browser's path and every web app's path resolve to it; this reads the one

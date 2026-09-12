@@ -3319,3 +3319,66 @@ Both are Spot's own rendering at 360px and neither was investigated.
 Netflix, Prime and every other protected stream are exactly as far away as they
 were. Spotify is reachable only because it has a protocol that predates EME and
 a client that speaks it.
+
+
+## 2026-09-13 -- the white squares, which were never tofu
+
+Reported from the device, with a screenshot of Spot's transport bar: four
+white squares with a folded corner where the playback controls should be, and
+the same thing "in other apps".
+
+Not tofu. Tofu is a font with no glyph for a character; this is GTK's
+`image-missing`, which is what it draws for an icon name the icon theme does
+not answer. Every themed icon name in every GTK app, at once.
+
+### One string, wrong on every image this project has built
+
+    $ gsettings get org.gnome.desktop.interface icon-theme
+    'Yaru-blue'
+
+    $ ls /usr/share/icons
+    Adwaita AdwaitaLegacy HighContrast breeze breeze-dark default hicolor
+
+`omarchy-theme-set-gnome` ends by reading the theme's own `icons.theme` and
+setting it, with `Yaru-blue` as the fallback when a theme ships none. Every one
+of upstream's themes ships one and every one of them names a Yaru: Yaru-blue,
+Yaru-purple, Yaru-red, Yaru-magenta, Yaru-olive, Yaru-grey, Yaru-sage-dark,
+Yaru-wartybrown.
+
+There is no Yaru for aarch64. Not in Arch Linux ARM, and not in the AUR either
+-- neither `yaru-icon-theme` nor `yaru-colors-icon-theme` exists there at all.
+So every theme set this image has ever done has pointed GTK at an icon theme
+that is not on the disk.
+
+### Why nobody noticed for this long
+
+The shell cannot see it. Quickshell's icon lookups walk the icon directories
+themselves (`AppLibrary.iconIndexScanCommand`, and `Quickshell.iconPath`), so
+the drawer's grid, the carousel's cards and the shade's notification icons have
+always resolved correctly whatever this setting said. The one surface this
+project looks at hardest is the one surface the bug cannot reach. It took a
+GTK app with a sidebar full of named icons to make it visible.
+
+### The fix, and why it is a hook
+
+`default/etc/skel/.config/omarchy/hooks/theme-set.d/60-icon-theme.sh`:
+`omarchy-hook theme-set` runs it after `omarchy-theme-set-gnome` has had its
+say, it looks for the named theme's `index.theme` in the directories the spec
+searches, and it sets Adwaita only when the name resolves to nothing. Install a
+Yaru one day and upstream's own choice starts working and the hook stops
+touching it.
+
+Adwaita rather than breeze: it is GNOME's own, and so are this image's apps.
+
+Checked on the guest, three ways: the hook alone turns `Yaru-purple` into
+`Adwaita` and leaves `breeze` alone; `omarchy-hook theme-set` does the same
+through the dispatcher; and a real `omarchy-theme-set "Tokyo Night"`, run with
+the session's own environment, ends at `Adwaita`. With that, Spot's sidebar
+draws Library, Saved Tracks, Now playing, New Playlist and every playlist glyph
+-- all of which were white squares in the screenshot that started this.
+
+`vm-push.sh` installed one named hook file and would have pushed the new one
+nowhere; it installs the directory now.
+
+A `vm-selftest.sh apps` line holds the string to the disk: 32 passed, with
+`the icon theme GTK is pointed at (Adwaita) is installed`.
