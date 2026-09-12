@@ -1707,7 +1707,7 @@ section_apps() {
   reset_session
 
   local pkg
-  for pkg in moarchy-keep moarchy-store-git; do
+  for pkg in moarchy-keep moarchy-store-git spot-client; do
     check apps "$pkg is installed" g sh "pacman -Q $pkg >/dev/null"
   done
 

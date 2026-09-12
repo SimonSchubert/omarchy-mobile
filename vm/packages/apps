@@ -186,10 +186,18 @@ moarchy-store-git
 # itself as gnome-music#255. So the choice is a player that does not fit or no
 # player, and this list takes no player.
 #
-# The drawer has one anyway, and it is not in this file: Spotify, as a web app
-# (default/etc/skel/.local/share/applications/Spotify.desktop). A page that
-# lays itself out for a phone fits where Music's fixed sidebars do not, and it
-# costs no package at all.
+# There is one after all, and it is Spotify's: spot-client, pinned as
+# [pkg.spot-client] and built in the builder. GTK4 and libadwaita, every
+# runtime dependency of it already installed for the GNOME apps above, ~21 MB.
+#
+# It is here rather than left to the web app because the web player cannot play
+# a note on this image: Spotify's player asks for Widevine, and there is no
+# Widevine for aarch64 Linux in any repo -- Arch's chromium ships no CDM and
+# every widevine package in the AUR is arch=('x86_64'), Google having published
+# the Linux CDM for x86_64 only. Spot plays through librespot instead, which
+# speaks Spotify's own protocol: a Premium account and no CDM at all
+# (docs/build-log.md).
+spot-client
 #
 # About 95 MB of download for the eleven. Most of it is webkit2gtk-4.1 (39 MB)
 # for Calendar and Contacts through evolution-data-server, which Geary then

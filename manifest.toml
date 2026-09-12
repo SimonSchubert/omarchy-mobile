@@ -127,6 +127,35 @@ tag     = "2026.9.5-1"
 ref     = "00e537b20b8968c09bb3023236475cb2ce7b757c"
 
 # ---------------------------------------------------------------------------
+# The phone's Spotify, and the reason it is a package rather than a web app.
+#
+# The web player is on the image as a tile and cannot play a note: it asks for
+# Widevine, and there is no Widevine for aarch64 Linux at all -- Arch's
+# chromium ships no CDM, and every widevine package in the AUR is
+# arch=('x86_64'), because Google publishes the Linux CDM for x86_64 only and
+# the arm64 builds live inside ChromeOS and Android images. WebKitGTK has no
+# CDM path either. So no browser on this image can play protected content, and
+# swapping browsers does not change that (docs/build-log.md).
+#
+# librespot does not use EME at all. It speaks Spotify's own protocol, so it
+# needs a Premium account and no CDM, which is the whole of why this works
+# where the web player does not. Spot is the GTK4 + libadwaita client on top of
+# it -- every one of its runtime dependencies (gtk4, libadwaita, glib2, cairo,
+# pango, graphene, alsa-lib, libpulse, openssl) is already installed for the
+# GNOME apps, so it costs a Rust build in the builder and almost nothing on the
+# image.
+#
+# Upstream is slow rather than dead: 0.5.0 released 2024-12-17, last push
+# 2025-10-13, not archived. The AUR packaging tracks that release, declares
+# aarch64, and builds the tarball rather than a VCS checkout, so this ref pins
+# the packaging and the release pins the code.
+# ---------------------------------------------------------------------------
+[pkg.spot-client]
+url     = "https://aur.archlinux.org/spot-client.git"
+tag     = "0.5.0-1"
+ref     = "e9edb52471ce5694c419b5d2fee22549135ead5c"
+
+# ---------------------------------------------------------------------------
 # The on-screen keyboard: moarchy's, at the commit moarchy pins, for the reason
 # [omarchy] gives -- two ports of one phone UI that type through two different
 # keyboards are two projects.

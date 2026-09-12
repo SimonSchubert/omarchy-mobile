@@ -3251,3 +3251,71 @@ and the phone's answer is a tile you can hold and remove.
 So this entry is a finding and not a fix: WhatsApp is wide because
 web.whatsapp.com is wide, on every browser, and the user agent had nothing to
 do with it.
+
+
+## 2026-09-13 -- the phone plays music, and it is not the browser that does it
+
+Spotify's web player, in the tile this image ships:
+
+> **Playback disabled.** Spotify won't work if you block protected content,
+> have an incompatible browser, or are using an incognito or private browsing
+> mode.
+
+That is EME, and it is the end of the road for every browser here, not for
+Epiphany in particular:
+
+* Arch's `chromium` package ships no CDM at all -- nothing Widevine-shaped
+  anywhere in its dependency list.
+* Every widevine package in the AUR is `arch=('x86_64')`: `chromium-widevine`
+  and `ungoogled-chromium-widevine-bin` both, and `chromium-widevine-helper` is
+  `any` only because it is a downloader for the x86_64 CDM. Google publishes
+  the Linux CDM for x86_64 only; the arm64 builds live inside ChromeOS and
+  Android images.
+* WebKitGTK has no CDM path either -- no `widevine`, no `libwidevinecdm`, no
+  `com.widevine.alpha` in `libwebkitgtk-6.0.so.4`.
+
+So "we need Chromium" would have cost 434 MB, an untested window-mapping
+problem on this VM, and changed nothing on that screen. Worth knowing before
+spending the build rather than after.
+
+### librespot is the way round it
+
+librespot does not use EME. It speaks Spotify's own protocol, which wants a
+Premium account and no CDM, and that is the whole of why it plays where the
+browser cannot. The clients in ALARM's `extra` are `ncspot` and
+`spotify-player`, both TUIs, and a terminal music player is the wrong shape for
+a phone.
+
+**Spot** (`spot-client`, AUR, pinned as `[pkg.spot-client]`) is the GTK4 and
+libadwaita one on top of librespot. Its PKGBUILD declares aarch64, its whole
+runtime dependency list -- gtk4, libadwaita, glib2, cairo, pango, graphene,
+alsa-lib, libpulse, openssl -- is already installed for the GNOME apps, and the
+built package is 5.3 MB for 20.7 MB installed. Upstream is slow rather than
+dead: 0.5.0 released 2024-12-17, last push 2025-10-13.
+
+Built in the builder like hyprland and mise-bin, and the pin is the AUR
+packaging's commit; the PKGBUILD builds the 0.5.0 release tarball, so the
+release pins the code.
+
+### What it does on the phone
+
+Its window is 360x674 -- the workspace exactly, no clipping. Its README
+describes a username and password login, which is out of date: launching it
+opens Spotify's own OAuth consent page in the browser, and the account was
+already signed in there, so the whole login is one tap and no credential ever
+touches this project. (The consent was left for the phone's owner to give. It
+was given, and the token is Spot's.)
+
+Then it plays. The shade's media widget picked it up over MPRIS without being
+told anything -- *Come To Me*, Björk, with transport controls -- which is the
+first time this image has played a note of music.
+
+Two rough edges, neither fatal: album art renders small inside its tile at this
+width, and a few of the transport glyphs draw as GTK's missing-image square.
+Both are Spot's own rendering at 360px and neither was investigated.
+
+### What this does not fix
+
+Netflix, Prime and every other protected stream are exactly as far away as they
+were. Spotify is reachable only because it has a protocol that predates EME and
+a client that speaks it.

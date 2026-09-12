@@ -135,9 +135,14 @@ a phone image rather than from aarch64:
   which depends on Evince.
   GNOME's Calculator, Calendar, Contacts, Maps, Clocks, Weather, Text Editor,
   Geary, Camera, Sound Recorder and Showtime are added: the apps a phone is
-  expected to have, and libadwaita apps that fit a 360px screen. No music
-  player, which `vm/packages/apps` explains and puts a price on. mpv stays
+  expected to have, and libadwaita apps that fit a 360px screen. mpv stays
   installed for upstream's scripts, but the drawer's player is Showtime.
+  GNOME Music is still left out, for the fixed 220px sidebar
+  `vm/packages/apps` measures; the music player is **Spot**
+  (`[pkg.spot-client]`), which plays Spotify through librespot -- Spotify's own
+  protocol, a Premium account, and no DRM, which is the only way audio plays at
+  all here: there is no Widevine for aarch64 Linux in any repo, so the web
+  player says "Playback disabled" in every browser on this image.
 - **Three of them are web apps.** X, Discord and Spotify are in the drawer, and
   each opens as its own window with no browser chrome at all, through
   `omarchy-launch-webapp` and the window rule in `hypr/mobile.lua` that tells
@@ -405,6 +410,10 @@ account, dead ends included.
   layout and never mapped a window here at all
   (`ContextResult::kTransientFailure`). Whether it would map for `--app=` alone,
   with software GL, is untested.
+- Protected content does not play, in any browser: Arch's chromium ships no
+  CDM and every widevine package in the AUR is `arch=('x86_64')`, Google having
+  published the Linux CDM for x86_64 only. Spotify is covered by Spot, which
+  does not use EME at all; Netflix and the rest are not.
 - Discord and WhatsApp state no `theme-color` and no manifest to read one from,
   so their tiles leave the bar and the band in the theme's colours. Sampling the
   window's own top pixel would cover them, and every non-web app with it.
