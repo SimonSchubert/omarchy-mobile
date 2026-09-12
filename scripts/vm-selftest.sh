@@ -144,6 +144,11 @@ case $1 in
     echo "$(hyprctl -j clients | jq --arg a "$a" \
             'first(.[] | select(.address == $a)) | [.tags[] | select(startswith("default-opacity"))] | length')" \
          "$(hyprctl getprop "address:$a" opacity)" "$(hyprctl getprop "address:$a" opacity_inactive)" ;;
+  # W7: bindings keyed on a pointer button, which on a desktop are the drag
+  # that moves a window and the drag that resizes it. Counted rather than
+  # matched by description -- upstream's wording is upstream's to change, and a
+  # phone has no pointer button for any binding to be worth keeping.
+  drag_binds) hyprctl -j binds | jq '[.[] | select(.key | startswith("mouse:"))] | length' ;;
   transform) hyprctl -j monitors | jq 'first(.[]).transform' ;;
   rotate_back)
     read -r name mode pos scale <<<"$(hyprctl -j monitors | jq -r 'first(.[]) |
@@ -360,6 +365,7 @@ section_W() {
   check W6 "the shell's own screens draw opaque, as the bar does ($opacity)" \
     is "$opacity" "0 1 1"
   ipc settings quit >/dev/null
+  check W7 "no pointer drag moves or resizes a window" is "$(g drag_binds)" 0
 }
 
 section_A() {

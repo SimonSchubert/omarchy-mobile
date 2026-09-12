@@ -28,7 +28,7 @@ before any of this applies, and they belong to [gestures.md](gestures.md).
 
 ---
 
-## W1–W6. The window area
+## W1–W7. The window area
 
 **W1** A single app on a workspace fills its workspace exactly. No wallpaper
 shows around it, on any edge.
@@ -93,6 +93,21 @@ that, the wallpaper tinted Settings `#1e1d27` under a `#1a1b26` bar on Tokyo
 Night.
 → with Settings open, `hyprctl getprop` reports `opacity` and
 `opacity_inactive` of 1 for its window, which carries no `default-opacity` tag
+
+**W7** *Added here, not moarchy's.* A window cannot be moved or resized by
+dragging it. Upstream binds SUPER + left-drag to move and SUPER + right-drag to
+resize (`default/hypr/bindings/tiling.lua`), which is the desktop's answer to a
+window in the wrong place. Here a window is never in the wrong place: it fills
+its workspace exactly (W1), or it floats where its own toolkit opened it.
+
+On a tiled window the drag already did nothing — one app per workspace leaves
+no neighbour to swap with. The floating case is the one that bit: measured, the
+move walked a floating window from `[-20, -20]` to `[-21, -82]` and the resize
+took 720px of height down to 600, both away from the geometry the app asked
+for, and nothing on the phone puts that back — the un-float is `SUPER + T`, a
+key press and not a gesture. So the binding was inert where a phone would aim
+it and destructive where it landed.
+→ `hyprctl -j binds` reports no binding keyed on a mouse button
 
 ---
 

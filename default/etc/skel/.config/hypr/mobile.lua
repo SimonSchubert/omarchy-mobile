@@ -82,3 +82,22 @@ hl.window_rule({
   match = { workspace = "w[tv1]" },
   border_size = 0,
 })
+
+-- No dragging a window around, and no dragging it out of shape. Upstream binds
+-- SUPER + left-drag to move a window and SUPER + right-drag to resize it
+-- (default/hypr/bindings/tiling.lua), which is the desktop's answer to a window
+-- in the wrong place. Here a window is never in the wrong place: one app per
+-- workspace, filling it exactly (windows.md W1), and the only other state is
+-- floating where its own toolkit opened it. So the drag has nothing to fix and
+-- one thing it can do, which is break the geometry the app asked for --
+-- measured on a floating window, the move walked it from [-20, -20] to
+-- [-21, -82] and the resize took 720px of height down to 600. Nothing on the
+-- phone puts that back: the un-float is SUPER + T, a key press and not a
+-- gesture.
+--
+-- On a tiled window the same drag already did nothing, because
+-- one-app-per-workspace leaves no neighbour to swap with. That is the whole of
+-- the binding here -- inert where a phone actually points it, destructive
+-- where it lands.
+hl.unbind("SUPER + mouse:272")
+hl.unbind("SUPER + mouse:273")
