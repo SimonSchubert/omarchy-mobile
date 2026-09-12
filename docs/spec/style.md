@@ -143,10 +143,17 @@ rather than a shared singleton: the shade wants `popups` and the drawer wants
 is also why `SettingsRow` takes its colours as *properties* — it is used from
 both.
 
-**C3** `subdued` is computed against the surface it will be read on, through the
-surface's own `readableOn()` helper, and never fixed at an alpha. A theme whose
-menu text is already low-contrast turns a flat `alpha(text, 0.62)` into
-unreadable.
+**C3** `subdued` is computed against the surface it will be read on, and never
+fixed at an alpha. A theme whose menu text is already low-contrast turns a flat
+`alpha(text, 0.62)` into unreadable.
+
+Through `Theme.subduedOn(bg, ink)`, or `subduedOnContainer(surface, ink)` where
+the text sits on a card — one recipe, not a helper each surface calls its own
+way. The roles above stay per-surface, because the shade wants `popups` and the
+drawer wants `menu`; the arithmetic on top of them does not, because there is
+only one right answer and four surfaces had each picked a different one. `bg` is
+what is painted under the text, so a card's fill rather than the surface beneath
+the card.
 
 **C4** Literal hex appears in exactly one place: the fallback in a `typeof Color
 !== "undefined"` guard, for a surface that must draw before the theme singleton
