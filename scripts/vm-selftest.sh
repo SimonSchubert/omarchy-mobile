@@ -275,6 +275,10 @@ case $1 in
       find "$d" \( -path '*/apps/*' -o -path '*/devices/*' \) \
            \( -name "$2.svg" -o -name "$2.png" \) 2>/dev/null | head -1
     done | head -1 ;;
+  # One pixel, as six hex digits: `px 200,13`. At the output's own scale --
+  # `grim -s 1` resamples, and on an edge row its filter blends in what lies
+  # beyond the screen (section settings, I1a, has the measurement).
+  px) grim -g "$2 1x1" -t ppm - | tail -c 3 | od -An -tx1 | tr -d ' \n' ;;
   # A command in the session's environment, for the Settings checks that
   # compare a row with the reader behind it. `bash -lc`, as Settings runs them.
   sh) shift; bash -lc "$*" </dev/null ;;
@@ -1776,6 +1780,57 @@ section_apps() {
     check apps "$entry's long-press card offers to remove the launcher" \
       g sh "omarchy-mobile-app-remove plan $entry | grep -q 'Removes the launcher'"
   done
+
+  # ---------------------------------------------------------------------
+  # The colour an app states, on the bar and the band
+  # ---------------------------------------------------------------------
+  #
+  # With an entry of this suite's own rather than a web app's: no network, no
+  # browser, a colour no theme could produce by accident, and it exercises the
+  # same path a web app takes -- an entry naming a window class, found through
+  # the class index (Shell.qml, buildEntryIndex), carrying a stated colour.
+  echo "-- apps: the colour an app states"
+
+  local tint_entry="$apps/selftest-tint.desktop"
+  g sh "printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=Selftest Tint' \
+          'Exec=true' 'Icon=utilities-terminal' 'StartupWMClass=sel-tint' \
+          'X-Omarchy-Mobile-Bar-Color=#ff00ff' >$tint_entry"
+  # The index is rebuilt off the app list changing, which the entry landing in
+  # a watched directory is; the window then has to map and take focus.
+  g open_app sel-tint >/dev/null
+  wait_for "g active_class" sel-tint
+  # A terminal taking focus advertises text input, which raises the on-screen
+  # keyboard -- and the keyboard's panel covers the band, which the shell then
+  # stops filling (band=0). Put it down and wait for the band to come back,
+  # rather than reading the keyboard's own background and calling it a failure.
+  g osk_set false >/dev/null
+  band_state() { ipc gestures geometry | sed -n 's/.*\(band=[01]\).*/\1/p'; }
+  wait_for band_state band=1
+  sleep 1.5
+
+  # x=200 rather than the left edge: the clock's glyphs are drawn there, and a
+  # pixel inside a letter reads the ink, not the fill.
+  check apps "the bar takes the colour the focused app's entry states" \
+    is "$(g px 200,13)" ff00ff
+  check apps "so does the band under every window" \
+    is "$(g px 10,719)" ff00ff
+  # And the shell agrees with the screen about what it painted, which is the
+  # half a pixel cannot prove: a surface drawn the right colour by accident
+  # reads the same as one drawn it on purpose.
+  check apps "and the shell says that is what it painted" \
+    is "$(ipc gestures geometry | grep -o 'fill=#[0-9a-f]*')" "fill=#ff00ff"
+
+  # Off again with the sheet that covers it: the drawer is this shell's own
+  # surface and is drawn in the theme, so a bar still tinted for the app
+  # underneath would be the only piece of the screen that is not.
+  ipc drawer open >/dev/null; sleep 1.2
+  check apps "a sheet of the shell's own puts the theme's colours back" \
+    bash -c "[ '$(g px 200,13)' != ff00ff ]"
+  ipc drawer close >/dev/null; sleep 1.2
+
+  g sh "rm -f $tint_entry"
+  g kill_pids $(g pids sel-tint)
+  wait_for "g pids sel-tint" ""
 
   # What a web app tells the site it is. The override is on the schema, so the
   # browser's path and every web app's path resolve to it; this reads the one

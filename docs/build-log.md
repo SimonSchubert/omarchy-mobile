@@ -3093,3 +3093,106 @@ the other path -- the three web apps that were already open when the rule
 landed were put into the state by hand, and a live window entering fullscreen
 announces it. If it shows up on a cold launch, it is not from here and it wants
 looking at again.
+
+
+## 2026-09-13 -- the bar takes the app's colour
+
+Asked for: the colour of the site a web app is showing, on the status bar and
+the bottom band. Which is what Android does, and what a site already states for
+exactly that purpose -- `<meta name="theme-color">`, the one a phone browser
+paints its chrome with.
+
+### The colour cannot be asked for while it runs
+
+WebKit parses it: `libwebkitgtk-6.0` exports `webkit_web_view_get_theme_color`.
+Epiphany never calls it -- `nm -D --undefined-only libephymain.so` has no
+reference to the symbol -- and exposes nothing over IPC. So the value is read
+from the site the way the browser would read it, once, and written down.
+
+`omarchy-mobile-webapp-color` is that reader: the page's `theme-color` metas
+first, preferring the one whose `media` says dark, because this session is dark
+and x.com states `#FFFFFF` for light and `#000000` for dark; then the web app
+manifest's `theme_color`, for a site that states it there and not in the page;
+then nothing, which is a real answer. It sends the same user agent a web app
+sends, out of the same GSettings key, because a site that serves a different
+page to a phone states a different colour on it.
+
+    x.com                     #000000   (meta, dark variant)
+    open.spotify.com          #121212   (no meta; the linked manifest)
+    youtube.com               #0f0f0f   (meta)
+    discord.com/channels/@me  states nothing at all
+    web.whatsapp.com          states nothing at all
+
+Spotify's manifest took a second attempt: it is served compressed whatever you
+ask for, and `json.loads` on 496 bytes of gzip declines. The reader asks for
+`gzip` explicitly now -- the one encoding the standard library can undo -- and
+gets `#121212`.
+
+The value lands on the desktop entry as `X-Omarchy-Mobile-Bar-Color`, which any
+entry may carry: this is not a web app feature, it is a desktop entry feature
+that web apps happen to have an answer for.
+
+### What the shell does with it
+
+`Shell.qml` indexes the key across the launcher directories, in the order an
+entry is resolved in, and rebuilds that index when the app list moves -- next
+to the entry index, for the same reason and on the same signal. `appTint` is
+then the focused window's colour, and empty for every case that belongs to the
+theme: a sheet of this shell's own up, one of its own screens focused, nothing
+focused, or an app that states nothing.
+
+The ink is chosen rather than assumed (`Theme.js`, `inkOn`): whichever of the
+theme's own two colours clears the higher contrast ratio against the fill
+actually painted, because a site is as free to state `#ffffff` as `#000000`.
+
+### The bar is not the shell's to write to
+
+The first version aimed a `Binding` at `shell.bar.tint` -- the bar is this
+plugin's other entry point, and `shell.bar` is how the shade already reads the
+bar's height. It did nothing, silently, and the measurement said so: with
+Spotify focused the band read `#121212` and the bar read `#1a1b26`, the theme's.
+
+What a plugin is handed as `shell.bar` is not the bar. It is a sandboxed
+bar-state object the host builds for it -- `barHidden`, `barSize`, `fontFamily`,
+`position`, and nothing else (`shell.qml`, `pluginBarStateFor`). Writing `tint`
+into it wrote into a property that was not there.
+
+So the two entry points talk through `Tint.js`: both are loaded into the same
+QML engine in the same process, and a `.pragma library` module is shared across
+it. Not a property -- a plain JS value has no change signal, so a binding on it
+would never update -- but a listener list, which the bar subscribes to and
+unsubscribes from when it is destroyed. A callback into a destroyed object is
+dropped rather than taking the rest of the list with it, because the shell
+reloads a plugin whose files change.
+
+### Measured on the guest
+
+One pixel of the bar and one of the band, per app, with `grim`:
+
+| focused | bar | band |
+| --- | --- | --- |
+| Spotify | `#121212` | `#121212` |
+| X | `#000000` | `#000000` |
+| Discord (states nothing) | `#1a1b26` | `#1a1b26` |
+| the drawer open over X | `#1a1b26` | -- |
+| Settings, a screen of the shell's own | `#1a1b26` | -- |
+
+`vm-selftest.sh apps`: 32 passed. The tint checks use an entry of the suite's
+own -- no network, no browser, `#ff00ff`, which no theme produces by accident --
+and they exercise the class index on the way past, since the entry is found by
+`StartupWMClass`. One thing they had to learn: a terminal taking focus
+advertises text input, the on-screen keyboard rises, and the band stops being
+filled because the keyboard's panel covers it. The check puts the keyboard down
+and waits for `band=1` rather than reading the keyboard's background and
+calling it a failure.
+
+`gestures geometry` reports the fill it actually painted now, rather than the
+theme's unconditionally -- it would have said `#1a1b26` while the band was
+`#121212`, and I1a compares that string against a real pixel.
+
+### Not the keyboard
+
+Asked about, and left alone. `moarchy-keyboard` reads the theme's `colors.toml`
+and recolours on `omarchy-theme-set`: it has no per-app input, so tinting it
+would mean rewriting its palette and signalling it on every focus change, in a
+separate pinned project, for the surface you look at least.

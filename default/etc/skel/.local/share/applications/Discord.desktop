@@ -15,3 +15,8 @@ Type=Application
 Icon=omarchy-discord
 StartupNotify=true
 StartupWMClass=org.gnome.Epiphany.WebApp_discord_com
+# No X-Omarchy-Mobile-Bar-Color, and that is the site's answer rather than an
+# omission: `omarchy-mobile-webapp-color https://discord.com/channels/@me`
+# finds no theme-color meta and no manifest link on the app shell. The bar and
+# the band stay in the theme's colours here, which is what every app that
+# states nothing gets.

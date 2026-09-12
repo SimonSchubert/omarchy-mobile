@@ -19,3 +19,7 @@ Type=Application
 Icon=spotify
 StartupNotify=true
 StartupWMClass=org.gnome.Epiphany.WebApp_spotify_com
+# The player's own background, from `omarchy-mobile-webapp-color
+# https://open.spotify.com/` -- Spotify states no theme-color meta, so this
+# came out of the web app manifest the page links to.
+X-Omarchy-Mobile-Bar-Color=#121212

@@ -39,6 +39,7 @@ import Quickshell.Services.UPower
 import qs.Commons
 import qs.Ui as Ui
 import "Theme.js" as Theme
+import "Tint.js" as Tint
 
 Item {
   id: root
@@ -132,9 +133,42 @@ Item {
   }
 
   // ------------------------------------------------------------- appearance
-  readonly property color background: Color.bar.background
-  readonly property color foreground: Color.bar.text
+  //
+  // `tint` is written by Shell.qml -- this plugin's other entry point, which
+  // reaches this object as the host's `shell.bar`, the same way Shade.qml
+  // reads `barSize` off it. It holds the colour the focused app states on its
+  // desktop entry, and `transparent` for every case that is the theme's:
+  // nothing focused, a sheet of the shell's own up, or an app that states
+  // nothing (Shell.qml, appTint). NOT readonly, for the obvious reason, and
+  // not injected by the host either -- the host knows nothing about it.
+  property color tint: "transparent"
+  property var tintListener: null
+
+  Component.onCompleted: {
+    root.tintListener = Tint.subscribe(function(hex) {
+      root.tint = hex ? hex : "transparent"
+    })
+    // Whatever was worked out before this bar was built: the host loads the
+    // two entry points in whichever order it likes.
+    root.tint = Tint.value() ? Tint.value() : "transparent"
+  }
+  Component.onDestruction: Tint.unsubscribe(root.tintListener)
+  readonly property bool tinted: root.tint.a > 0
+
+  // The ink is chosen against whatever is actually painted, out of the theme's
+  // own pair: a site may state #000000 or #ffffff and the bar has to stay
+  // readable on both (Theme.js, inkOn).
+  property color background: root.tinted ? root.tint : Color.bar.background
+  property color foreground: root.tinted
+    ? Theme.inkOn(root.tint, Color.bar.text, Color.background)
+    : Color.bar.text
   readonly property color dim: Theme.subduedOn(root.background, root.foreground)
+
+  // Switching apps is a cut, and the bar changing colour with it reads as a
+  // flash on a screen this size. 160ms is the shade's own scrim fade, so the
+  // two surfaces that change together change at the same rate.
+  Behavior on background { ColorAnimation { duration: 160 } }
+  Behavior on foreground { ColorAnimation { duration: 160 } }
   readonly property int edgePad: Style.space(8)
 
   // DemiBold, not Regular. moarchy measured it on the device: light text on a

@@ -199,6 +199,14 @@ it on.
   they weigh, read out of `pacman -Rs --print`. Nothing this phone is made of
   can go: the shell's own packages, and anything in the session tier, say so
   instead of offering a button.
+- **The status bar takes the app's own colour.** An app that states one on its
+  desktop entry -- `X-Omarchy-Mobile-Bar-Color`, which
+  `omarchy-mobile-webapp-color` resolves from a site's `theme-color` or its web
+  app manifest -- gets the bar and the band at the bottom painted with it while
+  it is focused, the way Android does: X is `#000000`, Spotify `#121212`. The
+  ink is chosen against whatever is painted, so a white one stays readable. An
+  app that states nothing, one of the shell's own screens, or any sheet of its
+  own on top, and the theme's colours are back.
 - **Pull down the status bar** for the shade: Wi-Fi, Bluetooth, Silent,
   Airplane and Rotate, brightness and volume where there is hardware for them,
   the media player, and your notifications, each led by its app's icon: tap

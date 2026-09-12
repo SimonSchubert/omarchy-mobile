@@ -65,8 +65,11 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+// Process and SplitParser, for the scan that indexes the colour an entry states.
+import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import "Tint.js" as Tint
 
 Item {
   id: root
@@ -135,10 +138,95 @@ Item {
 
   Connections {
     target: root.apps
-    function onAppsChanged() { root.buildEntryIndex() }
+    function onAppsChanged() { root.buildEntryIndex(); barColorScan.running = true }
   }
 
   onAppsChanged: root.buildEntryIndex()
+
+  // ------------------------------------------- the colour an app asks the bar for
+  //
+  // Android tints the status bar with the colour the app states, and a web app
+  // states one: `<meta name="theme-color">` is the standard, X says #000000 and
+  // YouTube says #0f0f0f. WebKit parses it and Epiphany never asks for it
+  // (docs/build-log.md), so the value is resolved once by
+  // omarchy-mobile-webapp-color and written on the desktop entry as
+  // X-Omarchy-Mobile-Bar-Color. Any entry may carry it, not only a web app's.
+  //
+  // Scanned rather than read per window: this is one grep over the launcher
+  // directories, in the order a launcher entry is resolved in -- the user's
+  // first, so a user copy shadows a packaged one exactly as it does when the
+  // app is launched -- and it is rebuilt when the app list moves, next to the
+  // index that is rebuilt for the same reason.
+  property var barColorIndex: ({})
+
+  function barColorScanCommand() {
+    return [
+      'for d in "$HOME/.local/share/applications" /usr/local/share/applications',
+      '         /usr/share/applications; do',
+      '  [ -d "$d" ] && grep -shm1 -H "^X-Omarchy-Mobile-Bar-Color=" "$d"/*.desktop 2>/dev/null;',
+      'done'
+    ].join(' ')
+  }
+
+  // `<path>:X-Omarchy-Mobile-Bar-Color=#rrggbb`. First writer wins, so the
+  // user's directory -- scanned first -- shadows the rest.
+  function indexBarColorLine(line) {
+    var value = String(line || "").trim()
+    var cut = value.indexOf(".desktop:")
+    if (cut < 0) return
+    var id = value.slice(0, cut)
+    id = id.slice(id.lastIndexOf("/") + 1).toLowerCase()
+    var color = value.slice(value.indexOf("=", cut) + 1).trim()
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) return
+    if (pendingBarColors.map[id] === undefined) pendingBarColors.map[id] = color
+  }
+
+  QtObject {
+    id: pendingBarColors
+    property var map: ({})
+  }
+
+  Process {
+    id: barColorScan
+    command: ["bash", "-c", root.barColorScanCommand()]
+    stdout: SplitParser { onRead: function(line) { root.indexBarColorLine(line) } }
+    onStarted: pendingBarColors.map = ({})
+    onExited: root.barColorIndex = pendingBarColors.map
+  }
+
+  Component.onCompleted: {
+    barColorScan.running = true
+    Tint.set(root.appTintHex)
+  }
+
+  // What the bar and the bottom band are painted with, or transparent for
+  // "the theme's own colours", which is every case but one:
+  //
+  //   a sheet of this shell is up   the drawer, the carousel and the shade are
+  //                                 this shell's surfaces and are drawn in the
+  //                                 theme; a bar tinted for the app underneath
+  //                                 them would be the only piece that is not
+  //   one of this shell's screens    Settings, Wi-Fi and Bluetooth are windows,
+  //                                 but they are ours (K5)
+  //   nothing focused               the home screen is the wallpaper's
+  //   an app that states no colour  which is most of them, and upstream's own
+  //                                 web app entries until somebody resolves one
+  readonly property string appTintHex: {
+    if (root.opened) return ""
+    var tl = root.focusedToplevel()
+    if (!tl || root.screenForToplevel(tl)) return ""
+    var entry = root.entryFor(tl.appId)
+    if (!entry) return ""
+    var id = String(entry.id || "").toLowerCase().replace(/\.desktop$/, "")
+    return root.barColorIndex[id] || ""
+  }
+
+  // The same answer as a colour, for the surface this screen owns: the bottom
+  // band reads it straight off `host` (EdgeGestures.qml).
+  readonly property color appTint: root.appTintHex ? root.appTintHex : "transparent"
+
+  // And out to the bar, which this screen cannot reach. Tint.js says why.
+  onAppTintHexChanged: Tint.set(root.appTintHex)
 
   // An app id or an app name, in any case; null for anything unknown.
   function entryFor(name) {

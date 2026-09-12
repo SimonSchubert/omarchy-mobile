@@ -24,3 +24,9 @@ Type=Application
 Icon=x
 StartupNotify=true
 StartupWMClass=org.gnome.Epiphany.WebApp_x_com
+# The colour the site asks a phone's chrome to be, which the shell paints the
+# status bar and the bottom band with while this app is focused (Shell.qml,
+# appTint). Resolved by `omarchy-mobile-webapp-color https://x.com/` rather
+# than picked: x.com states #FFFFFF for a light scheme and this for a dark one,
+# and this session is dark. Re-run it if the site restyles.
+X-Omarchy-Mobile-Bar-Color=#000000

@@ -73,3 +73,22 @@ function subduedOn(bg, ink) { return readableOn(opaque(bg), ink, 0.55, 4.5) }
 function subduedOnContainer(surface, ink) {
   return subduedOn(containerOn(surface, ink), ink)
 }
+
+// ---------------------------------------------------------------------------
+// Ink on a colour the theme did not choose
+// ---------------------------------------------------------------------------
+// The status bar and the bottom band take the colour the focused app states
+// (Shell.qml, `appTint`), and that colour is the site's, not the theme's: X
+// says #000000 and YouTube says #0f0f0f, but a site is equally free to say
+// #ffffff. The bar's own text colour is right for one of those and invisible
+// on the other.
+//
+// So the ink is chosen rather than assumed, out of the theme's own pair --
+// whichever of the two clears the higher ratio against the fill actually
+// painted. Not a luminance threshold: a threshold answers "is this dark", and
+// the question here is "which of these two can be read on it", which is the
+// same arithmetic the rest of this file already does.
+function inkOn(bg, a, b) {
+  var fill = opaque(bg)
+  return contrastRatio(a, fill) >= contrastRatio(b, fill) ? a : b
+}

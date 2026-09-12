@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+# omarchy:summary=Resolve the colour a site asks its chrome to be
+# omarchy:args=<url> [--write <desktop-id>]
+#
+#   omarchy-mobile-webapp-color https://x.com/            -> #000000
+#   omarchy-mobile-webapp-color https://x.com/ --write X  ... and into X.desktop
+#
+# ---------------------------------------------------------------------------
+# What this is for
+# ---------------------------------------------------------------------------
+# The shell tints the status bar and the bottom band with the colour the
+# focused app states, the way Android does (docs/build-log.md). The state is a
+# key on the desktop entry:
+#
+#   X-Omarchy-Mobile-Bar-Color=#0f0f0f
+#
+# A web app cannot be asked for it while it runs. WebKit knows -- libwebkitgtk
+# exports webkit_web_view_get_theme_color, so the engine parses the meta -- but
+# Epiphany never calls it: `nm -D --undefined-only libephymain.so` has no
+# reference to the symbol, and nothing is exposed over IPC. So the value is
+# read from the site the same way the browser would read it, once, and written
+# down. This is the reader.
+#
+# ---------------------------------------------------------------------------
+# Where the colour comes from, in order
+# ---------------------------------------------------------------------------
+# 1. <meta name="theme-color">, which is the standard and what every phone
+#    browser uses for exactly this. A site may state several, each with a
+#    `media` query; the dark one is preferred because this session is dark
+#    (WebKitGTK answers prefers-color-scheme from the GTK theme) and x.com is
+#    the case that matters -- it states #FFFFFF for light and #000000 for dark.
+# 2. The web app manifest's `theme_color`, for a site that states it there and
+#    not in the page: an SPA shell often carries no meta at all.
+# 3. Nothing, and that is a real answer. An entry with no key is drawn in the
+#    theme's own colours, which is the behaviour this whole feature is an
+#    exception to.
+#
+# The agent is the one the web app itself will use, out of the same GSettings
+# key, because a site that serves a different page to a phone states a
+# different colour on it.
+
+import gzip
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.request
+import zlib
+from html.parser import HTMLParser
+from urllib.parse import urljoin
+
+TIMEOUT = 20
+FALLBACK_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
+               "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 "
+               "Mobile/15E148 Safari/604.1")
+KEY = "X-Omarchy-Mobile-Bar-Color"
+
+
+def user_agent():
+    """What a web app sends, read from the setting that decides it."""
+    try:
+        out = subprocess.run(
+            ["gsettings", "get",
+             "org.gnome.Epiphany.web:/org/gnome/epiphany/web/", "user-agent"],
+            capture_output=True, text=True, timeout=10).stdout.strip()
+        value = out[1:-1] if len(out) > 1 and out[0] in "'\"" else out
+        if value:
+            return value
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return FALLBACK_UA
+
+
+def fetch(url, ua):
+    # `Accept-Encoding: gzip` and not the default, which is whatever urllib
+    # feels like: Spotify's manifest is served compressed either way, and an
+    # unasked-for encoding arrives as 496 bytes of binary that json.loads
+    # declines. Asking for gzip means what comes back is a thing the standard
+    # library can undo -- brotli is not, and is not asked for.
+    request = urllib.request.Request(url, headers={
+        "User-Agent": ua, "Accept-Encoding": "gzip"})
+    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+        # 200 KB is past the <head> of every page tried here and stops a
+        # streamed app shell from being downloaded whole for two attributes.
+        raw = response.read(200_000)
+        if response.headers.get("Content-Encoding", "").lower() == "gzip":
+            try:
+                raw = gzip.decompress(raw)
+            except (OSError, EOFError, zlib.error):
+                # A truncated read of a gzip stream, which is what the 200 KB
+                # cap makes of a large page: take the bytes that did decode.
+                raw = zlib.decompressobj(zlib.MAX_WBITS | 16).decompress(raw)
+        return raw.decode("utf-8", "replace"), response.geturl()
+
+
+class Head(HTMLParser):
+    """theme-color metas, in document order, and the manifest link."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.colors = []       # (media, content)
+        self.manifest = None
+
+    def handle_starttag(self, tag, attrs):
+        a = {k.lower(): (v or "") for k, v in attrs}
+        if tag == "meta" and a.get("name", "").lower() == "theme-color":
+            self.colors.append((a.get("media", ""), a.get("content", "")))
+        elif tag == "link" and "manifest" in a.get("rel", "").lower():
+            if not self.manifest:
+                self.manifest = a.get("href", "")
+
+
+def normalise(value):
+    """#rgb or #rrggbb or rgb(r,g,b) -> #rrggbb, and anything else is not a
+    colour this can be sure of. A name like `white` is left out on purpose:
+    the shell is handed hex or nothing."""
+    value = (value or "").strip().lower()
+    m = re.fullmatch(r"#([0-9a-f]{3})", value)
+    if m:
+        return "#" + "".join(c * 2 for c in m.group(1))
+    m = re.fullmatch(r"#([0-9a-f]{6})", value)
+    if m:
+        return "#" + m.group(1)
+    m = re.fullmatch(r"rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)[\s,/]*[\d.]*\s*\)", value)
+    if m:
+        rgb = [max(0, min(255, int(g))) for g in m.groups()]
+        return "#%02x%02x%02x" % tuple(rgb)
+    return ""
+
+
+def pick(colors):
+    """The dark one, then the unconditional one, then whatever came first."""
+    for want_dark in (True, False):
+        for media, content in colors:
+            dark = "dark" in media.lower()
+            if dark == want_dark:
+                c = normalise(content)
+                if c:
+                    return c
+    return ""
+
+
+def resolve(url):
+    ua = user_agent()
+    html, final = fetch(url, ua)
+    head = Head()
+    head.feed(html)
+
+    color = pick(head.colors)
+    if color:
+        return color
+
+    if head.manifest:
+        try:
+            raw, _ = fetch(urljoin(final, head.manifest), ua)
+            return normalise(json.loads(raw).get("theme_color", ""))
+        except (OSError, ValueError):
+            return ""
+    return ""
+
+
+def write(desktop_id, color):
+    """Set the key on the user's own copy of the entry, leaving every other
+    line where it was: this file may be upstream's, or one
+    omarchy-webapp-install wrote, and only one line here is ours."""
+    apps = os.path.join(
+        os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")),
+        "applications")
+    path = os.path.join(apps, desktop_id if desktop_id.endswith(".desktop")
+                        else desktop_id + ".desktop")
+    if not os.path.isfile(path):
+        sys.exit("no launcher entry at %s" % path)
+    with open(path) as handle:
+        lines = handle.read().splitlines()
+    line = "%s=%s" % (KEY, color)
+    for i, existing in enumerate(lines):
+        if existing.startswith(KEY + "="):
+            lines[i] = line
+            break
+    else:
+        lines.append(line)
+    with open(path, "w") as handle:
+        handle.write("\n".join(lines) + "\n")
+    print("%s -> %s" % (path, color), file=sys.stderr)
+
+
+def main(argv):
+    if not argv or argv[0].startswith("-"):
+        sys.exit("usage: omarchy-mobile-webapp-color <url> [--write <desktop-id>]")
+    url = argv[0]
+    target = ""
+    if len(argv) >= 3 and argv[1] == "--write":
+        target = argv[2]
+
+    try:
+        color = resolve(url)
+    except OSError as error:
+        sys.exit("could not read %s: %s" % (url, error))
+
+    if not color:
+        sys.exit("%s states no colour" % url)
+
+    print(color)
+    if target:
+        write(target, color)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

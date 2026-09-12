@@ -61,11 +61,19 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import "Theme.js" as Theme
 
 Item {
   id: root
 
   property var host: null
+
+  // The colour the focused app states, or transparent for the theme's own
+  // (Shell.qml, appTint). The band below every window is painted with it, so
+  // an app's own colour runs from the status bar to the bottom edge rather
+  // than stopping at the window.
+  readonly property color tint: root.host ? root.host.appTint : "transparent"
+  readonly property bool tinted: root.tint.a > 0
   property var drawer: null
   property var carousel: null
   property var shade: null
@@ -619,7 +627,11 @@ Item {
         // I1a: whether the band is filled, and with what, so a check can hold
         // one pixel of the screen against what this surface says it painted.
         + " band=" + (root.bandFilled ? 1 : 0)
-        + " fill=" + Color.background
+        // The colour actually painted, which is the focused app's when it
+        // states one (Shell.qml, appTint) and the theme's otherwise. Reporting
+        // Color.background unconditionally, as this did, would have said the
+        // theme's while the band was painted #121212.
+        + " fill=" + (root.tinted ? root.tint : Color.background)
         + " kbd=" + (root.keyboardUp ? 1 : 0)
         // G10. The back band, which is an input region and not a surface, so
         // this is the only place it can be read from at all. `screen` is
@@ -667,8 +679,14 @@ Item {
       // the first stop. Armed for home it goes accent -- once the carousel
       // covers the screen the pill is the only cue left that letting go now
       // goes somewhere else.
+      // On a tinted band the theme's foreground can be the band's own colour --
+      // a white pill on #ffffff is no pill -- so the ink is picked against
+      // what is painted, the way the bar's is. The accent is left alone: it is
+      // a state, and a state that changes colour with the app is not one.
       color: root.homeArmed ? Color.accent
-                            : Util.alpha(Color.foreground, root.tracking ? 0.9 : 0.3)
+                            : Util.alpha(root.tinted
+                                ? Theme.inkOn(root.tint, Color.foreground, Color.background)
+                                : Color.foreground, root.tracking ? 0.9 : 0.3)
       scale: root.homeArmed ? 1.6
            : 1 + Math.min(0.4, Math.max(0, -root.dy) / (root.commitDistance * 4))
 
@@ -867,7 +885,8 @@ Item {
       anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
       height: root.stripHeight
       visible: root.bandFilled
-      color: Color.background
+      color: root.tinted ? root.tint : Color.background
+      Behavior on color { ColorAnimation { duration: 160 } }
     }
 
     MouseArea {
