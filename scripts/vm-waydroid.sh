@@ -99,6 +99,20 @@ die()  { printf '\033[31m!! %s\033[0m\n' "$*" >&2; exit 1; }
 
 ssh_() { ./scripts/vm-ssh.sh "$@"; }
 
+# One session drives the VM at a time, and Android takes the screen and four
+# cores' worth of software rendering while it boots -- so everything here that
+# touches the guest takes the lease first. vm-lease.sh is still being landed by
+# another session; until it is in the repo, say so rather than failing outright,
+# because an unleased run is a worse surprise as a silent one.
+take_lease() {
+  if [ -f scripts/vm-lease.sh ]; then
+    . scripts/vm-lease.sh
+    lease_take "$1" || exit 1
+  else
+    printf '\033[33m** no scripts/vm-lease.sh -- running unleased; check nobody else is driving the VM\033[0m\n' >&2
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # The guest's disk, grown live through the QEMU monitor.
 grow_disk() {
@@ -304,17 +318,17 @@ do_status() {
 # ---------------------------------------------------------------------------
 case "${1:-install}" in
   install)
-    . scripts/vm-lease.sh; lease_take "vm-waydroid.sh install" || exit 1
+    take_lease "vm-waydroid.sh install"
     grow_disk; install_packages; fetch_images; push_images; do_init; set_props
     say "installed"
     info "./scripts/vm-waydroid.sh start   boots it"
     ;;
-  disk)   . scripts/vm-lease.sh; lease_take "vm-waydroid.sh disk" || exit 1; grow_disk ;;
-  images) . scripts/vm-lease.sh; lease_take "vm-waydroid.sh images" || exit 1; fetch_images; push_images ;;
-  props)  . scripts/vm-lease.sh; lease_take "vm-waydroid.sh props" || exit 1; set_props ;;
-  start)  . scripts/vm-lease.sh; lease_take "vm-waydroid.sh start" || exit 1; do_start; show_ui ;;
-  ui)     . scripts/vm-lease.sh; lease_take "vm-waydroid.sh ui" || exit 1; show_ui ;;
-  stop)   . scripts/vm-lease.sh; lease_take "vm-waydroid.sh stop" || exit 1; do_stop ;;
+  disk)   take_lease "vm-waydroid.sh disk"; grow_disk ;;
+  images) take_lease "vm-waydroid.sh images"; fetch_images; push_images ;;
+  props)  take_lease "vm-waydroid.sh props"; set_props ;;
+  start)  take_lease "vm-waydroid.sh start"; do_start; show_ui ;;
+  ui)     take_lease "vm-waydroid.sh ui"; show_ui ;;
+  stop)   take_lease "vm-waydroid.sh stop"; do_stop ;;
   status) do_status ;;
   *) sed -n '2,9p' "$0"; exit 1 ;;
 esac
