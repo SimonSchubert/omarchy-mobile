@@ -169,6 +169,13 @@ it on.
 - **Swipe sideways along the pill** for the next or previous app. Every app
   gets a workspace of its own, filling it, through a window rule in
   [`hypr/mobile.lua`](default/etc/skel/.config/hypr/mobile.lua).
+- **Swipe in from the left edge** to go back, which always undoes the topmost
+  thing: the on-screen keyboard if it is up, then whatever sheet is open, then
+  the app itself -- *asked* to close, so an editor with unsaved work still
+  prompts. Inside Settings it walks up the page stack first and leaves the
+  window only from the root. The band is 16 logical px and stops short of the
+  bar at the top and of the pill and the keyboard at the bottom, so it never
+  swallows a key or the shade's handle.
 - **Drag up on the wallpaper** of a home screen for the app drawer, 1:1 with
   the finger. Drag down to put it away.
 - **Hold an app icon** for a card that says what it is: the package that owns
@@ -235,7 +242,9 @@ All measured, and the surface layout is shaped around them.
 - **The implicit pointer grab ends at a layer surface's edge.** A drag stops
   getting motion when it leaves the surface it started on, so the edge surface
   is full-screen and opens its input mask to the whole screen for the length of
-  a drag.
+  a drag. The back edge is the same trick and the plainest case of it: moarchy's
+  is a 16px-wide surface that reads the press and the release, which here would
+  see 16px of a 60px swipe and never commit one.
 - **A layer surface with exclusive keyboard focus takes every pointer event.**
   So the drawer holds `OnDemand` focus (tap the search field before typing) and
   the carousel holds none, which keeps the bottom edge live over both.
