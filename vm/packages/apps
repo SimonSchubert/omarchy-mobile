@@ -109,6 +109,35 @@ xdg-terminal-exec
 # that fail. 7 MB, one static binary.
 mise-bin
 
+# Node, for the agents mise installs but cannot run.
+#
+# mise fetches an `npm:` package itself -- `mise use -g npm:@xai-official/grok`
+# installs against no node at all -- and what it unpacks is a shim whose last
+# line is `exec node`. So on the first image to carry mise, Grok installed and
+# then answered
+#
+#   .../npm-xai-official-grok/latest/node_modules/.bin/grok: exec: node: not found
+#
+# which is what a phone with the installer and no runtime looks like: the row
+# works, the install works, and the agent does not start. Most of the thirteen
+# resolve to npm packages through mise's registry, so it is not Grok's alone.
+#
+# Upstream never meets this, because node arrives before any agent does:
+# install/user/mise-work.sh runs `mise use -g node@latest` while
+# omarchy-provision-user sets a user up. This image seeds /etc/skel from
+# upstream's config/ and runs no provisioning of its own (vm/configure.sh), so
+# nothing here was ever going to ask for it.
+#
+# From ALARM's extra rather than through mise, for the same reason as
+# everything else in this file: it is on the image before first boot instead of
+# a 70 MB download on the first tap of an agent tile, on a phone that may have
+# no network when it is tapped. ALARM is current with it -- nodejs 26.8.2-1, the
+# same version `mise use -g node@latest` resolved to here -- and npm comes with
+# it because upstream's mise node carries npm, and an agent that shells out to
+# it otherwise finds nothing. 70 MB and 10 MB installed.
+nodejs
+npm
+
 # --- moarchy's default apps -----------------------------------------------
 # Notes (moarchy-keep) and the App Store (moarchy-store), built by
 # vm/build-packages.sh from [pkg.moarchy-keep] and [pkg.moarchy-store-git] and

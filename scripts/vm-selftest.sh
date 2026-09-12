@@ -1869,7 +1869,12 @@ section_agent() {
     # decoy at claude is excluded because P7 is the check that it survived;
     # hermes and openclaw because P8 is the check that they were skipped.
     local wrapped expected="" a2
-    wrapped=$(g sh 'grep -l mise ~/.local/bin/* 2>/dev/null | xargs -n1 basename | sort | tr "\n" " "')
+    # The save at the top of this section lands in the very directory this
+    # greps: on a guest that has seeded once, ~/.local/bin/claude is a mise
+    # wrapper, and moving it aside leaves claude.selftest-saved beside the
+    # eleven for the glob to find. Excluded here rather than saved elsewhere,
+    # so the three files this section moves aside still move the same way.
+    wrapped=$(g sh 'grep -l mise ~/.local/bin/* 2>/dev/null | grep -v "\.selftest-saved$" | xargs -n1 basename | sort | tr "\n" " "')
     for a2 in $(g sh 'omarchy-mobile-agent list | sort'); do
       case $a2 in hermes|openclaw|claude) continue ;; esac
       expected="$expected$a2 "
