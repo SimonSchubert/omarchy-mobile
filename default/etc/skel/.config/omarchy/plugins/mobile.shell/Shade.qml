@@ -147,6 +147,16 @@ Item {
   readonly property color subdued: Theme.subduedOnContainer(root.surface,
                                                             root.textOnSurface)
 
+  // The same role on a tile that is switched on, where the fill is the accent
+  // and the ink is the background. Its own property rather than an alpha at the
+  // call site: a tile's detail line is the detail line whichever way the tile
+  // is set, and the two branches of that ternary were following different rules
+  // -- 0.75 flat when on, the recipe when off. Some accents cannot reach 4.5:1
+  // against the background even at full ink; readableOn hands back the full ink
+  // there, which is the most the theme has to give.
+  readonly property color subduedOnAccent: Theme.subduedOn(root.accent,
+                                                           root.textOnAccent)
+
   component PressVeil: Veil { ink: root.textOnSurface }
 
   // ---------------------------------------------------------- drag state
@@ -1029,7 +1039,7 @@ Item {
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
           font.weight: root.textWeight
-          color: tile.on ? Util.alpha(root.textOnAccent, 0.75) : root.subdued
+          color: tile.on ? root.subduedOnAccent : root.subdued
           elide: Text.ElideRight
         }
       }
@@ -1100,7 +1110,7 @@ Item {
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
         font.weight: root.textWeight
-        color: small.on ? Util.alpha(root.textOnAccent, 0.75) : root.subdued
+        color: small.on ? root.subduedOnAccent : root.subdued
       }
     }
 
