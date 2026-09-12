@@ -3196,3 +3196,56 @@ Asked about, and left alone. `moarchy-keyboard` reads the theme's `colors.toml`
 and recolours on `omarchy-theme-set`: it has no per-app input, so tinting it
 would mean rewriting its palette and signalling it on every focus change, in a
 separate pinned project, for the surface you look at least.
+
+
+## 2026-09-13 -- WhatsApp is not the user agent
+
+Reported from the device: WhatsApp still comes up in desktop mode. It does, and
+the user agent is not why -- WhatsApp is in fact the clearest evidence that the
+agent reaches every web app.
+
+    curl -A "<Epiphany's own desktop agent>" https://web.whatsapp.com/
+      -> HTTP 400, 6 KB, <title>Error</title>, "Sorry, something went wrong."
+    curl -A "<the iPhone agent this image sets>" https://web.whatsapp.com/
+      -> HTTP 200, 88 KB, the app shell, width=device-width
+
+The window on screen shows the working QR login, which is the 200. If the app
+were still sending the desktop agent it would be showing an error page. The
+setting resolves at that web app's own path as well
+(`/org/gnome/epiphany/web-apps/org.gnome.Epiphany.WebApp_whatsapp_com/web/`),
+and the instance had been started after the override landed.
+
+### The dead end, for the record
+
+The first theory was the service worker: WhatsApp registers one, the profile's
+`CacheStorage` and `serviceworkers` directories were dated 2026-09-11, before
+the agent changed, and a cached app shell would never ask the network what it
+should look like. Wrong. Both were deleted -- cookies, storage and the login
+left alone -- and the relaunched app drew exactly the same wide layout from a
+cold cache.
+
+### What it actually is
+
+web.whatsapp.com has no phone layout. It is a desktop product: the page it
+serves a phone is the same two-column login, and the first thing on it is a
+banner reading *"Download WhatsApp for Mac -- Get the app"*. There is nothing
+to switch to. YouTube is the contrast, on the same mechanism: a completely
+different, narrow page.
+
+### The lever for a site like that
+
+Epiphany's zoom is per web app, on the same relocatable schema the agent is on,
+so it is one setting and it sticks:
+
+    gsettings set "org.gnome.Epiphany.web:/org/gnome/epiphany/web-apps/\
+      org.gnome.Epiphany.WebApp_whatsapp_com/web/" default-zoom-level 0.5
+
+At 0.5 the whole login card fits the 360px screen with margin -- QR, all three
+steps, "Log in with phone number" and the footer, nothing clipped. The card is
+about 530 CSS px wide, so ~0.67 is where it starts touching the edges and 0.6
+is the comfortable maximum.
+
+Not shipped as a default: this image ships no WhatsApp entry (upstream's is
+what `omarchy-refresh-applications` copies), and the right number is a property
+of the site, not of the phone. It is written down here as the answer for any
+web app whose page was never drawn for a phone.
