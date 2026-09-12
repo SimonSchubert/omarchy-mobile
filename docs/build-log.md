@@ -2661,9 +2661,18 @@ grafted into the Lineage-20 vendor through `/var/lib/waydroid/overlay/vendor`,
 which is a lowerdir above rootfs and so shadows and extends it. They were never
 loaded -- `ro.hardware.egl` resolves to `angle` regardless, so the loader takes
 `libEGL_angle.so` and never looks at them -- and the thing that actually changed
-was the gralloc prop in the same step. They have been removed. 18.1 would also
-have cost the `arm64_only` fix, since that channel is Lineage-20 only and the
-18.1 `arm64` images carry the same `boringssl_self_test32_vendor` that reboots.
+was the gralloc prop in the same step. 18.1 would also have cost the
+`arm64_only` fix, since that channel is Lineage-20 only and the 18.1 `arm64`
+images carry the same `boringssl_self_test32_vendor` that reboots.
+
+Those three libs are **still in the guest's overlay**, along with
+`drm_device = /dev/dri/card0` in `waydroid.cfg` from the card0 detour, a spare
+358 MB 18.1 `vendor.img` under `/etc/waydroid-extra/images181` and a `/mnt/v181`
+mount that was used to read it. All four are inert -- the libs are never loaded,
+and `drm_device` only decides which node gets bound into a container that no
+longer allocates through it -- and `vm-waydroid.sh` installs none of them, so a
+guest built from the script has a clean configuration. They are still there
+because the lease went to another session before they could be cleaned up.
 
 The one lasting sharp edge: `ro.hardware.gralloc=default` is hand-written into
 `waydroid_base.prop`, and `waydroid init -f` regenerates that file from
