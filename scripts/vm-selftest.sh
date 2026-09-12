@@ -2,7 +2,7 @@
 # Check the mobile shell against its acceptance criteria, in the running VM.
 #
 #   ./scripts/vm-selftest.sh              every section
-#   ./scripts/vm-selftest.sh A E S        only those (W A B C D E H L S K settings keyboard apps)
+#   ./scripts/vm-selftest.sh A E S        only those (W A B C D G E H L S K settings keyboard apps)
 #
 # Every line of output names the AC it proves, from docs/spec/gestures.md,
 # shade.md, windows.md and settings.md, so an AC with no check here is visible
@@ -373,6 +373,127 @@ section_D() {
   g open_app sel-a
   drag $MID_X 400 -300
   check D3 "the same drag over an app does nothing to the shell" is "$(ipc drawer state)" closed
+}
+
+section_G() {
+  echo "-- G: the left edge, back"
+  reset_session
+  # One field of an IPC line of key=value pairs, as the keyboard section does.
+  kv() { tr ' ' '\n' <<<"$2" | sed -n "s/^$1=//p"; }
+
+  local geom band bw bh top inset strip screen width
+  geom=$(ipc gestures geometry)
+  band=$(kv back "$geom"); bw=${band%x*}; bh=${band#*x}
+  top=$(kv backTop "$geom"); inset=$(kv backInset "$geom")
+  strip=$(kv strip "$geom"); screen=$(kv screen "$geom")
+  width=$(kv edge "$geom"); width=${width%x*}
+
+  # G8, G10. The band is an input region and not a surface, so `gestures
+  # geometry` is the only place it can be read from at all: from outside, a
+  # band that failed to shrink and one that is fine both answer nothing, and a
+  # tap below the cut and a tap on a dead edge look identical.
+  check G8 "the band is ${bw}px wide -- a settable property, not a constant" \
+    bash -c "[ $bw -gt 0 ] && [ $bw -le 40 ]"
+  check G10 "it stops one strip plus one keyboard panel short of the bottom ($strip + 200 = $inset)" \
+    is "$inset" "$(( strip + 200 ))"
+  check G10 "and the bar's band short of the top, so it is $screen - $top - $inset = $bh tall" \
+    is "$bh" "$(( screen - top - inset ))"
+
+  # In from the left edge, far enough to commit (G6). BACK_Y is the middle of
+  # the band, computed from what the shell just reported rather than written
+  # down: below the bar, well above the keyboard's panel, and with room above
+  # and below for a drag that is meant to travel vertically. The screen clamps
+  # the pointer, so a swipe aimed off the top arrives with its dy cut short --
+  # measured, a 120px rise from y=66 was delivered as 66 and read as the
+  # sideways swipe it was not.
+  local BACK_X=5 BACK_Y=$(( top + bh / 2 ))
+  back_swipe() { DX=${1:-80} drag "$BACK_X" "${2:-$BACK_Y}" 0; }
+
+  g open_app sel-a
+  g osk_set false; wait_for "g osk_visible" "b false"
+  local n; n=$(g nwin)
+
+  back_swipe 20
+  check G6 "a short drag in from the edge does nothing, so brushing it never closes an app" \
+    is "$(g nwin)" "$n"
+  DX=80 drag "$BACK_X" "$BACK_Y" -150
+  check G6 "nor does a swipe that travels further up than in -- a scroll from the edge is not a back" \
+    is "$(g nwin)" "$n"
+
+  # G10's two cuts, from the outside. Both were dead corners before they were
+  # cut: the bottom one swallowed the keyboard's leftmost key column, and the
+  # top one is the shade's own handle.
+  back_swipe 80 $(( screen - 10 ))
+  check G10 "a swipe in the bottom ${inset}px is not a back -- that band is the strip's and the keyboard's" \
+    is "$(g nwin) $(ipc recents state)" "$n closed"
+  back_swipe 80 $(( top / 2 ))
+  check G10 "nor is one in the bar's band, which stays the shade's handle" \
+    is "$(g nwin) $(ipc shade state)" "$n closed"
+
+  # G9. Android takes both edges; this takes one, which halves what it costs
+  # apps. Nothing is listening on the right, so the mirror swipe does nothing.
+  DX=-80 drag $(( width - 5 )) "$BACK_Y" 0
+  check G9 "only the left edge is claimed -- the mirror swipe from the right does nothing" \
+    is "$(g nwin) $(ipc drawer state)" "$n closed"
+
+  # G1, G2. The keyboard is the first rung, and it is the whole of what that
+  # swipe does: this is the gesture that puts the keyboard away, so it must not
+  # also take the app with it.
+  g osk_set true; wait_for "g osk_visible" "b true"
+  back_swipe
+  check G2 "with the keyboard up, back dismisses it and changes nothing else" \
+    is "$(g osk_visible) $(g nwin)" "b false $n"
+
+  # G1's order, on the two rungs that can be on screen at once.
+  ipc drawer open >/dev/null; sleep 0.5
+  g osk_set true; wait_for "g osk_visible" "b true"
+  back_swipe
+  check G1 "the keyboard goes before the sheet standing under it" \
+    is "$(g osk_visible) $(ipc drawer state)" "b false open"
+  back_swipe
+  check G3 "and the next back closes that sheet, leaving the app underneath alone" \
+    is "$(ipc drawer state) $(g nwin)" "closed $n"
+
+  # G3 through the shade, which is the forwarding path: the shade is on Overlay
+  # too and keeps its whole input region while up, so the press lands on it and
+  # it hands the band back (A8 applied to this edge).
+  ipc shade open >/dev/null; sleep 0.8
+  back_swipe
+  check G3 "the shade forwards the band it covers, so back still closes the shade" \
+    is "$(ipc shade state) $(g nwin)" "closed $n"
+
+  # G4, G7. A close *request*, which is why firing it from a swipe is
+  # acceptable at all -- an editor with unsaved work prompts rather than dies.
+  g osk_set false; wait_for "g osk_visible" "b false"
+  g focus_class sel-a
+  local before_close; before_close=$(g nwin)
+  back_swipe
+  check G4 "with nothing over it, back asks the focused app to close" \
+    is "$(g nwin)" "$(( before_close - 1 ))"
+
+  # G5. Nothing focused is a bare home screen, and that is where back stops --
+  # including not reaching a window left running on another workspace.
+  ipc gestures swipe home >/dev/null; sleep 1
+  local ws total; ws=$(g ws_id); total=$(g nwin)
+  back_swipe
+  check G5 "on a bare home screen back does nothing at all" \
+    is "$(g nwin) $(g ws_id) $(ipc drawer state) $(ipc recents state)" "$total $ws closed closed"
+
+  # K7, settings.md B3. Printed here rather than in K or settings because this
+  # is the gesture that reaches it: the page stack is walked by back and by
+  # nothing else on screen. The ordering is the whole criterion -- back inside
+  # Settings must never reach G4 and close the app beside it, and back on the
+  # root must not be swallowed into doing nothing.
+  ipc settings open >/dev/null; sleep 1.5
+  ipc settings goto appearance >/dev/null; sleep 0.6
+  g osk_set false; wait_for "g osk_visible" "b false"
+  local before; before=$(g nwin)
+  back_swipe
+  check K7 "from depth 2, back walks Settings' page stack and closes no window" \
+    is "$(ipc settings page) $(ipc settings state) $(g nwin)" "root open $before"
+  back_swipe
+  check K7 "from the root, the same gesture closes the window" \
+    is "$(ipc settings state) $(g nwin)" "closed $(( before - 1 ))"
 }
 
 section_E() {
@@ -1369,7 +1490,7 @@ section_apps() {
 }
 
 SECTIONS=("$@")
-[ ${#SECTIONS[@]} -gt 0 ] || SECTIONS=(W A B C D E H L S K settings keyboard apps)
+[ ${#SECTIONS[@]} -gt 0 ] || SECTIONS=(W A B C D G E H L S K settings keyboard apps)
 for s in "${SECTIONS[@]}"; do
   "section_$s"
 done

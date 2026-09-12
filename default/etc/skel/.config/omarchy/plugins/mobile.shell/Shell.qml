@@ -218,6 +218,27 @@ Item {
     return list.length > 0
   }
 
+  // The focused window: what a back gesture would close (G4), and what the
+  // strip's band asks about to decide whether to fill itself (I1a).
+  //
+  // NOT ToplevelManager.activeToplevel on its own. moarchy records it reading
+  // null with a window plainly focused, while `toplevels` was populated the
+  // whole time, and the back gesture then found nothing and closed nothing. The
+  // per-toplevel `activated` flag is the one that demonstrably tracks focus --
+  // it is what puts the accent border on the right card in the carousel. So
+  // prefer the singleton when it answers and fall back to the flag that works.
+  //
+  // One definition, in one place, because the two callers must never disagree:
+  // a band that fills for a window the back gesture cannot find is the same
+  // fault reported twice, and a second copy of this walk is how it would start.
+  function focusedToplevel() {
+    if (ToplevelManager.activeToplevel) return ToplevelManager.activeToplevel
+    var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
+    for (var i = 0; i < list.length; i++)
+      if (list[i] && list[i].activated) return list[i]
+    return null
+  }
+
   // E2, K12. Focus a window, through Hyprland's own dispatcher by address.
   //
   // Not the foreign-toplevel activate() request on its own, which is what this
@@ -356,6 +377,83 @@ Item {
     return false
   }
 
+  // G1. The back gesture: undo the topmost thing on screen, and undo exactly
+  // one of them.
+  //
+  //   1. the on-screen keyboard   G2
+  //   2. any open sheet           G3
+  //   3. the focused window       K7 walks its pages first if it is one of
+  //                               ours, then G4 asks it to close
+  //   4. nothing                  G5, on a bare home screen
+  //
+  // Here rather than in EdgeGestures because this is the file that owns the
+  // sheets and the windows. The edge surface only decides that a swipe
+  // happened.
+  //
+  // Whether the keyboard is up is read off this shell's own surface and not
+  // from sm.puri.OSK0. moarchy asks the bus -- a probe started on press and
+  // read on release, with a retry budget and a warm-up for the answer that has
+  // not arrived yet, and a branch that takes the keyboard fork anyway when it
+  // never does. I1a is why none of that is here: the bus property is stale
+  // between gestures and has been seen reading `Visible true` with nothing
+  // drawn, while a surface the compositor has resized cannot be wrong about
+  // it. The answer is synchronous, so there is no unknown to guess at.
+  function performBack(): void {
+    // G2. The keyboard, and nothing else. Not retreatKeyboard(): its second
+    // hide answers a raise that a *focus change* provokes, and back changes no
+    // focus -- arming it here would put away a keyboard the user summoned again
+    // within the second, which is more than "dismisses the keyboard and changes
+    // nothing else" allows.
+    if (edgeGestures.keyboardUp) { root.hideKeyboard(); return }
+
+    // G3
+    if (root.backTopmost()) return
+
+    // K7. A shell app owns a page stack, and back walks up it before leaving
+    // the window. Asked of the *focused window* and not of a list of open
+    // screens: a screen is a window (K1), so "which one am I in" is the same
+    // question G4 asks below, and asking it here is what keeps back inside
+    // Settings from falling through to closing the app on the workspace beside
+    // it.
+    //
+    // goBack() answers true when it consumed the gesture; false means there is
+    // nothing left, and the window takes G4's close request like any other.
+    var tl = root.focusedToplevel()
+    var own = root.screenForToplevel(tl)
+    if (own && typeof own.goBack === "function" && own.goBack() === true) return
+
+    // G4, G7. close() is xdg_toplevel.close -- a close *request*, so an editor
+    // with unsaved work prompts rather than dies. That is what makes firing it
+    // from a swipe acceptable at all.
+    //
+    // K6. For one of this shell's own screens it is also exactly what the
+    // carousel's card flick sends, so the two ways out of a screen are one
+    // mechanism rather than two that have to be kept agreeing.
+    //
+    // G5. A bare home screen has nothing focused, so this is where back stops.
+    if (tl) tl.close()
+  }
+
+  // G3. The sheets, topmost first, with a page stack getting first refusal:
+  // goBack() answers true when it consumed the gesture, false when there is
+  // nothing left to go back to and the sheet itself should go.
+  //
+  // The same order clearTopmost() walks, and deliberately not the same
+  // function. An up-flick means "get me out of here" and never walks a stack
+  // (A7, A8); back means "up one level" and always does. The carousel is also
+  // asked a different question there, because a strip drag may have it part-way
+  // up and clearing it mid-drag is what A6 exists to prevent.
+  function backTopmost(): bool {
+    if (shade.opened || shade.progress > 0) { shade.close(); return true }
+    if (drawer.opened || drawer.progress > 0) {
+      if (drawer.goBack()) return true
+      drawer.dismiss()
+      return true
+    }
+    if (carousel.opened || carousel.progress > 0) { carousel.close(); return true }
+    return false
+  }
+
   // S6b, S6d, K10. The screens that are windows: Wi-Fi, Bluetooth and
   // Settings. `returnTo` is where each one's back chevron goes afterwards --
   // the shade, when its long press is what opened Wi-Fi; Settings, when one of
@@ -389,6 +487,12 @@ Item {
   // The strip's logic, for a sheet that has to deliver a strip gesture itself
   // because it is on top of the edge surface (Shade.qml, A8).
   readonly property var gestures: edgeGestures
+
+  // The bar's own band, which is the shade's grab handle (A8) and therefore
+  // the one piece of the screen's edge the back band gives up (G10, the top
+  // half). Read off the shade, which reads it off the bar, so the surface that
+  // yields and the surface that takes cannot drift apart.
+  readonly property int barBand: shade.stripHeight
 
   // ------------------------------------------------------------- the pieces
   AppDrawer {

@@ -83,6 +83,62 @@ Item {
   // the edge is not a workspace switch.
   readonly property int commitDistance: Style.space(56)
 
+  // --------------------------------------------------------- the back edge
+  //
+  // G8. About 3mm on this panel, which is roughly what Android's back edge
+  // feels like at its default sensitivity. Deliberately one property rather
+  // than a number inlined in a binding: Android makes this device-configurable
+  // *and* user-adjustable *and* queryable by apps, which is three admissions
+  // that no single value is right. Expect to change it.
+  readonly property int backEdgeWidth: Style.space(16)
+
+  // G10. How far short of the bottom the band stops: one strip plus one
+  // keyboard panel. Below this the strip wants the touch, and above the strip
+  // the keyboard does.
+  //
+  // A number rather than an arrangement, on this compositor for a different
+  // reason than on Sway. moarchy cannot reach the keys by arrangement because
+  // Sway subtracts exclusive zones from Overlay down, so the keyboard's Top
+  // zone is taken off after this surface has been placed. Here zones resolve
+  // the other way up and the keyboard genuinely is arranged first -- but that
+  // settles placement, not input, and an Overlay surface still takes every
+  // touch a Top one would have had. Either way the input region is the only
+  // knob, and the number is the same 220.
+  //
+  // The keyboard's 200 is measured and not ours to choose, so unlike
+  // backEdgeWidth it does NOT go through Style.space: the keyboard is a
+  // separate client that never sees this theme, and scaling the inset with the
+  // theme would cut the band shorter than the keys it exists to clear.
+  readonly property int backEdgeBottomInset:
+    root.stripHeight + (root.host ? root.host.keyboardPanelHeight : 200)
+
+  // G10, the other end, and the one part of this the spec does not already
+  // say. The band stops short of the TOP as well, by the height of the bar --
+  // which is the shade's grab handle (A8, Shade.qml's `stripHeight`).
+  //
+  // Measured rather than assumed, and it is a decision made out of a race. The
+  // shade is Overlay too and keeps the bar's band as its input region even
+  // while shut, so the two surfaces want the same top-left corner and map
+  // order picks the winner. Measured with no inset, the shade won: a back
+  // swipe answered nothing at y=10 and fired from y=30 down. Writing the same
+  // 26px down here changes no behaviour today and stops the behaviour
+  // depending on which surface happened to map first.
+  //
+  // Cutting the column out of the shade's band instead is the other way round,
+  // and Shade.qml records why it is not taken: a cut-out region there does not
+  // commit until something repaints.
+  readonly property int backEdgeTopInset: root.host ? root.host.barBand : Style.space(26)
+
+  // The band's own height, published by `gestures geometry` because the
+  // surface is transparent and reserves nothing: from outside, a band that
+  // failed to shrink and one that is fine look identical (G10).
+  readonly property int backEdgeHeight:
+    Math.max(0, back.height - root.backEdgeTopInset - root.backEdgeBottomInset)
+
+  // G6. Inward travel that commits a back swipe -- three times the band, so
+  // brushing the edge never closes an app.
+  readonly property int backCommit: Style.space(48)
+
   // The pill moves a fraction of the finger's travel. Full 1:1 tracking on a
   // 360px screen runs the pill off the edge long before the commit threshold.
   readonly property real damping: 0.32
@@ -376,6 +432,75 @@ Item {
     watchdog.stop()
   }
 
+  // ========================================================= the back gesture
+  //
+  // G. One gesture that always undoes the most recent thing: the keyboard,
+  // then an open sheet, then the focused app (G1). The order is the host's --
+  // it owns the sheets and the windows -- and this is only the surface that
+  // decides a swipe happened at all.
+  //
+  // A press and a release are all moarchy reads, because on Sway motion keeps
+  // being delivered after the finger leaves a 16px surface. Here it does not:
+  // motion stops at that surface's own edge to the pixel, so a 16px-wide
+  // surface would see 16px of a 60px swipe and never reach backCommit. So the
+  // band is the input region and not the surface, and it opens to the whole
+  // screen for the length of the gesture -- exactly what the edge surface does
+  // for the strip, for the same measured reason (this file's header).
+  property bool backTracking: false
+  property real backStartX: 0
+  property real backStartY: 0
+  property real backDx: 0
+  property real backDy: 0
+
+  // A back gesture the shade is delivering, which keeps its whole input region
+  // while it is up and is on top of this surface (Shade.qml, A8). Same bargain
+  // the strip's `borrowed` strikes: this surface must not open its own region
+  // for a gesture it is not receiving, or it becomes the topmost region under
+  // the finger and takes the rest of the drag.
+  property bool backBorrowed: false
+
+  // Untyped for the reason stripPressed is: the third argument is optional,
+  // and this surface's own MouseArea passes two.
+  function backPressed(x, y, borrowed): void {
+    root.backBorrowed = !!borrowed
+    root.backTracking = true
+    root.backStartX = x
+    root.backStartY = y
+    root.backDx = 0
+    root.backDy = 0
+    watchdog.restart()
+  }
+
+  function backMoved(x: real, y: real): void {
+    if (!root.backTracking) return
+    root.backDx = x - root.backStartX
+    root.backDy = y - root.backStartY
+    watchdog.restart()
+  }
+
+  function backReleased(): void {
+    if (!root.backTracking) return
+    // G6. Inward, far enough, and more sideways than not -- so a vertical
+    // scroll that begins at the edge is never a back, and brushing the edge
+    // never closes an app.
+    var commit = root.backDx >= root.backCommit
+                 && Math.abs(root.backDx) > Math.abs(root.backDy)
+    // Reset first, so the region is back to its band before anything the
+    // gesture does can put a sheet or a window under the finger.
+    root.backReset()
+    if (commit) root.host.performBack()
+  }
+
+  function backCanceled(): void { root.backReset() }
+
+  function backReset(): void {
+    watchdog.stop()
+    root.backTracking = false
+    root.backBorrowed = false
+    root.backDx = 0
+    root.backDy = 0
+  }
+
   // The edge's input region is the whole screen for as long as `tracking` is
   // true, so something has to close it if the release never comes -- a client
   // that loses the pointer without a release would otherwise leave the screen
@@ -386,6 +511,7 @@ Item {
     interval: 3000
     onTriggered: {
       if (root.tracking) root.stripCanceled()
+      if (root.backTracking) root.backReset()
       if (root.homeTracking) {
         if (root.homeDragging) {
           root.drawer.dragging = false
@@ -419,6 +545,13 @@ Item {
       return "usage: swipe left|right|up|home"
     }
 
+    // G. Reachable without a finger, and the only way to exercise the priority
+    // order without a keyboard on screen to swipe past.
+    function back(): string {
+      root.host.performBack()
+      return "ok: back"
+    }
+
     function status(): string {
       var s = root.tracking
         ? "tracking mode=" + root.dragMode + " pending=" + root.pendingMode
@@ -443,6 +576,15 @@ Item {
         + " band=" + (root.bandFilled ? 1 : 0)
         + " fill=" + Color.background
         + " kbd=" + (root.keyboardUp ? 1 : 0)
+        // G10. The back band, which is an input region and not a surface, so
+        // this is the only place it can be read from at all. `screen` is
+        // published with it because a check that saw only `back` could not
+        // tell a band that failed to shrink from one this output never
+        // configured.
+        + " back=" + root.backEdgeWidth + "x" + root.backEdgeHeight
+        + " backTop=" + root.backEdgeTopInset
+        + " backInset=" + root.backEdgeBottomInset
+        + " screen=" + (back.screen ? Math.round(back.screen.height) : 0)
     }
   }
 
@@ -590,12 +732,65 @@ Item {
     && home.height < home.screen.height
                      - (root.host ? root.host.keyboardPanelHeight : 200) / 2
 
-  readonly property bool bandFilled: {
-    if (root.keyboardUp) return false
-    if (ToplevelManager.activeToplevel) return true
-    var list = ToplevelManager.toplevels ? ToplevelManager.toplevels.values : []
-    for (var i = 0; i < list.length; i++) if (list[i] && list[i].activated) return true
-    return false
+  // Through the host's focusedToplevel() rather than walking the toplevel list
+  // again here, which is what this was. It is the same walk the back gesture
+  // makes to decide what G4 closes, and two copies of it can disagree: a band
+  // that fills for a window back cannot find is one fault reported twice.
+  readonly property bool bandFilled:
+    !root.keyboardUp && !!(root.host && root.host.focusedToplevel())
+
+  // ========================================================== the left edge
+  //
+  // G. The one surface here that takes touch ahead of an app, which is why the
+  // band is 16px and why it stops short of the bottom. Overlay so it sits above
+  // the drawer and the carousel and can close them (G3) -- on Top they map
+  // later and would win.
+  //
+  // Full-screen, unlike moarchy's 16px-wide surface, because this compositor
+  // stops delivering motion at the surface's own edge: the surface that owns a
+  // gesture has to be as large as the gesture. What is 16px here is the input
+  // region, and it opens to the whole screen from press to release the way the
+  // edge surface's does.
+  PanelWindow {
+    id: back
+
+    anchors { top: true; bottom: true; left: true; right: true }
+    color: "transparent"
+
+    WlrLayershell.namespace: "omarchy-mobile-back"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+
+    // Reserve nothing: this band overlaps whatever is under it rather than
+    // moving it, which is what makes the leftmost 16px of every app still
+    // belong to the gesture (G10a, D3).
+    exclusionMode: ExclusionMode.Ignore
+
+    // Two regions swapped rather than one region bound to `backTracking`, for
+    // the reason the edge surface gives: a Region's own property changes do
+    // not re-apply the mask, and assigning a different Region object does.
+    mask: root.backTracking && !root.backBorrowed ? backFullMask : backBandMask
+
+    property Region backFullMask: Region {
+      width: back.width
+      height: back.height
+    }
+
+    // G8, G10. The band: 16px wide, starting below the bar and stopping one
+    // strip plus one keyboard panel short of the bottom.
+    property Region backBandMask: Region {
+      y: root.backEdgeTopInset
+      width: root.backEdgeWidth
+      height: root.backEdgeHeight
+    }
+
+    MouseArea {
+      anchors.fill: parent
+      onPressed: mouse => root.backPressed(mouse.x, mouse.y)
+      onPositionChanged: mouse => root.backMoved(mouse.x, mouse.y)
+      onReleased: root.backReleased()
+      onCanceled: root.backCanceled()
+    }
   }
 
   // ======================================================= the home screen

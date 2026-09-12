@@ -284,16 +284,18 @@ All measured, and the surface layout is shaped around them.
 geometry, is done. **Phase 2** ports moarchy's mobile UI back up from Sway to
 the Hyprland it was first written against. The bottom-edge gestures, the
 carousel, the home screen, the drawer, the status bar, the shade, the Wi-Fi,
-Bluetooth and Settings screens, and the on-screen keyboard are in (gestures.md
-A to F, H, I and K, shade.md, settings.md). [`docs/build-log.md`](docs/build-log.md) is the chronological
+Bluetooth and Settings screens, the on-screen keyboard and the left-edge back
+gesture are in (gestures.md A to I and K, shade.md, settings.md). [`docs/build-log.md`](docs/build-log.md) is the chronological
 account, dead ends included.
 
 ### Not done yet
 
-- The back gesture and the still of an app being put away (gestures.md G and
-  J). Settings already keeps the page stack a back gesture would walk, and the
-  keyboard can leave the left edge's column to it (`--back-edge-inset`, 0 by
-  default).
+- The still of an app being put away (gestures.md J).
+- Back over a *vendored* popup (settings.md B5). Omarchy 4.0.3's third-party
+  plugin facade has no `openPanelIds`, and its `hide` resolves every request to
+  the caller's own plugin, so this shell can neither see one nor put it away.
+  moarchy gets both by patching `shell.qml`, which is the one thing this project
+  does not do. Everything else in gestures.md G is in.
 - An image built before the keyboard, Notes and the App Store landed has none
   of them, and no `archlinuxarm-keyring` either, so pacman in that guest trusts
   none of ALARM's signatures and can fetch nothing, the store's installs

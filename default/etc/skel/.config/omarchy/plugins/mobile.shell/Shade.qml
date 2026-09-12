@@ -69,8 +69,9 @@ Item {
     ? root.shell.bar.barSize : Style.space(26)
 
   // The home pill's band. While the shade is up this surface takes it and
-  // forwards it to the strip's own logic (A8; the last MouseArea at the foot of
-  // this file). The back edge will need the same forwarding when G lands.
+  // forwards it to the strip's own logic (A8; the second-to-last MouseArea at
+  // the foot of this file). The back edge's band is forwarded the same way, by
+  // the last one, for the same reason (G3).
   readonly property int gestureStrip: root.host ? root.host.stripHeight : Style.space(20)
 
   readonly property int screenHeight: shadeWindow.screen ? shadeWindow.screen.height : 720
@@ -1922,6 +1923,46 @@ Item {
       }
       onReleased: root.host.gestures.stripReleased()
       onCanceled: root.host.gestures.stripCanceled()
+    }
+
+    // G3. The back edge's band, while the shade is up -- A8's bargain applied
+    // to the other edge, and settled the same way for the same reason. Both
+    // surfaces are on Overlay and this one keeps its whole input region while
+    // open (see the mask), so the press lands here rather than on the back
+    // surface's own band. A third region with the band cut out is not an
+    // option: it does not commit until something repaints, and the drag would
+    // stop dead at this surface anyway (the note on the mask above).
+    //
+    // `borrowed` keeps the back surface from opening its own region for a
+    // gesture it is not receiving, which would put it topmost under the finger
+    // and take the rest of the drag. Surface coordinates are screen
+    // coordinates, so the points pass through unchanged.
+    //
+    // G10. Inset off the bottom by the same amount the band itself is, so the
+    // shade does not answer a touch down there that the back gesture would
+    // have refused -- and so the pill's band below keeps the touches A8 hands
+    // it.
+    MouseArea {
+      anchors { top: parent.top; bottom: parent.bottom; left: parent.left }
+      width: root.host && root.host.gestures ? root.host.gestures.backEdgeWidth : 0
+      // The band's own two insets, so the shade hands back exactly the strip
+      // this gesture owns and no more: the bar's band above stays the shade's
+      // own handle, and the pill's band below stays the strip's (A8).
+      anchors.topMargin: root.host && root.host.gestures
+        ? root.host.gestures.backEdgeTopInset : 0
+      anchors.bottomMargin: root.host && root.host.gestures
+        ? root.host.gestures.backEdgeBottomInset : 0
+      enabled: root.progress > 0 && !!root.host && !!root.host.gestures
+      onPressed: mouse => {
+        var p = mapToItem(null, mouse.x, mouse.y)
+        root.host.gestures.backPressed(p.x, p.y, true)
+      }
+      onPositionChanged: mouse => {
+        var p = mapToItem(null, mouse.x, mouse.y)
+        root.host.gestures.backMoved(p.x, p.y)
+      }
+      onReleased: root.host.gestures.backReleased()
+      onCanceled: root.host.gestures.backCanceled()
     }
   }
 

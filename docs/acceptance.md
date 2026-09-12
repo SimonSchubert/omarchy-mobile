@@ -98,7 +98,27 @@ Hyprland 0.56.2 at 360x720 logical.
 
 | AC | Status | Note |
 | --- | --- | --- |
-| G1–G10a | todo | Not built. When it is, the shade has to forward the left edge the way it forwards the pill (A8), and G10's 220px inset -- Sway's layer-by-layer exclusive zones -- has to be re-measured on Hyprland |
+| G1 | pass | The order is one function, `performBack()` in Shell.qml. Checked on the two rungs that can be on screen at once: with the keyboard up over an open drawer, the first back takes the keyboard and leaves the drawer open, and the second closes the drawer |
+| G2 | pass | **Changed:** the instrument, not the answer. moarchy asks `sm.puri.OSK0` over the bus -- a probe started on press and read on release, with a retry budget, a warm-up and a branch for the answer that never came. Here the shell already has a synchronous one: the home surface's own height, which the compositor shrinks by the keyboard's zone (I1a). That is the instrument I1a argues for in moarchy's own words, so the probe and all three of its hedges are gone |
+| G3 | pass | Checked with the drawer and with the shade. The shade is the interesting one: it is on Overlay too and keeps its whole input region while up, so it takes the press and forwards the band -- A8's bargain applied to this edge, in the last MouseArea of Shade.qml |
+| G4 | pass | `tl.close()`, on the toplevel `focusedToplevel()` finds. One definition of "focused window", shared with the band's fill (I1a), because the two disagreeing is one fault reported twice |
+| G5 | pass | Checked on a bare home screen with a window left running on another workspace: back closes neither it nor anything else |
+| G6 | pass | Both halves: 20px of travel does nothing, and 80px in with 150px up does nothing either |
+| G7 | holds | `close()` is xdg_toplevel.close, a request. Not checked against an app that actually prompts |
+| G8 | pass | 16px, reported by `gestures geometry` because an input region cannot be seen from outside |
+| G9 | pass | The mirror swipe from the right edge does nothing -- there is no surface there |
+| G10 | pass | **Re-measured on Hyprland, and the number is unchanged.** 220 = one strip plus one keyboard panel, and `hyprctl layers` puts the keyboard's surface at y=500 on a 720 screen, which is exactly where the band stops. The reasoning changes even though the answer does not: Sway subtracts exclusive zones from Overlay down, so moarchy cannot fix this by arrangement; here they resolve the other way up and the keyboard genuinely is arranged first, but that settles placement and not input, and Overlay still takes every touch Top would have had |
+| G10 (top) | changed | **Added here**, and the spec has no clause for it: the band also stops the bar's 26px short of the *top*. The shade keeps the bar's band as its input region even while shut and is on Overlay too, so the two surfaces want the same top-left corner and map order picks the winner. Measured with no inset, the shade won -- back answered nothing at y=10 and fired from y=30 down. Writing the same 26 down changes no behaviour and stops it depending on which surface mapped first. Cutting the column out of the shade's band is the other way round, and Shade.qml already records why that is not taken |
+| G10a | holds | Outside the two cuts the leftmost 16px of every app is the gesture's, which is what D3 checks from the other side |
+
+Not moarchy's mechanism, and the one real port difference: **the band is an input
+region, not a surface.** moarchy's back edge is a 16px-wide layer surface that
+reads the press and the release, because Sway keeps delivering motion after the
+finger leaves it. Hyprland stops at that surface's own edge to the pixel, so the
+same surface would see 16px of a 60px swipe and never reach the commit
+threshold. The surface here is full-screen and masked to the band, and opens to
+the whole screen from press to release -- which is what the strip's edge surface
+already does, for the same measured reason.
 
 ### H. Closing an overlay by dragging it
 
@@ -151,7 +171,7 @@ Settings.
 | K4 | todo | Not checked |
 | K5 | pass | Glyph, name and page, from the screen itself -- there is no desktop entry for an app id that names the shell process |
 | K6 | pass | Flicking the card closes the window; summoned again, it opens (moarchy's visible-false-then-true, measured after a compositor-side close too). Settings reopens at the root |
-| K7 | todo | Needs the back gesture. Settings' `goBack()` walks its stack and answers false at the root, for the gesture to close it then |
+| K7 | pass | Both halves, which is the whole criterion: from depth 2 one back leaves `settings page` one page up with the window count unchanged, and from the root the same gesture leaves `settings state` closed with one window fewer. Asked of the focused window, not of a list of open screens. Printed by the `G` section, because the back gesture is what reaches it |
 | K8 | pass | A bridged row's terminal comes up tiled on a workspace of its own and Settings stays running (settings.md E6) |
 | K9 | holds | Measured: the class is `org.quickshell`, and each screen is told apart by a title prefix |
 | K10 | pass | Wi-Fi, Bluetooth and Settings, and the theme picker is a page of Settings, not a screen |
@@ -295,7 +315,8 @@ command. The helpers moarchy calls `bin/moarchy-*` are `omarchy-mobile-*` in
 | A8 | pass | **Added here**, not moarchy's. A real tap on the drawer's Settings tile, found with `drawer cellTarget`: `omarchy-mobile-settings.desktop`, running `omarchy-shell settings open`. Settings opens at the root, and the drawer is put away |
 | B1 | pass | A real tap on a row, aimed with `settings rowTarget` |
 | B2 | pass | The chevron by tap, and `back` walking up from the power glyph's deep link to `closed` |
-| B3, B5 | todo | Need the back gesture (gestures.md G). `goBack()` is there for it to call |
+| B3 | pass | The same check as K7, and the same two halves: one page up, then closed, and never the app underneath |
+| B5 | todo | **Not reachable unpatched**, unlike the rest of G. moarchy dismisses a vendored popup by reading the host's `openPanelIds` and calling `shell.hide(id)` for any `omarchy.` id, and gets both by patching `shell.qml` to hand its own namespace the trusted host. Omarchy 4.0.3's third-party facade has no `openPanelIds` at all, and its `_hide` resolves every request to the caller's own id (`owns(requestedId) ? ... : false`, shell.qml:719). So back cannot see a vendored popup here, let alone put one away. The other half of B5's premise still holds -- `HyprlandFocusGrab` is stubbed, so none of them dismisses on tap-outside |
 | B4 | partial | The carousel rises over Settings with its card leading (the K6 check does exactly that); the home band leaving it running is not checked |
 | B6 | pass | |
 | B7 | holds | **Changed:** Theme is a page here, not a plugin, so it returns to where it was opened from by being popped |

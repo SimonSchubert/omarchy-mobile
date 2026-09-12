@@ -2075,3 +2075,119 @@ suffix off whatever it is handed. And one run of four lost L5 and L6 to a card
 that had closed between two of the suite's own ssh round trips, while another
 session was driving the same VM; L6 reads the card in one round trip now rather
 than five, which is the half of that this repo can fix.
+
+
+## 2026-09-12 -- the back gesture, and a band that is a region
+
+Reported as "I cannot seem to close the keyboard with back navigation", and the
+answer was that there was nothing to close it with: gestures.md G was the last
+whole section of the spec with no code behind it. `goBack()` had been sitting in
+AppDrawer.qml and SettingsScreen.qml since Settings landed, waiting for a caller
+that did not exist, and `docs/acceptance.md` had carried one `G1-G10a | todo`
+row for as long.
+
+It is moarchy's gesture, ported, and two of its parts had to be rebuilt rather
+than copied.
+
+### The band is an input region, not a surface
+
+moarchy's back edge is a 16px-wide layer surface that reads the press and the
+release and nothing in between. That works on Sway, which keeps delivering
+motion after the finger leaves the surface it landed on. This compositor stops
+at that surface's own edge, to the pixel -- the same fact the file header
+already records for the strip, which is why a 20px strip that tracks a
+full-height swipe on Sway would see 18px of a 300px drag here.
+
+So a 16px surface would see 16px of a 60px swipe and never reach the 48px that
+commits one. The surface is full-screen instead and the *mask* is the band: 16px
+at rest, the whole screen from press to release, the two Regions swapped rather
+than one Region's geometry changed, for the reason the edge surface already
+gives. G6's "far enough to be deliberate" is measurable again because the motion
+that proves it is delivered.
+
+### The keyboard is asked of a surface, not of the bus
+
+G2 is the rung the report was about, and it is the one place this port gets to
+delete rather than translate. moarchy answers "is the keyboard up" over DBus:
+a `busctl get-property` on `sm.puri.OSK0` started on the press and read on the
+release, plus a six-deep retry budget, a warm-up at startup so the first
+gesture is not the one that pays for a cold connection, and a branch that takes
+the keyboard fork anyway when the answer never arrives.
+
+None of it is here, and moarchy's own spec is the argument: I1a already says the
+bus property "is the wrong instrument twice over: it is stale between back
+gestures, and I5d records it reading `Visible true` with nothing drawn". The
+shell already had the right instrument for the band's fill -- the home surface's
+own height, which the compositor shrinks by the keyboard's exclusive zone. It is
+synchronous, so there is no unknown to hedge against, and `performBack()`'s
+first line is `if (edgeGestures.keyboardUp)`.
+
+The same dedupe went the other way. `bandFilled` was walking the toplevel list
+for an activated window, and G4 needs that same walk to know what to close; they
+are one `focusedToplevel()` in Shell.qml now. Two copies could disagree, and a
+band that fills for a window back cannot find is one fault reported twice.
+
+### G10 re-measured, and the 220 survives
+
+`docs/acceptance.md` had flagged the bottom inset for re-measurement, because
+moarchy's reasoning for it is Sway's: exclusive zones resolve from Overlay down,
+so the keyboard's Top zone is subtracted after the Overlay back edge has been
+placed and `ExclusionMode.Normal` would move nothing.
+
+Here they resolve the other way up and the keyboard genuinely is arranged first
+-- but that settles *placement*, not input, and an Overlay surface still takes
+every touch a Top one would have had. The knob is the same knob and the number
+is the same number. `hyprctl layers` puts `moarchy-keyboard` at y=500 on a 720
+screen, and 720 - 20 - 200 is 500: the band stops exactly where the keys begin.
+
+### The top inset the spec does not have
+
+The other end was a race, and measuring it is what turned it into a decision.
+The shade keeps the bar's 26px band as its input region even while shut, and it
+is on Overlay too, so both surfaces want the same top-left corner and map order
+picks the winner. Measured with no inset: a back swipe answered nothing at y=10
+and fired from y=30 down -- the shade had won.
+
+Writing the same 26 into the band changes no behaviour today and stops the
+behaviour depending on which surface happened to map first. The cost is that a
+back swipe cannot start in the bar, which is where it is least likely to. The
+other way round -- cutting the column out of the shade's band -- is the one this
+file already warns off: a cut-out region there stayed uncommitted until
+something repainted.
+
+The band is therefore 16 x 474 on this screen, the bar above it and the keyboard
+and the pill below, and `gestures geometry` publishes all three numbers because
+an input region cannot be seen from outside. A band that failed to shrink and
+one that is fine both answer nothing.
+
+### What cannot be done here
+
+settings.md B5 -- back dismissing a *vendored* popup -- is the one part of G
+that does not port, and it is the sandbox rather than the compositor. moarchy
+reads the host's `openPanelIds` and calls `shell.hide(id)` for any `omarchy.`
+id; it gets both by patching `shell.qml` to hand its own namespace the trusted
+host. Omarchy 4.0.3's third-party facade has no `openPanelIds` at all, and its
+`_hide` resolves every request back to the caller's own plugin
+(`owns(requestedId) ? ... : false`). So this shell can neither see a vendored
+popup nor put one away, and the row says so rather than staying a todo.
+
+### The run
+
+`vm-selftest.sh G`: 16 checks, all passing -- the three geometry numbers, both
+halves of G6, both of G10's cuts from the outside, G9's mirror swipe, G1's order
+with the keyboard over an open drawer, G3 through the drawer and through the
+shade's forwarded band, G4, G5 with a window left running on another workspace,
+and K7's two halves, which are settings.md B3's as well.
+
+Two of them were wrong before they were right, and both were the check rather
+than the code. The vertical half of G6 aimed 120px up from y=66 and committed a
+back: the screen clamps the pointer, so the rise was delivered as 66 and read as
+the sideways swipe it was not. It aims from the middle of the band now, computed
+from what the shell just reported. The other was a leftover App Store window
+from an earlier session drifting in and out of the count while the checks held a
+window total across eight of them.
+
+A B C D, S, K and keyboard all still pass -- 76 checks between them, including
+I1a on both sides of the `focusedToplevel()` dedupe and A8 with the new
+MouseArea in the shade. A1 failed once at 5 samples and passed on a rerun at 57;
+its own comment predicts exactly that on a windowed VM while the Mac is busy.
