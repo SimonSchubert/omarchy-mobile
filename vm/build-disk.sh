@@ -56,6 +56,8 @@ OMARCHY_URL=$(manifest_get omarchy url)        || die "no omarchy url"
 VM_WIDTH=$(manifest_get vm width)              || die "no vm width"
 VM_HEIGHT=$(manifest_get vm height)            || die "no vm height"
 VM_SCALE=$(manifest_get vm scale)              || die "no vm scale"
+REPO_NAME=$(manifest_get repo name)            || die "no repo name"
+REPO_SERVER=$(manifest_get repo server)        || die "no repo server"
 
 SESSION_ONLY=${SESSION_ONLY:-0}
 
@@ -272,6 +274,7 @@ GUEST_USER="$GUEST_USER" GUEST_HOST="$GUEST_HOST" ROOT_UUID="$ROOT_UUID" \
 ESP_UUID="$ESP_UUID" VERSION="$VERSION" COMMIT="$COMMIT" \
 OMARCHY_VERSION="$OMARCHY_VERSION" OMARCHY_REF="$OMARCHY_REF" \
 VM_WIDTH="$VM_WIDTH" VM_HEIGHT="$VM_HEIGHT" VM_SCALE="$VM_SCALE" \
+REPO_NAME="$REPO_NAME" REPO_SERVER="$REPO_SERVER" \
 SSH_PUBKEY="${SSH_PUBKEY:-}" \
   arch-chroot "$ROOTDIR" /root/configure.sh
 rm -f "$ROOTDIR/root/configure.sh"

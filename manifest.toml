@@ -189,6 +189,61 @@ tag     = "0.1.0.r22.c08a073-1"
 ref     = "c08a07379171bb0a4998cb94f07f4bfb2370c78f"
 
 # ---------------------------------------------------------------------------
+# The key that signs [moarchy], packaged so pacman can check a signature.
+#
+# The one entry here whose point is not the code in it. It installs the public
+# half of `moarchy package signing` into /usr/share/pacman/keyrings, and its
+# post_install runs `pacman-key --populate`, so the key is trusted before the
+# repository below is ever consulted. Without it the stanza vm/configure.sh
+# writes would have to say SigLevel = Never, and packages that install as root
+# over a network deserve more than HTTPS alone.
+#
+# Chicken and egg, broken deliberately on this side: moarchy-keyring is itself
+# in the signed repo, so the first install of it cannot be verified. The image
+# builds it from this pinned commit instead, into the file:// repo that never
+# leaves the container -- the same shape archlinux-keyring and danctnix-keyring
+# use.
+#
+# Built from moarchy's tree rather than copied here, because a key defined in
+# two places is a key that will eventually disagree with itself.
+# ---------------------------------------------------------------------------
+[pkg.moarchy-keyring]
+url         = "https://github.com/SimonSchubert/moarchy"
+tag         = "20260906-1"
+ref         = "d0e5dd247620f350c91b32668b340889559d9ec1"
+pkgbuilddir = "pkgbuilds/moarchy-keyring"
+
+# ---------------------------------------------------------------------------
+# The package repository the phone updates from, shared with moarchy.
+#
+# vm/configure.sh writes this into the guest's /etc/pacman.conf, appended after
+# core/extra/alarm/aur so an upstream package of the same name always wins --
+# nothing here should shadow the base system by accident.
+#
+# It is what makes an app installable rather than baked in: moarchy-store's
+# helper execs `pacman -S` against its signed allowlist, and pacman can only
+# reach a package that is in a sync database. An app packaged into this repo is
+# in one; an app built only into the image is not, and can never be uninstalled
+# and reinstalled by anybody.
+#
+# Shared with the PinePhone port rather than stood up again: both ports are
+# aarch64 Arch, the packages are the same packages, and a second repository
+# means a second key to guard and a second place to publish. What the two ports
+# do not share is what they can RUN -- Flutter's Impeller wants GLES 3.0 and the
+# PinePhone's Mali-400 stops at 2.0 -- but that is a question about each app,
+# which moarchy-store's catalogue answers per entry with `tested`, not a
+# question about where the bytes live.
+#
+# One fixed release tag, re-uploaded in place, so this URL never moves. moarchy
+# owns the publishing side (repo/build.sh signs on the host so the private key
+# never enters a container; repo/publish.sh uploads).
+# ---------------------------------------------------------------------------
+[repo]
+name   = "moarchy"
+server = "https://github.com/SimonSchubert/moarchy/releases/download/repo"
+keyid  = "3CA83612E7F3108F442006B418305B893569BAD3"
+
+# ---------------------------------------------------------------------------
 # The aarch64 container everything is built in. Pinned by digest rather than
 # by the `base-devel` tag: a floating tag is a clone at HEAD by another name.
 #

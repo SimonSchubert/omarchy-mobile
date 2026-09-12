@@ -324,6 +324,47 @@ cp -a /etc/skel/.config/systemd "/home/$GUEST_USER/.config/" 2>/dev/null || true
 chown -R "$GUEST_USER:$GUEST_USER" "/home/$GUEST_USER"
 
 # ---------------------------------------------------------------------------
+say "package repository"
+# [moarchy] is how a built phone gets a fix without a reflash, and how the Store
+# installs an app this project packaged rather than baked in: moarchy-store's
+# helper execs `pacman -S` against its signed allowlist, and pacman can only
+# reach a package that is in a sync database. A package built into the image is
+# in no database at all -- it cannot be installed on demand, and once removed it
+# cannot come back.
+#
+# Appended, never inserted. pacman resolves in file order, so ours sitting after
+# core/extra/alarm/aur means an upstream package of the same name always wins.
+# Nothing here should shadow the base system by accident.
+#
+# SigLevel = Required rather than Never: these install as root, and HTTPS alone
+# says only that the bytes arrived from GitHub, not that they are ours.
+# moarchy-keyring is in the session tier, so the key is already trusted by the
+# time this repo is first consulted.
+cat >>/etc/pacman.conf <<EOF
+
+[$REPO_NAME]
+SigLevel = Required
+Server = $REPO_SERVER
+EOF
+
+# Prime the database, or a flashed image installs nothing from the repository it
+# just configured. pacstrap caches the sync databases it used, and [$REPO_NAME]
+# was not among them -- the build resolves everything from ALARM and the file://
+# repo of our own builds -- so the guest starts life with the stanza and no
+# database behind it. Fetching it here means the first `pacman -S` works before
+# the phone has ever been online, and the Store's Install row does not open a
+# terminal that prints "database not found" and waits.
+#
+# Warned about rather than fatal: a build machine that cannot reach the release
+# URL still produces a usable image, one `pacman -Sy` away from working. moarchy
+# learned this the hard way and documents it in image/configure.sh.
+if pacman -Sy --noconfirm >/dev/null 2>&1; then
+  say "[$REPO_NAME] primed -- installable before first boot"
+else
+  say "!! could not refresh [$REPO_NAME] -- run 'pacman -Sy' in the guest"
+fi
+
+# ---------------------------------------------------------------------------
 say "provenance"
 install -d /etc/omarchy-mobile
 # The Omarchy pin as well as this project's own. About Omarchy reads it

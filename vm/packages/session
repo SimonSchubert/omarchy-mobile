@@ -140,3 +140,13 @@ gnome-themes-extra
 # which is the same typeface with the complete glyph set -- a substitution, not
 # an omission, so it is not listed in vm/packages/omitted.
 ttf-jetbrains-mono-nerd
+
+# --- the package repository -----------------------------------------------
+# The public half of the key that signs [moarchy], whose stanza vm/configure.sh
+# appends to the guest's /etc/pacman.conf. Session tier rather than apps,
+# because it is not an app: `--session-only` still writes the stanza, and a
+# stanza saying SigLevel = Required with no key in the keyring is an image that
+# refuses every package in the repository it just configured.
+#
+# Built from [pkg.moarchy-keyring] -- see the manifest for the chicken and egg.
+moarchy-keyring
