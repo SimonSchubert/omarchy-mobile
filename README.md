@@ -276,10 +276,19 @@ All measured, and the surface layout is shaped around them.
 ## Android apps, through Waydroid
 
 `./scripts/vm-waydroid.sh install` puts a whole Android 13 in an LXC container
-beside the session, rendering into the same Wayland compositor, so an Android
-app is a window Hyprland manages like any other — at 360x674, inside the
-status bar and the strip, with the back gesture and the carousel applying to it.
-`start` boots it and shows the launcher; `status` says what it is doing.
+beside the session, rendering into the same Wayland compositor, so Android
+arrives as an ordinary Hyprland toplevel — `class: Waydroid`, 360x674 at 0,26,
+which is the same box an Omarchy app gets under the status bar and above the
+strip. `start` boots it and asks for the full UI; `status` says what it is
+doing.
+
+What has been seen: the container reaching `sys.boot_completed=1` in about 60
+seconds, an IP on `waydroid0`, `waydroid app list` enumerating Lineage's apps,
+and that window mapped with `QuickstepLauncher` as the focused activity. What
+has **not**: a screenshot of the launcher actually drawn, and whether the
+bottom-edge gestures and the carousel drive an Android window the way they
+drive a native one. Being an ordinary toplevel at the right geometry is a good
+reason to expect it and is not the same as having checked.
 
 Four things made this more than `pacman -S waydroid`, and the script's header
 carries the detail:
