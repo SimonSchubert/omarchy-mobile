@@ -1,0 +1,26 @@
+# Repair the icons QtSvg cannot draw, every time pacman lays new ones down.
+#
+# The repairs live in /usr/local/share/icons and are generated from what is
+# under /usr/share -- so an app the store installs, or a theme upgrade that
+# redraws one, leaves them stale until this runs. omarchy-mobile-icon-repair
+# rebuilds the whole set and sweeps what no longer has a source, which is why
+# Remove is a trigger too: an uninstalled app should not keep a repair.
+#
+# In /etc/pacman.d/hooks, pacman's own HookDir for the administrator, rather
+# than /usr/share/libalpm/hooks, which belongs to packages.
+#
+# The globs are alpm's fnmatch without FNM_PATHNAME, so `*` crosses `/` and
+# one line covers every theme and size beneath it.
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Path
+Target = usr/share/icons/*.svg
+Target = usr/share/pixmaps/*.svg
+
+[Action]
+Description = Repairing the icons QtSvg cannot clip...
+When = PostTransaction
+Exec = /usr/local/bin/omarchy-mobile-icon-repair

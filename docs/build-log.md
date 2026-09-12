@@ -2191,3 +2191,133 @@ A B C D, S, K and keyboard all still pass -- 76 checks between them, including
 I1a on both sides of the `focusedToplevel()` dedupe and A8 with the new
 MouseArea in the shade. A1 failed once at 5 samples and passed on a rerun at 57;
 its own comment predicts exactly that on a windowed VM while the Mac is busy.
+
+
+
+## 2026-09-12 -- the icons with a black square behind them
+
+Reported as "some icons inside the app drawer have a black background", and
+four of the fourteen apps on the grid had one: Web, Geary, Fractal and Dino.
+`rsvg-convert` draws those four files correctly and so does GTK, so the icons
+are not wrong. The renderer is, and one missing feature accounts for all of it.
+
+### QtSvg does not clip
+
+The only Qt renderer this project has is the shell itself, so every probe below
+is a one-element SVG handed to it as a desktop entry's `Icon=` and read off a
+screenshot. Four of them settle it:
+
+| the probe | what QtSvg drew |
+| --- | --- |
+| a 128x128 red rect with `clip-path="url(#c)"`, `c` a circle | the whole red rect |
+| the same clip on the `<g>` around the rect | the whole rect again |
+| `<clipPath id="c"><rect width="192" height="152"/></clipPath>`, then a circle | a black square behind the circle |
+| the same clipPath inside `<defs>` | nothing, as it should |
+
+So `clip-path` is ignored outright, and a `<clipPath>` that is not inside
+`<defs>` is *painted*, children and all. `<mask>`, `<symbol>`, `<pattern>` and
+`<marker>` outside `<defs>` were probed the same way and all four are skipped
+correctly; clipPath is the only one that leaks.
+
+Both faults are in one file at once here. These icons are cairo exports and
+declare their clip paths at the top, beside the gradients:
+
+    <clipPath id="e"><rect height="152" width="192"/></clipPath>
+
+A `<rect>` with no fill is black, 192x152 covers a 128x128 canvas, and it is
+declared before the artwork -- so it lands behind it. That is the black square
+that was reported, and Geary's is four of them stacked. The ignored references
+are the quieter half, and they had been read as "close enough": Dino's 5% white
+highlight, clipped to its own silhouette, spilling across the whole canvas as a
+pale box, and Fractal's rounded bubble drawn as a hard square.
+
+### The wrong half of the first diagnosis
+
+The first read blamed `<filter>`, on a correlation that looked airtight: across
+the fourteen visible apps, the four with a black square were exactly the four
+whose SVG contains a filter, and no other icon on the grid has one. A repair
+built on that -- move the stray definitions into `<defs>`, strip every filter
+reference -- did clear Geary, Web, Fractal and Text Editor, which is the trap:
+the `<defs>` move was doing all of the work and the filter strip none of it.
+Dino stayed exactly as broken, and Geary lost the shading on its envelope flap,
+because that shading is a mask whose content is a `feColorMatrix` that turns a
+black rect white, and a mask stripped of its filter is a black rect that hides
+everything it covers.
+
+Two probes closed it. A blurred red square drawn beside an unfiltered one is
+visibly blurred, so QtSvg renders filters. And Dino, with its filters left
+alone and its one clip path rewritten, came out clean. Breeze's kteatime looked
+like the counter-example -- a white smear under the saucer that went away when
+its filters were stripped -- and it is the same bug: the shine spilling past
+the clip that should have held it.
+
+### The repair is the mask that means the same thing
+
+QtSvg does honour `<mask>` faithfully enough to draw Geary's envelope shading
+exactly as rsvg does, so `omarchy-mobile-icon-repair` says every clip path as a
+mask instead: the `<clipPath>` becomes a `<mask>` whose shapes are filled
+white, `clip-rule` becomes `fill-rule`, and every `clip-path="url(#c)"` becomes
+`mask="url(#c)"`. A clipPath cannot be painted once it is a mask, so the black
+square goes out with the same rewrite rather than needing its own.
+
+Two shapes are left alone rather than converted on a guess: a clip path with
+`clipPathUnits="objectBoundingBox"`, whose coordinates would have to become
+`maskContentUnits`, and one containing a `<use>`, where the fill to whiten
+lives in another element entirely. Neither appears in any icon in this image.
+One that cannot be converted is still moved into `<defs>`, so that at worst it
+stops being ink. An element that already carries a mask of its own gets a
+`<g mask="...">` around it, because an element cannot take two.
+
+Faithful, and measured that way: every one of the 39 repairs renders within 1%
+RMSE of its original under `rsvg-convert`, the worst being Adwaita's microphone
+at 0.84%, where a mask's antialiased edge and a clip's differ by a pixel.
+
+### Where a repair has to live to be found
+
+`/usr/local/share/icons`, at the same theme-relative path the source has under
+`/usr/share/icons`. `XDG_DATA_DIRS` in the session is
+`/usr/local/share:/usr/share`, so the shell's icon index, `Quickshell.iconPath`
+and GTK all reach the repaired copy first, by the ordinary XDG override rule
+and without a byte changed under `/usr/share`, which pacman owns. A repaired
+`/usr/share/pixmaps` icon has to land in a theme to be found at all, so those
+go to `hicolor/scalable/apps`.
+
+Only `apps/` and `devices/` are scanned, plus pixmaps: that is exactly what
+`AppLibrary.iconIndexScanCommand` looks at, and the rest of a theme -- Breeze's
+several thousand action glyphs -- is ink the shell never draws. Of the 2145
+icons in that scope, 50 use a clip path at all and 39 need repair; the run
+takes 0.13s, because a file with no clip path in its bytes is never parsed.
+
+What it cannot reach: `~/.icons` and `~/.local/share/icons` are searched
+*before* `/usr/local/share`, so an SVG a user installs into their own home
+shadows any repair of it. Nothing in the image puts one there.
+
+### Three places run it, and the third is the one that matters later
+
+`vm/configure.sh` at image build, `scripts/vm-push.sh` on a running guest, and
+`/etc/pacman.d/hooks/60-omarchy-mobile-icon-repair.hook` after any transaction
+that touches an icon -- so an app the store installs next month is repaired
+before its first drawer frame. The hook is in pacman's own administrator hook
+directory rather than `/usr/share/libalpm/hooks`, which belongs to packages,
+and `Remove` is a trigger as well as `Install` and `Upgrade`: the run rebuilds
+the whole set and sweeps what no longer has a source, so an uninstalled app
+does not leave a repair behind.
+
+### Checked in the running guest
+
+- The grid, before and after, at the same four columns: Web, Geary and Fractal
+  lost their black squares, Dino its pale box, and Fractal is a rounded bubble
+  now instead of a square. Text Editor was a fifth case nobody had reported --
+  a grey blob in its lower right, which was a painted clipPath as well.
+- `sudo pacman -U` of the cached `dino` package, with the repaired icon deleted
+  first: `(2/4) Repairing the icons QtSvg cannot clip...`, and the file back.
+- A deliberately broken icon dropped into `/usr/share/icons/hicolor/scalable/
+  apps`: repaired on the next run (40 of 2146), and after deleting the source,
+  `39 of 2145 icons repaired, 1 stale dropped` and the copy gone.
+- `vm-push.sh` end to end: the script into `/usr/local/bin`, the hook into
+  `/etc/pacman.d/hooks`, `39 of 2145 icons repaired`, shell back up.
+
+One thing to know when looking at this by hand: Qt caches a decoded image by
+URL, so a repair written over a path the running shell has already drawn is not
+what you see until the shell restarts. Two of the screenshots above were taken
+before that was understood and showed the old icon at the new path.

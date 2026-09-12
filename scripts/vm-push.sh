@@ -40,7 +40,7 @@ ssh "${SSH_OPTS[@]}" -p "$PORT" "$USER_NAME@127.0.0.1" \
 scp "${SSH_OPTS[@]}" -P "$PORT" -rq \
   "$SKEL/omarchy/plugins" "$SKEL/hypr/mobile.lua" "$SKEL/omarchy/themed" \
   "$SKEL/omarchy/hooks" "$SKEL/mimeapps.list" default/etc/skel/.local \
-  default/usr/local patches vm/packages/session \
+  default/usr/local default/etc/pacman.d patches vm/packages/session \
   "$USER_NAME@127.0.0.1:.cache/omarchy-mobile-push/"
 
 ssh "${SSH_OPTS[@]}" -p "$PORT" "$USER_NAME@127.0.0.1" bash -s <<'GUEST'
@@ -134,6 +134,14 @@ if [ -d "$STAGE/local/bin" ]; then
   sudo install -m755 "$STAGE"/local/bin/* /usr/local/bin/
   echo "pushed $(ls "$STAGE"/local/bin | tr '\n' ' ')to /usr/local/bin"
 fi
+
+# The icons QtSvg cannot clip. The repairs live in /usr/local/share/icons and
+# are generated from what pacman has put under /usr/share, so they are made
+# here rather than shipped: a guest built before this landed has none, and one
+# built after has whatever its own packages installed (docs/build-log.md).
+sudo install -Dm644 "$STAGE/pacman.d/hooks/60-omarchy-mobile-icon-repair.hook" \
+  /etc/pacman.d/hooks/60-omarchy-mobile-icon-repair.hook
+sudo /usr/local/bin/omarchy-mobile-icon-repair
 
 # The session tier, which the long-press card's removal script refuses to
 # remove anything from (gestures.md L12). vm/build-disk.sh installs the same

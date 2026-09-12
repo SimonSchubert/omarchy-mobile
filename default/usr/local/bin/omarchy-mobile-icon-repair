@@ -1,0 +1,365 @@
+#!/usr/bin/env python3
+# Repair the icons QtSvg draws wrong, where every icon lookup in the session
+# finds the repair before the original.
+#
+#   omarchy-mobile-icon-repair            repair, and say how many
+#   omarchy-mobile-icon-repair --list     ... and name each one
+#   omarchy-mobile-icon-repair --report   diagnose only, write nothing
+#
+# ---------------------------------------------------------------------------
+# The bug
+# ---------------------------------------------------------------------------
+# Four apps in the drawer -- Web, Geary, Fractal and Dino -- drew their artwork
+# on an opaque black square, where every other icon drew on the sheet. The four
+# share nothing but their renderer: GTK draws the same files correctly, and so
+# does rsvg-convert. QtSvg 6.11 does not, and one missing feature explains all
+# of it: IT DOES NOT CLIP. Both halves of that were pinned down against the
+# running shell, with one-element SVGs handed to it as a desktop entry's Icon=.
+#
+# 1. `clip-path="url(#c)"` is ignored. A 128x128 red rect clipped to a circle
+#    draws as the whole red square, on a group or on the shape itself. So an
+#    icon that paints a highlight and clips it to its own silhouette -- Dino's
+#    5% white gradient, Breeze's saucer shine -- spills that ink over the whole
+#    canvas as a pale box.
+#
+# 2. A <clipPath> outside <defs> is PAINTED, children and all. These icons are
+#    cairo exports and declare their clip paths at the top of the file, beside
+#    the gradients:
+#
+#      <clipPath id="e"><rect height="152" width="192"/></clipPath>
+#
+#    A <rect> with no fill is black, 192x152 covers a 128x128 canvas, and it is
+#    declared before the artwork -- so it lands behind it as the black square.
+#    The same clipPath wrapped in <defs> draws nothing. <mask>, <symbol>,
+#    <pattern> and <marker> outside <defs> are all skipped correctly; clipPath
+#    is the only one that leaks.
+#
+# What QtSvg does honour is <mask>, faithfully enough to draw Geary's envelope
+# shading -- a feColorMatrix mask -- exactly as rsvg does. So the repair is one
+# rewrite: every clip path becomes the mask that means the same thing, its
+# shapes filled white on the black that masks everything else out, and every
+# clip-path reference becomes a mask reference. A clipPath cannot be painted
+# once it is a <mask>, which fixes (2) on the way past.
+#
+# Nothing else is touched, and nothing else needs to be. Gradients, masks and
+# filters all draw: an feGaussianBlur on a red square blurs it, side by side
+# with an unfiltered one, so the soft shadows in these icons were never the
+# problem. Breeze's kteatime looked like they were -- a white smear under the
+# saucer -- and it was its shine spilling past the clip that should have held
+# it, which the same rewrite puts back where it belongs.
+#
+# ---------------------------------------------------------------------------
+# Where the repairs go
+# ---------------------------------------------------------------------------
+# /usr/local/share/icons, at the same theme-relative path the source has under
+# /usr/share/icons. XDG_DATA_DIRS in the session is /usr/local/share:/usr/share
+# -- so the shell's icon index (AppLibrary.iconIndexScanCommand walks the same
+# list), Quickshell.iconPath's themed lookup, and GTK all find the repaired
+# copy first, by the ordinary override rule and without a byte changed under
+# /usr/share, which pacman owns.
+#
+# Only apps/ and devices/ are scanned, plus /usr/share/pixmaps: that is exactly
+# what the shell's index looks at, and the rest of a theme -- Breeze's several
+# thousand action glyphs -- is ink the shell never draws. A repaired pixmaps
+# icon has to land in a theme to be found at all, so it goes to
+# hicolor/scalable/apps.
+#
+# What it cannot reach: ~/.icons and ~/.local/share/icons are searched BEFORE
+# /usr/local/share, so an icon a user installs into their own home shadows any
+# repair of it. Nothing in the image puts an SVG there.
+#
+# Run at image build (vm/configure.sh), on a push (scripts/vm-push.sh), and
+# after any pacman transaction that touches an icon
+# (/etc/pacman.d/hooks/60-omarchy-mobile-icon-repair.hook) -- so an app the
+# store installs next month is repaired before its first drawer frame.
+import os
+import sys
+import xml.etree.ElementTree as ET
+
+SVG_NS = "http://www.w3.org/2000/svg"
+XLINK_NS = "http://www.w3.org/1999/xlink"
+
+ICONS = "/usr/share/icons"
+PIXMAPS = "/usr/share/pixmaps"
+DEST = "/usr/local/share/icons"
+# A repaired pixmaps icon needs a theme to live in; this is the one every
+# lookup falls back to.
+PIXMAPS_DEST = os.path.join("hicolor", "scalable", "apps")
+# What the last run wrote. Without it, an icon whose package fixed it upstream
+# -- or dropped it -- would go on being shadowed by a repair nobody asked for.
+LEDGER = os.path.join(DEST, ".omarchy-mobile-icon-repair")
+
+# Paint that would change a mask's luminance. A clip path's shapes carry the
+# fill they were drawn with; as a mask they have to be plain white, because
+# white keeps and black cuts.
+PAINT = ("fill", "fill-opacity", "opacity", "stroke", "stroke-opacity",
+         "style", "filter", "mask")
+
+# ElementTree invents ns0: prefixes for everything otherwise, and an icon whose
+# root element is <ns0:svg> is an icon nothing will draw.
+ET.register_namespace("", SVG_NS)
+ET.register_namespace("xlink", XLINK_NS)
+
+
+def tag(element):
+    """The local name, or "" for a comment or processing instruction."""
+    name = element.tag
+    return name.rsplit("}", 1)[-1] if isinstance(name, str) else ""
+
+
+def reference(value):
+    """The id in `url(#id)`, or None."""
+    value = (value or "").strip()
+    if value.startswith("url(") and value.endswith(")"):
+        return value[4:-1].strip().strip("\"'").lstrip("#") or None
+    return None
+
+
+def clip_reference(element):
+    """The clip path this element names, as attribute or style, or None."""
+    named = reference(element.get("clip-path"))
+    if named:
+        return named
+    style = element.get("style") or ""
+    for declaration in style.split(";"):
+        name, _, value = declaration.partition(":")
+        if name.strip() == "clip-path":
+            return reference(value)
+    return None
+
+
+def drop_clip(element):
+    """Take the clip-path off, however it was written."""
+    element.attrib.pop("clip-path", None)
+    style = element.get("style")
+    if style and "clip-path" in style:
+        kept = [d for d in style.split(";")
+                if d.strip() and d.split(":")[0].strip() != "clip-path"]
+        if kept:
+            element.set("style", ";".join(kept))
+        else:
+            del element.attrib["style"]
+
+
+def defs_of(root):
+    """The document's <defs>, made as its first child if it has none."""
+    for child in root:
+        if tag(child) == "defs":
+            return child
+    defs = ET.Element("{%s}defs" % SVG_NS)
+    root.insert(0, defs)
+    return defs
+
+
+def convertible(clip):
+    """Can this clip path be said as a mask without guessing?"""
+    # objectBoundingBox coordinates would have to become maskContentUnits, and
+    # a <use> hides the shape whose fill has to become white in another element
+    # entirely. Neither appears in any icon in the image; both are left as they
+    # are rather than converted wrong.
+    if clip.get("clipPathUnits") == "objectBoundingBox":
+        return False
+    return not any(tag(node) == "use" for node in clip.iter())
+
+
+def to_mask(clip):
+    """Rewrite a <clipPath> in place as the <mask> that means the same."""
+    clip.tag = "{%s}mask" % SVG_NS
+    for shape in clip.iter():
+        if shape is clip:
+            continue
+        # A clip path's shapes are filled by clip-rule, a mask's by fill-rule.
+        rule = shape.attrib.pop("clip-rule", None)
+        for attribute in PAINT:
+            shape.attrib.pop(attribute, None)
+        shape.set("fill", "#fff")
+        if rule:
+            shape.set("fill-rule", rule)
+
+
+def repair(root):
+    """Rewrite every clip path as a mask. Returns the faults found."""
+    faults = set()
+    parents = {}
+    clips = {}
+
+    for parent in root.iter():
+        for child in parent:
+            parents[child] = parent
+
+    def in_defs(element):
+        while element in parents:
+            element = parents[element]
+            if tag(element) == "defs":
+                return True
+        return False
+
+    for element in list(root.iter()):
+        if tag(element) != "clipPath":
+            continue
+        painted = not in_defs(element)
+        if painted:
+            faults.add("painted")
+        if convertible(element):
+            clips[element.get("id")] = element
+            to_mask(element)
+        elif painted:
+            # Not convertible, so the references stay broken -- but its shapes
+            # must stop being ink, and inside <defs> nothing is.
+            parents[element].remove(element)
+            defs_of(root).append(element)
+
+    # The first pass moved elements, so the map has to be taken again.
+    parents = {child: parent for parent in root.iter() for child in parent}
+
+    for element in list(root.iter()):
+        named = clip_reference(element)
+        if named is None or named not in clips:
+            continue
+        faults.add("ignored")
+        drop_clip(element)
+        if element.get("mask") is None:
+            element.set("mask", "url(#%s)" % named)
+            continue
+        # It already wears a mask of its own, and an element cannot take two.
+        # A group around it can, and clipping the group clips its contents.
+        parent = parents[element]
+        wrapper = ET.Element("{%s}g" % SVG_NS, {"mask": "url(#%s)" % named})
+        parent.insert(list(parent).index(element), wrapper)
+        parent.remove(element)
+        wrapper.append(element)
+
+    return faults
+
+
+def rendered(path):
+    """The repaired document as bytes, or (None, None) if it was already fine."""
+    # insert_comments, so a licence header in the source survives into the copy.
+    parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=True))
+    root = ET.parse(path, parser).getroot()
+    faults = repair(root)
+    if not faults:
+        return None, None
+    return ET.tostring(root, encoding="UTF-8", xml_declaration=True), faults
+
+
+def sources():
+    """Every icon the shell can draw, as (path, destination-relative path)."""
+    for dirpath, _, files in os.walk(ICONS):
+        parts = dirpath.split(os.sep)
+        if "apps" not in parts and "devices" not in parts:
+            continue
+        for name in sorted(files):
+            if name.endswith(".svg"):
+                path = os.path.join(dirpath, name)
+                yield path, os.path.relpath(path, ICONS)
+    if os.path.isdir(PIXMAPS):
+        for name in sorted(os.listdir(PIXMAPS)):
+            if name.endswith(".svg"):
+                yield os.path.join(PIXMAPS, name), os.path.join(PIXMAPS_DEST, name)
+
+
+def ledger_read():
+    try:
+        with open(LEDGER) as handle:
+            return {line.strip() for line in handle
+                    if line.strip() and not line.startswith("#")}
+    except FileNotFoundError:
+        return set()
+
+
+def ledger_write(written):
+    os.makedirs(DEST, exist_ok=True)
+    with open(LEDGER, "w") as handle:
+        handle.write("# Written by omarchy-mobile-icon-repair. Do not edit.\n")
+        for rel in sorted(written):
+            handle.write(rel + "\n")
+    os.chmod(LEDGER, 0o644)
+
+
+def prune(directory):
+    """Take away the directories a removed repair leaves empty."""
+    while directory != DEST and directory.startswith(DEST + os.sep):
+        try:
+            os.rmdir(directory)
+        except OSError:
+            return
+        directory = os.path.dirname(directory)
+
+
+def main(argv):
+    report = "--report" in argv
+    listing = report or "--list" in argv
+
+    if not report:
+        try:
+            os.makedirs(DEST, exist_ok=True)
+            writable = os.access(DEST, os.W_OK)
+        except PermissionError:
+            writable = False
+        if not writable:
+            print("!! cannot write %s -- run this as root, or --report" % DEST,
+                  file=sys.stderr)
+            return 1
+
+    scanned = 0
+    written = set()
+    for path, rel in sources():
+        scanned += 1
+        # Cheap gate: parsing 2000 icons to find 50 is all of the runtime, and
+        # a file with no clip path in it has nothing this can repair.
+        try:
+            with open(path, "rb") as handle:
+                source = handle.read()
+        except OSError as error:
+            print("!! %s: %s" % (path, error), file=sys.stderr)
+            continue
+        if b"clipPath" not in source and b"clip-path" not in source:
+            continue
+        try:
+            data, faults = rendered(path)
+        except ET.ParseError as error:
+            print("!! %s: %s" % (path, error), file=sys.stderr)
+            continue
+        if data is None:
+            continue
+        if listing:
+            print("%-16s %s" % (",".join(sorted(faults)), rel))
+        if report:
+            written.add(rel)
+            continue
+        target = os.path.join(DEST, rel)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        try:
+            with open(target, "rb") as handle:
+                current = handle.read()
+        except OSError:
+            current = None
+        if current != data:
+            with open(target, "wb") as handle:
+                handle.write(data)
+            os.chmod(target, 0o644)
+        written.add(rel)
+
+    if report:
+        print("%d of %d icons need repair" % (len(written), scanned))
+        return 0
+
+    stale = ledger_read() - written
+    for rel in sorted(stale):
+        target = os.path.join(DEST, rel)
+        try:
+            os.remove(target)
+        except FileNotFoundError:
+            pass
+        prune(os.path.dirname(target))
+    ledger_write(written)
+
+    print("%d of %d icons repaired under %s%s"
+          % (len(written), scanned, DEST,
+             ", %d stale dropped" % len(stale) if stale else ""))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

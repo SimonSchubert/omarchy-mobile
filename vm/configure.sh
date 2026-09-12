@@ -246,6 +246,20 @@ EOF
 chown "$GUEST_USER:$GUEST_USER" "/home/$GUEST_USER/.bash_profile"
 
 # ---------------------------------------------------------------------------
+say "icons QtSvg cannot clip"
+# QtSvg ignores clip-path, and paints a <clipPath> that is not inside <defs> --
+# which is why Web, Geary, Fractal and Dino drew their artwork on a black
+# square (docs/build-log.md). omarchy-mobile-icon-repair says every clip path
+# as the mask QtSvg does honour, and writes the result into
+# /usr/local/share/icons, where every icon lookup in the session -- the shell's
+# index, Quickshell.iconPath, GTK -- reaches it before /usr/share.
+#
+# Here as well as in the pacman hook the overlay just installed: the hook is
+# for the transactions to come, and every icon in this image was laid down by
+# pacstrap, before there was a hook to fire.
+/usr/local/bin/omarchy-mobile-icon-repair
+
+# ---------------------------------------------------------------------------
 say "theme bootstrap"
 # The whole shell reads its palette from ~/.local/state/omarchy/current/theme.
 # Until some theme has been applied that path does not exist, and a shell that
