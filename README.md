@@ -384,12 +384,15 @@ account, dead ends included.
 - An image built before 2026-09-11 has no xdg-terminal-exec, and on it every
   Settings row that opens a terminal shows nothing. Rebuild, or install the
   package.
-- An image built before 2026-09-12 has no coding-agent tile at all and no mise
-  behind the AI agent row (settings.md P). `./scripts/vm-push.sh` puts the
-  script and its icons into a running guest and seeds the tile, which is enough
-  for the setup tile and for the drawer to answer a search for "agent"; the
-  agents themselves cannot install until the image is rebuilt around
-  `[pkg.mise-bin]`.
+- An image built before 2026-09-12 has no coding-agent tile at all, and behind
+  the AI agent row neither the mise an agent installs through nor the node it
+  runs on (settings.md P). `./scripts/vm-push.sh` puts the script and its icons
+  into a running guest and seeds the tile, which is enough for the setup tile
+  and for the drawer to answer a search for "agent". For the agents themselves,
+  rebuild -- or in the guest `pacman -U` the `mise-bin` that
+  `vm/build-packages.sh` leaves in `vm/out/packages/`, then `pacman -S nodejs
+  npm`: mise installs an agent happily with no node on the system, and the
+  agent then answers `exec: node: not found`.
 - An image built before 2026-09-12 has Chromium and neither GNOME Web nor
   Evince, so the browser is the one that has no narrow layout and PDFs open in
   it. Rebuild, or in the guest `pacman -S epiphany evince`, then

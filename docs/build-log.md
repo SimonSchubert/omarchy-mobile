@@ -2702,3 +2702,82 @@ owed. Nothing here has been through `vm-selftest.sh`, and none of it is in the
 image build: `vm-waydroid.sh` installs into a running guest, and a rebuilt image
 has no Waydroid and a 14.7 GB disk again. `ROOT_SLACK_MIB=12288` at build time is
 how to get the room in advance.
+
+## 2026-09-12 -- the agent that installed and would not start
+
+Reported from the phone, with the floating terminal still on screen:
+
+    /usr/bin/omarchy-default-agent: line 72: mise: command not found
+    Could not install Grok with mise
+
+Which is the image saying what the entry above already predicted. `mise-bin` is
+a pin as of this morning and nothing has been built around it, so on this guest
+-- built 2026-09-11 -- there is no mise for any of the thirteen rows to install
+through.
+
+Worth saying how the picker was reached at all, since the row that leads to it
+is guarded on mise and correctly hidden here. `vm-push.sh` puts
+`omarchy-mobile-agent` and its icons into a running guest, and the seed writes
+the setup tile, which is guarded on nothing: it opens
+`apps.default.agent` directly. That is the door, and it is the right one --
+the page installs what it lists, so a guard on the agents would hide the only
+screen that could install one (F8) -- but it means the tile can reach a page
+whose every row fails on an image with no installer behind it.
+
+### The pin installed by hand, and what it found
+
+`mise-bin-2026.9.5-1-aarch64.pkg.tar.xz` from the builder's `/pkgs` volume,
+`pacman -U` in the guest, and the row's own command:
+
+    mise ✓ npm:@xai-official/grok@1.0.30  7.3s
+
+on a guest with neither node nor npm -- mise fetches the npm tarballs itself
+and needs no node to install one. What it unpacked needs one:
+
+    .../npm-xai-official-grok/latest/node_modules/.bin/grok: exec: node: not found
+
+So the installer was never the last thing missing. Most of the thirteen resolve
+to npm packages through mise's registry, so this was not Grok's alone, and
+nothing in the tree had ever asked for node: upstream gets it before any agent,
+from `install/user/mise-work.sh`'s `mise use -g node@latest` as
+`omarchy-provision-user` sets a user up, and this image seeds `/etc/skel` from
+upstream's `config/` and runs no provisioning of its own.
+
+`nodejs` and `npm` are in `vm/packages/apps` now, from ALARM's extra rather
+than through mise -- on the image before first boot instead of a 70 MB download
+on the first tap of an agent tile, which is the reason everything else in that
+file comes from there. ALARM is current with it: 26.8.2-1, the same version
+`mise use -g node@latest` resolved to on this hardware, checked by installing
+both ways and running the agent against each.
+
+### What that made true, on a guest rather than an image
+
+With mise and node in place, `vm-selftest.sh agent` reads **28 passed** where
+it read 26 passed and 3 skipped this morning. P6's wrapper half, P7 and P8 were
+all skipped for want of mise: the seed writes eleven wrappers, leaves Hermes and
+OpenClaw to their own installers, and leaves a hand-placed binary at
+`~/.local/bin/claude` byte-identical.
+
+P6 failed the first time for a reason of its own. The section moves
+`~/.local/bin/claude` aside as `claude.selftest-saved` -- in the very directory
+its `grep -l mise ~/.local/bin/*` then globs -- so on a guest that had seeded
+once, the save counted as a twelfth wrapper and the comparison failed on the
+test's own bookkeeping. Excluded in the grep rather than saved somewhere else,
+so the three files that section moves aside still move the same way.
+
+D8 is the other half: `settings rows` on `apps.default` answers
+`agent nav AI agent 1` with mise present, which is the first time that row has
+been seen visible. And the tile end to end -- `drawer launch
+omarchy-mobile-agent` with `grok` as the default -- opens a terminal running
+Grok, which puts its device sign-in in the browser. None of this is on a built
+image yet; both packages went in by hand.
+
+One thing that looked like the image's and is not. The first launch stopped on
+
+    mise config files in ~/Work are not trusted. Trust them?
+
+which is `mise trust`'s prompt for `~/Work/.mise.toml`. That file is upstream's,
+written by `mise-work.sh`, and it is in this guest's home because that script
+was run there by hand earlier in the day -- `/etc/skel` has no `Work`, and no
+unit here runs provisioning, so a fresh image has neither the file nor the
+prompt. `mise trust ~/Work/.mise.toml` clears it where it exists.
