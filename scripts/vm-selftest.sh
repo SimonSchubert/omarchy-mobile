@@ -2,7 +2,33 @@
 # Check the mobile shell against its acceptance criteria, in the running VM.
 #
 #   ./scripts/vm-selftest.sh              every section
-#   ./scripts/vm-selftest.sh A E S        only those (W A B C D G E H L S K settings keyboard apps agent)
+#   ./scripts/vm-selftest.sh A E S        only those (W A B C D G E H L S K settings keyboard splash apps agent)
+#
+# The whole suite is ~10 minutes on a windowed VM. Run the sections a change
+# can reach, not all of them:
+#
+#   hypr/mobile.lua                                  W
+#   EdgeGestures.qml                                 A B C D G, and S (S0, A8)
+#   Carousel.qml                                     A E K
+#   AppDrawer.qml                                    D H L splash, and A B
+#                                                      (A5, A7, B3)
+#   Splash.qml                                       splash
+#   default/usr/local/bin/omarchy-mobile-app-remove  L
+#   Shade.qml, Bar.qml                               S G, and splash (Bar's
+#                                                      launchOsd opt-out)
+#   WifiScreen.qml, BluetoothScreen.qml              K
+#   MobileAppWindow.qml                              K settings
+#   SettingsScreen.qml, SettingsRow.qml,
+#     Pages.js, Guards.js                            settings
+#   [pkg.moarchy-keep], [pkg.moarchy-store-git],
+#     49-moarchy-store.rules, `drawer launch`        apps
+#   default/usr/local/bin/omarchy-mobile-agent,
+#     the agent icons, [pkg.mise-bin]                agent, and settings
+#                                                      (D8, F8)
+#   Shell.qml, Theme.js, patches/, this file's
+#     plumbing (helper, drag, close_all)             every section
+#
+# Veil.qml is drawn and never read back: a screenshot checks it, not this.
 #
 # Every line of output names the AC it proves, from docs/spec/gestures.md,
 # shade.md, windows.md and settings.md, so an AC with no check here is visible
@@ -28,6 +54,10 @@ set -uo pipefail
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$REPO_ROOT"
 . scripts/manifest.sh
+# The VM's lease, for the whole run: another session's drag or push half-way
+# through fails checks that have nothing to do with the change under test.
+. scripts/vm-lease.sh
+lease_take "vm-selftest.sh $*" || exit 1
 
 USER_NAME=$(manifest_get guest user) || exit 1
 PORT=$(manifest_get vm ssh_port)     || exit 1
@@ -119,6 +149,29 @@ case $1 in
     read -r name mode pos scale <<<"$(hyprctl -j monitors | jq -r 'first(.[]) |
       "\(.name) \(.width)x\(.height)@\(.refreshRate) \(.x)x\(.y) \(.scale)"')"
     hyprctl eval "hl.monitor({ output = \"$name\", mode = \"$mode\", position = \"$pos\", scale = $scale, transform = 0 })" >/dev/null ;;
+  # The splash lives between a tap and the window it announces, and an ssh hop
+  # each way is most of that -- so the launch and the reads that prove it
+  # happened share one round trip (windows.md L1, L7). The layer is polled for,
+  # because a surface is mapped a frame after the shell says it is up.
+  splash_launch)
+    omarchy-shell drawer launch "$2" >/dev/null
+    echo "state=$(omarchy-shell splash state)"
+    echo "drawn=$(omarchy-shell splash drawn)"
+    l=""
+    for _ in $(seq 1 10); do
+      l=$(hyprctl -j layers | jq -r 'first(.[].levels[][] | select(.namespace == "omarchy-mobile-splash") | "\(.x) \(.y) \(.w) \(.h)") // ""')
+      [ -n "$l" ] && break
+      sleep 0.1
+    done
+    echo "layer=$l" ;;
+  # And the reads that follow the drag, in one hop for the same reason: four
+  # round trips after a launch is most of the fifteen seconds the splash has to
+  # live, and a check that spends them is timing the ssh, not the splash.
+  splash_crossed)
+    echo "shade=$(omarchy-shell shade state)"
+    echo "splash=$(omarchy-shell splash state)"
+    echo "classes=$(hyprctl -j clients | jq -r '[.[].class] | sort | join(",")')" ;;
+  classes) hyprctl -j clients | jq -r '[.[].class] | sort | join(",")' ;;
   menu_mapped) hyprctl layers | grep -c 'namespace: omarchy-menu' ;;
   toasts) hyprctl layers | grep -c 'namespace: omarchy-notifications' ;;
   volume_view) echo "$(omarchy-shell shade tiles | grep -o 'volume=[a-z0-9]*') $(omarchy-shell shade target volume)" ;;
@@ -219,11 +272,51 @@ l_entry_gone() {
   g sh 'test -e ~/.local/share/applications/selftest-l.desktop && echo here || echo gone'
 }
 
-
 # Poll until a command prints the wanted value, for up to ~3s -- for the checks
 # whose outcome arrives through an animation and then a client's own close. The
 # first argument is word-split on purpose: `wait_for "g nwin" 2`.
 wait_for() { local i; for i in $(seq 1 15); do [ "$($1)" = "$2" ] && return 0; sleep 0.2; done; return 1; }
+
+# A drag trace that went through the middle, rather than a sheet that appeared
+# at a threshold (A1).
+#
+# Counting samples is the wrong measure here, and the count this used to want --
+# eight -- is one this VM cannot be relied on to reach. A sample is a rendered
+# frame: the carousel leaves 13 headless and 5-9 windowed on a loaded Mac, for
+# the same gesture followed just as closely, and the window stays open on this
+# machine by choice. Four identical drags measured 9, 5, 6, 9 -- the criterion
+# straddled by the renderer, not by the shell.
+#
+# What separates following from snapping is not how many positions were drawn
+# but whether any position between the ends was: a snap leaves "100", a follow
+# leaves "14 15 69 70 100". So: three or more samples, all travelling the one
+# way, and at least one strictly inside the travel.
+#
+# Either direction, because half these sheets open by growing and close by
+# shrinking -- the shade's pull is 0 -> 100 and its dismissal 100 -> 0, and both
+# of them follow the finger.
+follows_finger() {
+  local -a t; read -ra t <<<"$1"
+  [ "${#t[@]}" -ge 3 ] || return 1
+  local n=${#t[@]} first=${t[0]} last=${t[$(( ${#t[@]} - 1 ))]}
+  local v prev mid=0 dir
+  if   [ "$last" -gt "$first" ]; then dir=up
+  elif [ "$last" -lt "$first" ]; then dir=down
+  else return 1                      # it ended where it started: it went nowhere
+  fi
+  prev=$first
+  for v in "${t[@]}"; do
+    if [ "$dir" = up ]; then [ "$v" -ge "$prev" ] || return 1
+    else                     [ "$v" -le "$prev" ] || return 1
+    fi
+    [ "$v" -gt 0 ] && [ "$v" -lt 100 ] && mid=1
+    prev=$v
+  done
+  [ "$mid" = 1 ]
+}
+# Exported: the checks that pair it with a state read call it from `bash -c`,
+# which is a child and would not otherwise have it.
+export -f follows_finger
 reset_session() { g close_all; }
 
 # The strip is the bottom 20 logical px; the carousel's travel is 324 (0.45 of
@@ -290,8 +383,8 @@ section_A() {
   # "follows", and a slower drag still proves it. Every trace check below drags
   # for the same length, for the same reason.
   drag $MID_X $STRIP_Y -200 125 12
-  local samples; samples=$(ipc recents dragTrace | wc -w | tr -d ' ')
-  check A1 "the carousel follows the finger ($samples samples)" [ "$samples" -ge 8 ]
+  local trace; trace=$(ipc recents dragTrace)
+  check A1 "the carousel follows the finger ($trace)" follows_finger "$trace"
   check A3 "released between 15% and 75%, it stays open" is "$(ipc recents state)" open
   [ "$(ipc drawer state)" = open ] && drawer_opened=1
 
@@ -358,8 +451,8 @@ section_D() {
   drag $MID_X 560 -300 125 12
   local trace last; trace=$(ipc drawer dragTrace); last=${trace##* }
   local want=$(( 300 * 100 / travel ))
-  check D1 "an up-drag on the wallpaper opens the drawer ($(wc -w <<<"$trace" | tr -d ' ') samples)" \
-    bash -c "[ '$(ipc drawer state)' = open ] && [ $(wc -w <<<"$trace") -ge 8 ]"
+  check D1 "an up-drag on the wallpaper opens the drawer ($trace)" \
+    bash -c "[ '$(ipc drawer state)' = open ] && follows_finger '$trace'"
   check D2a "the open drag is 1:1 -- 300px left it at $last%, want ~$want%" \
     bash -c "d=$(( last - want )); [ \${d#-} -le 3 ]"
   ipc drawer close >/dev/null; sleep 0.4
@@ -568,8 +661,9 @@ section_H() {
   ipc drawer open >/dev/null; sleep 0.4
   # 1.5s, for the reason A1 gives.
   drag $MID_X 400 400 125 12
-  check H1 "a drag down on the sheet closes it ($(ipc drawer dragTrace | wc -w | tr -d ' ') samples)" \
-    bash -c "[ '$(ipc drawer state)' = closed ] && [ $(ipc drawer dragTrace | wc -w) -ge 8 ]"
+  local h1; h1=$(ipc drawer dragTrace)
+  check H1 "a drag down on the sheet closes it ($h1)" \
+    bash -c "[ '$(ipc drawer state)' = closed ] && follows_finger '$h1'"
   ipc drawer open >/dev/null; sleep 0.4
   drag $MID_X 400 60
   check H3 "a drag that stops short springs back" is "$(ipc drawer state)" open
@@ -605,9 +699,9 @@ section_S() {
   ipc notifications clear >/dev/null
 
   drag $MID_X 13 400 125 12
-  local n; n=$(ipc shade dragTrace | wc -w | tr -d ' ')
-  check S0 "a pull down the status bar opens the shade, following the finger ($n samples)" \
-    bash -c "[ '$(ipc shade state)' = open ] && [ $n -ge 8 ]"
+  local trace; trace=$(ipc shade dragTrace)
+  check S0 "a pull down the status bar opens the shade, following the finger ($trace)" \
+    bash -c "[ '$(ipc shade state)' = open ] && follows_finger '$trace'"
 
   drag $MID_X $STRIP_Y -120
   check A8 "with the shade down, an up-swipe from the strip puts it away and opens nothing" \
@@ -615,9 +709,9 @@ section_S() {
 
   ipc shade open >/dev/null; sleep 0.6
   drag $MID_X 640 -300 125 12
-  n=$(ipc shade dragTrace | wc -w | tr -d ' ')
-  check H2 "an up-drag on the scrim closes it, following the finger ($n samples)" \
-    bash -c "[ '$(ipc shade state)' = closed ] && [ $n -ge 8 ]"
+  trace=$(ipc shade dragTrace)
+  check H2 "an up-drag on the scrim closes it, following the finger ($trace)" \
+    bash -c "[ '$(ipc shade state)' = closed ] && follows_finger '$trace'"
 
   ipc shade open >/dev/null; sleep 0.6
   tap $MID_X 640
@@ -1368,7 +1462,7 @@ section_L() {
   drag "$cx" "$cy" 400 100 12
   check L3 "a 1.2s drag down from a cell closes the sheet and opens no card" \
     bash -c "[ '$(ipc drawer state)' = closed ] && [ -z '$(ipc drawer detail)' ] &&
-             [ $(ipc drawer dragTrace | wc -w) -ge 8 ]"
+             follows_finger '$(ipc drawer dragTrace)'"
 
   # --- L7, L8, L11, L12: what a plan may say -------------------------------
   #
@@ -1446,6 +1540,100 @@ section_L() {
 # windows.md's L ids, not gestures.md's: this section prints them with a `w.`
 # in front, the way the Settings checks print an `s.`, because the two specs
 # reuse the same letter for the long-press card and for the launch splash.
+section_splash() {
+  echo "-- splash: the launching app's own icon (windows.md L)"
+  reset_session
+
+  local geom; geom=$(ipc splash geometry)
+  check w.L2a "the splash is an Overlay surface, not Top ($geom)" \
+    contains "layer=overlay" "$geom"
+  # The screen is 360 wide; this surface is 130, with a 96px icon in it.
+  local w; w=$(sed 's/.*w=\([0-9]*\).*/\1/' <<<"$geom")
+  check w.L2 "sized to its icon rather than to the screen (w=$w)" \
+    bash -c "[ ${w:-0} -gt 0 ] && [ ${w:-0} -lt 180 ]"
+  check w.L "nothing is on the wallpaper with no launch in flight" \
+    is "$(ipc splash state)" closed
+
+  # Foot, which is the app this suite opens everywhere else and the one whose
+  # windows it knows how to close again.
+  local pids_before; pids_before=$(g pids foot)
+  local probe; probe=$(g splash_launch foot)
+  local state drawn layer
+  state=$(sed -n 's/^state=//p' <<<"$probe")
+  drawn=$(sed -n 's/^drawn=//p' <<<"$probe")
+  layer=$(sed -n 's/^layer=//p' <<<"$probe")
+  check w.L1 "a launch puts it up at once, not two seconds later" is "$state" open
+  check w.L7 "and something is drawn on it ($drawn)" drew_something "$drawn"
+  check w.L2 "and the compositor maps it that size, centred (${layer:-unmapped})" \
+    bash -c "[ -n '$layer' ] && [ \$(cut -d' ' -f3 <<<'$layer') -lt 180 ]"
+
+  local i
+  for i in $(seq 1 50); do [ "$(g pids foot)" != "$pids_before" ] && break; sleep 0.2; done
+  check w.L4 "it goes once the window has mapped" wait_for "ipc splash state" closed
+  local p new=()
+  for p in $(g pids foot); do [[ " $pids_before " == *" $p "* ]] || new+=("$p"); done
+  [ ${#new[@]} -gt 0 ] && g kill_pids "${new[@]}"
+
+  # L5. Settings' entry summons this shell rather than starting a process, so
+  # no toplevel need appear at all -- and if its window is already up and
+  # focused, none does. The screen opening is what ends the launch.
+  probe=$(g splash_launch omarchy-mobile-settings)
+  check w.L5 "a .desktop entry that summons a screen puts a splash up too" \
+    is "$(sed -n 's/^state=//p' <<<"$probe")" open
+  check w.L5 "and the screen opening takes it down, with no window to wait for" \
+    wait_for "ipc splash state" closed
+  ipc settings quit >/dev/null
+
+  # L3, L6, L7 all off one launch: an id no entry answers to. The drawer asks
+  # the library anyway, gtk-launch fails, and nothing ever maps -- so the
+  # splash is up for the full fifteen seconds, which is both the case the
+  # timeout is for and the only window long enough to drag a finger through.
+  probe=$(g splash_launch selftest-nothing-at-all)
+  check w.L7 "an id with no entry still gets a splash, as the outline" \
+    is "$(sed -n 's/^drawn=//p' <<<"$probe")" fallback
+
+  # The shade's drag starts at the status bar and ends past the middle of the
+  # screen, which is where the splash is. On this compositor the pointer is not
+  # grabbed across a layer surface's edge, so a splash with an input region
+  # would take the rest of this gesture and the shade would stop where the icon
+  # starts.
+  #
+  # "Still up afterwards" is how the drag is known to have crossed a splash
+  # rather than an empty screen, so both windows lists are printed: a window
+  # mapping mid-drag ends the launch for the right reason (L4) and makes this
+  # check say the wrong thing, and the difference between the two lists is what
+  # says which happened.
+  #
+  # "Was it up while the finger went through it" is asserted at the START of the
+  # drag, not the end, because one drag costs longer than a splash lives: the
+  # uinput device is scp'd in, created, waited on for udev and torn down again,
+  # which is ~16s on this VM against the splash's 15s (L6). Read afterwards, the
+  # splash is always down -- by its own timeout, on a launch nothing ever
+  # answered -- and the check reported the drag as having dismissed it. It never
+  # had; instrumenting finish() showed the timeout firing every time.
+  #
+  # So: up when the drag begins, and nothing mapped while it ran. The pointer
+  # crosses the icon in the first fraction of the gesture, seconds inside the
+  # fifteen, and with no window appearing there is nothing but that timeout that
+  # could have taken it down -- so the finger did go through a splash that was
+  # there, which is what L3 needs and all it needs.
+  local wins_before; wins_before=$(g classes)
+  local before; before=$(g splash_launch selftest-nothing-at-all)
+  check w.L3 "the splash is up as the drag starts, so there is one to cross" \
+    is "$(sed -n 's/^state=//p' <<<"$before")" open
+  drag $MID_X 13 400 125 12
+  local crossed; crossed=$(g splash_crossed)
+  local wins_after; wins_after=$(sed -n 's/^classes=//p' <<<"$crossed")
+  check w.L3 "a drag straight through the splash still reaches the shade" \
+    is "$(sed -n 's/^shade=//p' <<<"$crossed")" open
+  check w.L3 "and no window mapped while it ran, so nothing but its own timeout took the splash down (windows: [$wins_before] -> [$wins_after])" \
+    is "$wins_after" "$wins_before"
+  ipc shade close >/dev/null
+
+  sleep 16
+  check w.L6 "15 seconds with nothing mapped and it gives up, rather than sitting there" \
+    is "$(ipc splash state)" closed
+}
 
 section_apps() {
   echo "-- apps: moarchy-keep and moarchy-store"
@@ -1474,8 +1662,8 @@ section_apps() {
     wait_for "g pids $id" ""
   done
 
-  # L9, the half that is not the splash (L1-L8 are todo): the installed store
-  # hands Open to the shell rather than starting the entry through Gio.
+  # L9, the half that is not the splash (section `splash` has that one): the
+  # installed store hands Open to the shell rather than starting it through Gio.
   check L9 "the installed store's launcher.py calls 'omarchy-shell drawer launch'" \
     g sh 'grep -qF "\"drawer\", \"launch\"" "$(pacman -Qlq moarchy-store-git | grep "/launcher\.py$")"'
 
@@ -1696,7 +1884,7 @@ section_agent() {
 }
 
 SECTIONS=("$@")
-[ ${#SECTIONS[@]} -gt 0 ] || SECTIONS=(W A B C D G E H L S K settings keyboard apps agent)
+[ ${#SECTIONS[@]} -gt 0 ] || SECTIONS=(W A B C D G E H L S K settings keyboard splash apps agent)
 for s in "${SECTIONS[@]}"; do
   "section_$s"
 done

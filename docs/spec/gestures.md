@@ -39,7 +39,17 @@ cites these ids, so an AC with no test is visible.
 
 **A1** With an app open, dragging up from the strip raises the carousel, and it
 follows the finger rather than appearing at a threshold.
-→ `omarchy-shell recents dragTrace` leaves ≥ 8 samples
+→ `omarchy-shell recents dragTrace` leaves three or more samples, never
+decreasing, at least one of them strictly between 0 and 100
+
+This asked for ≥ 8 samples until 2026-09-12. A sample is a rendered frame, so
+that number measured the renderer and not the shell: the same drag leaves 13
+headless and 5–9 on a windowed guest on a busy Mac, and the window stays open on
+that machine by choice. Four identical drags measured 9, 5, 6, 9 — a criterion
+the renderer straddled while the carousel followed the finger every time. What
+tells following from snapping is not how many positions were drawn but whether
+any position between the ends was: a snap leaves `100`, a follow leaves
+`14 15 69 70 100`. The prose above is unchanged; only the way it is read off is.
 
 **A2** Released under 15% travel, nothing happens and the carousel springs back.
 → `omarchy-shell recents state` == `closed`
@@ -141,7 +151,8 @@ existed to stand in for.
 
 **D1** On a home screen, dragging up **on the workspace** — the wallpaper, not
 the strip — opens the drawer, following the finger.
-→ `omarchy-shell drawer state` == `open`, `drawer dragTrace` ≥ 8 samples
+→ `omarchy-shell drawer state` == `open`, and `drawer dragTrace` follows the
+finger as A1 defines it
 
 **D2** Released short of the threshold, the drawer springs back and nothing
 happens.
@@ -354,7 +365,8 @@ the sheet *body* did nothing. That was never a decision -- it was where an
 implementation stopped.
 
 **H1** Dragging **down** anywhere on the drawer closes it, following the finger.
-→ `omarchy-shell drawer dragTrace` leaves ≥ 8 samples; `drawer state` == `closed`
+→ `omarchy-shell drawer dragTrace` follows the finger as A1 defines it;
+`drawer state` == `closed`
 
 **H2** Dragging **up** anywhere on the shade closes it, following the finger.
 "Anywhere" includes the band of scrim below the sheet, which is where a thumb
@@ -366,7 +378,8 @@ the band is ~70px with the shade full and several hundred with it near empty
 dismissed the shade outright on release: it looked like a shade with no close
 animation, and it was one being shut by a tap that happened to have travelled
 250px.
-→ `omarchy-shell shade dragTrace` leaves ≥ 8 samples; `shade state` == `closed`
+→ `omarchy-shell shade dragTrace` follows the finger as A1 defines it;
+`shade state` == `closed`
 
 `state` alone cannot check this and never could. A shade that jumps shut
 reaches `closed` exactly as fast as one that followed the finger the whole way,
@@ -933,7 +946,8 @@ goes down on an icon and then drags is a close drag from the first pixel past
 the slop, whether or not 500ms has passed on the way — the timer stops when
 `sheetDragging` latches.
 → a 1200ms drag down from a cell leaves `drawer state` == `closed`,
-`drawer detail` empty, and `drawer dragTrace` ≥ 8 samples
+`drawer detail` empty, and `drawer dragTrace` following the finger as A1
+defines it
 
 **L4** Scrolling the grid opens nothing. A `Flickable` steals the grab and Qt
 clears `pressed` before it emits `canceled()` (`style.md` H6), so the timer has
