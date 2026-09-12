@@ -399,6 +399,20 @@ account, dead ends included.
   `default/usr/share/polkit-1/rules.d/49-moarchy-store.rules` to the same path
   in the guest. Or rebuild. The image build itself was never affected, since it
   verifies against the builder's keyring.
+- Web apps are GNOME Web's, not real PWAs. A manifest-driven install, `display:
+  standalone` and scope handling exist only in the Chrome family on Linux, which
+  is what upstream uses -- this image dropped chromium because it has no narrow
+  layout and never mapped a window here at all
+  (`ContextResult::kTransientFailure`). Whether it would map for `--app=` alone,
+  with software GL, is untested.
+- Discord and WhatsApp state no `theme-color` and no manifest to read one from,
+  so their tiles leave the bar and the band in the theme's colours. Sampling the
+  window's own top pixel would cover them, and every non-web app with it.
+- A web app launch showed *"Press F11 to exit fullscreen"* once, on the device.
+  It is not reproducible: eighteen screendumps at 1.2s across a cold start show
+  no toast in any frame, and a window that maps already in the state was never
+  in another one to announce. A live window put into the state does toast, which
+  the three open web apps got when the rule first landed.
 - Settings search from the drawer (settings.md O) is in, but the quiet open O4
   needs -- `quietOpen`, `settlePending` and the floor under a guard batch that
   never answers -- has no `vm-selftest.sh` line yet.

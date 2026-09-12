@@ -440,6 +440,21 @@ to travel up over the shade. The shade forwards the band instead.
 **`Toplevel.activate()` ignores the shell's own windows**, where it focuses
 anybody else's. Every focus goes through `hl.dsp.focus({ window = "address:…" })`.
 
+**A Hyprland class rule matches the WHOLE class.** `^org\.gnome\.Epiphany\.WebApp_`
+matched no window at all, and a rule that matches nothing says nothing --
+neither the log nor `hyprctl` mentions it. Pinned with two `foot` windows: a
+rule on `^sel-fs$` fires on class `sel-fs`, one on `^sel-pre` never fires on
+`sel-prefix`. Every prefix match wants `.*$` on the end.
+
+**What a plugin is handed as `shell.bar` is not the bar.** It is a sandboxed
+bar-state object the host builds per plugin -- `barHidden`, `barSize`,
+`fontFamily`, `position`, and nothing else (`shell.qml`, `pluginBarStateFor`) --
+so a `Binding` aimed at any other property of "the bar" writes into nothing,
+silently. Caught by measurement rather than by an error: the bottom band took
+the app's colour and the bar stayed in the theme's. Two entry points of one
+plugin reach each other through a `.pragma library` module instead (`Tint.js`),
+which is shared because they are loaded into the same QML engine.
+
 **Persistent toasts owned the top of the screen.** Upstream's two first-run
 notifications do not time out, and the toast column took every touch in
 roughly the top 170px until they were dismissed -- the drawer's handle and first

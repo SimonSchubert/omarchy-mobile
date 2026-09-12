@@ -186,6 +186,11 @@ moarchy-store-git
 # itself as gnome-music#255. So the choice is a player that does not fit or no
 # player, and this list takes no player.
 #
+# The drawer has one anyway, and it is not in this file: Spotify, as a web app
+# (default/etc/skel/.local/share/applications/Spotify.desktop). A page that
+# lays itself out for a phone fits where Music's fixed sidebars do not, and it
+# costs no package at all.
+#
 # About 95 MB of download for the eleven. Most of it is webkit2gtk-4.1 (39 MB)
 # for Calendar and Contacts through evolution-data-server, which Geary then
 # reuses for 2 MB more, and js140 (21 MB), the JavaScript engine behind the GJS
