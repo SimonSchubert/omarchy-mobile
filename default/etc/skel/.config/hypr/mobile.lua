@@ -57,6 +57,46 @@ hl.window_rule({
   opacity = "1 1",
 })
 
+-- A web app is the site and nothing else.
+--
+-- Epiphany's --application-mode drops the URL bar and the tab strip, and keeps
+-- a bar of its own: the page title, the URL under it, and a row of back,
+-- forward, page menu and site menu. At this width that bar is ~80 of 674
+-- logical pixels, 12% of the screen, on every web app and on every page.
+-- Upstream's web apps have none of it -- chromium's --app= draws no chrome at
+-- all -- so the bar is an artefact of swapping the browser (docs/build-log.md),
+-- not something this image chose.
+--
+-- What takes it away is the state Epiphany already drops its chrome for: the
+-- one F11 puts it in. Hyprland 0.56 keeps the two halves of that separate, so
+-- `0 2` is "compositor: lay it out normally, client: you are fullscreen" --
+-- the window stays tiled under the bar at the size it had, and only Epiphany's
+-- own chrome goes. A real fullscreen (`2 2`) would take the bar's 26px as
+-- well, which is the clock and the notification dot, and those are not the
+-- web app's to cover.
+--
+-- Back and forward are not lost with the buttons. `enable-navigation-gestures`
+-- is true in Epiphany's own settings, so a horizontal swipe inside the page
+-- walks history, and the shell's left edge is 16px wide (gestures.md G8) --
+-- narrow enough that a swipe starting past it reaches the page rather than
+-- closing the app.
+--
+-- Matched on the prefix, which is every web app and no ordinary browser
+-- window: omarchy-launch-webapp names each profile
+-- org.gnome.Epiphany.WebApp_<host>, and the browser itself is plain
+-- org.gnome.Epiphany.
+--
+-- The trailing `.*` is not decoration. Hyprland matches a class rule against
+-- the WHOLE class, not any part of it, so `^org\.gnome\.Epiphany\.WebApp_`
+-- matched nothing at all -- measured, with a rule on `^sel-pre` that never
+-- fired on a window of class `sel-prefix` while `^sel-fs$` fired on `sel-fs`.
+-- A rule that matches nothing is silent, so this is the shape of the bug that
+-- would have shipped.
+hl.window_rule({
+  match = { class = "^org\\.gnome\\.Epiphany\\.WebApp_.*$" },
+  fullscreen_state = "0 2",
+})
+
 -- The on-screen keyboard: moarchy's, pinned in manifest.toml. It raises itself
 -- when a text field takes focus and retracts when focus leaves one -- no
 -- toggle, no gesture -- because Hyprland advertises

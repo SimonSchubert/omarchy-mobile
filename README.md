@@ -139,8 +139,10 @@ a phone image rather than from aarch64:
   player, which `vm/packages/apps` explains and puts a price on. mpv stays
   installed for upstream's scripts, but the drawer's player is Showtime.
 - **Three of them are web apps.** X, Discord and Spotify are in the drawer, and
-  each opens as its own window with no URL bar and no tab strip, through
-  `omarchy-launch-webapp`. Upstream ships entries for the first two that nothing
+  each opens as its own window with no browser chrome at all, through
+  `omarchy-launch-webapp` and the window rule in `hypr/mobile.lua` that tells
+  Epiphany it is fullscreen while the compositor keeps laying it out under the
+  bar. Upstream ships entries for the first two that nothing
   on this image ever copied into a home, and artwork beside them that nothing
   ever put in an icon theme, so both are done at build time; Spotify is written
   here, because upstream has no entry for it and because this image has no music

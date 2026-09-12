@@ -24,7 +24,8 @@
 #     49-moarchy-store.rules, `drawer launch`        apps
 #   the X, Discord and Spotify entries,
 #     default/usr/local/bin/omarchy-launch-webapp,
-#     the web app icons build-disk.sh installs       apps
+#     the web app icons build-disk.sh installs,
+#     mobile.lua's web app window rule               apps
 #   default/usr/local/bin/omarchy-mobile-agent,
 #     the agent icons, [pkg.mise-bin]                agent, and settings
 #                                                      (D8, F8)
@@ -252,6 +253,17 @@ case $1 in
     HOME=$tmp PATH="$tmp/bin:$PATH" omarchy-launch-webapp "$2" |
       sed -n 's;^--profile=.*/;;p' | head -1
     rm -rf "$tmp" ;;
+  # Whether hypr/mobile.lua's web app rule matches a window class, the way
+  # Hyprland matches it: against the WHOLE class and not any part of it. The
+  # pattern is read out of the file rather than written again here, with Lua's
+  # own escaping undone on the way (the file writes \\. for a literal dot), and
+  # `grep -x` stands in for the full match. That is the property the rule got
+  # wrong the first time -- a prefix that matched nothing, silently.
+  webapp_rule_matches)
+    rx=$(grep -o 'class = "[^"]*Epiphany[^"]*"' ~/.config/hypr/mobile.lua |
+         head -1 | sed 's/^class = "//; s/"$//; s/\\\\/\\/g')
+    [ -n "$rx" ] || { echo "no rule"; exit 1; }
+    if printf '%s\n' "$2" | grep -qxE "$rx"; then echo yes; else echo no; fi ;;
   # Whether an icon name resolves to a file, in the directories the shell's own
   # index walks (AppLibrary.iconIndexScanCommand): the user's first, then every
   # XDG_DATA_DIRS, apps/ and devices/ only.
@@ -1747,6 +1759,12 @@ section_apps() {
       test -n "$class"
     check apps "$entry's StartupWMClass is what omarchy-launch-webapp derives" \
       is "$(g webapp_id "$url")" "$class"
+
+    # And the rule that takes the browser's own chrome off that window
+    # (hypr/mobile.lua) has to match the same class. Hyprland says nothing
+    # about a rule that matches nothing, so this is the only place it shows.
+    check apps "$entry's class is one the web app window rule matches" \
+      is "$(g webapp_rule_matches "$class")" yes
 
     icon=$(g sh "sed -n 's/^Icon=//p' $file")
     check apps "$entry's icon ($icon) resolves to a file the shell can index" \

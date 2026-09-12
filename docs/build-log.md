@@ -2918,3 +2918,90 @@ once on a 4 GB guest put it into `Under memory pressure, flushing caches` on
 the serial console and stopped answering ssh. That is worth writing down on its
 own -- this VM holds one web app comfortably and not three -- and Discord's
 page is worth opening again, alone, before anything is concluded about it.
+
+
+## 2026-09-12 -- a web app is the site and nothing else
+
+The web apps landed with the browser's own bar still on them: the page title,
+the URL under it, and a row of back, forward, page menu and site menu.
+Epiphany's `--application-mode` drops the URL bar and the tab strip and keeps
+that. At this width it is ~80 of 674 logical pixels, 12% of the screen, on
+every web app and every page -- and upstream's web apps have none of it, since
+chromium's `--app=` draws no chrome at all. The bar is an artefact of swapping
+the browser, not something this image chose.
+
+There is no setting for it. `gsettings list-recursively org.gnome.Epiphany` is
+47 keys and not one of them is about app-mode chrome; the bar is a GNOME design
+decision, which is a thing to work with rather than argue with.
+
+### The state Epiphany already hides its chrome for
+
+F11. `notify_fullscreen_cb` in `ephy-window.c` hides the header bar, the tab
+bar and the action bar when the window's `fullscreened` property goes true, and
+that property comes from the compositor, not from the key -- so anything that
+tells the client it is fullscreen gets the same result.
+
+Hyprland 0.56 can say exactly that and nothing more. `fullscreen_state` takes
+two halves, the compositor's and the client's, so
+
+    hl.window_rule({
+      match = { class = "^org\\.gnome\\.Epiphany\\.WebApp_.*$" },
+      fullscreen_state = "0 2",
+    })
+
+is "lay it out normally; tell it it is fullscreen". Measured on a live window:
+before `360x474 at 0,26`, after `360x474 at 0,26`, `fullscreen: 0`,
+`fullscreenClient: 2`, and the bar gone. A real fullscreen (`2 2`) would take
+the 26px bar with it -- the clock and the notification dot -- which is not the
+web app's to cover.
+
+Back and forward go with the buttons, and are not lost:
+`org.gnome.Epiphany.web enable-navigation-gestures` is true, so a horizontal
+swipe in the page walks history, and the shell's left edge band is 16px
+(gestures.md G8) -- narrow enough that a swipe starting past it reaches the
+page rather than closing the app.
+
+### The bug that would have shipped silently
+
+The first rule matched `^org\.gnome\.Epiphany\.WebApp_` and did nothing at all.
+Hyprland matches a class rule against the WHOLE class, not any part of it, so a
+prefix matches nothing -- and a rule that matches nothing says nothing. It was
+visible only because a freshly launched web app came up `fullscreenClient: 0`
+after the rule was in place.
+
+Pinned with two windows rather than guessed: a rule on `^sel-fs$` fired on a
+`foot` window of class `sel-fs`, and a rule on `^sel-pre` never fired on one of
+class `sel-prefix`. `.*$` on the end, and the same launch comes up
+`fullscreenClient: 2`.
+
+The selftest's `apps` section now reads the pattern out of `hypr/mobile.lua`,
+undoes Lua's escaping, and requires it to full-match each entry's
+`StartupWMClass` -- `grep -qxE`, where the `-x` is the whole point. It answers
+`no` for `org.gnome.Epiphany`, which is the ordinary browser and keeps its URL
+bar.
+
+### The toast, and when it does not appear
+
+Entering fullscreen makes Epiphany say *"Press F11 to exit fullscreen"* across
+the middle of the page, which on a phone is both wrong and useless. It fades in
+about five seconds -- and it never appears on a launch: a window that MAPS in
+the state was never in any other, so there is no transition to announce. Caught
+with QEMU-side screendumps of the first frames after a map (the guest is busy
+then, and `grim` over ssh is not fast enough to catch it): cookie banner, no
+toast. The only way to see it is to toggle a window that is already open, which
+is what the three already-open web apps got when the rule landed.
+
+### Two corrections to the entry above this one
+
+Discord's "near-white page with its own background illustration" was a
+near-white page with **the wallpaper** behind it: upstream tags every window
+0.985/0.96 opacity (`default/hypr/windows.lua`), and the Audi Quattro of the
+active theme was showing through a blank page. So the finding is simpler and
+worse than it read -- Discord rendered nothing.
+
+And the guest did not stop answering ssh because three web apps is too many,
+quite. Two X launches died 35 seconds in, both exactly when the ssh session
+that started them disconnected: `omarchy-shell drawer launch` from a login
+shell leaves the app in that session's tree. `nohup setsid` in front of it, and
+the same launch sat at `fullscreenClient: 2` for two minutes and more. Worth
+knowing before reading anything into a web app that "crashed" during a test.
