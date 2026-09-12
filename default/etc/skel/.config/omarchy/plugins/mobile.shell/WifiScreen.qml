@@ -20,6 +20,7 @@ import Quickshell.Wayland
 import Quickshell.Networking
 import qs.Commons
 import qs.Ui as Ui
+import "Theme.js" as Theme
 
 Item {
   id: root
@@ -56,7 +57,8 @@ Item {
   readonly property color containerHigh: Util.alpha(Color.popups.text, 0.14)
   readonly property color accent: Color.accent
   readonly property color textOnAccent: Color.background
-  readonly property color subdued: Util.alpha(Color.popups.text, 0.62)
+  readonly property color subdued: Theme.subduedOnContainer(root.surface,
+                                                            root.textOnSurface)
 
   component PressVeil: Veil { ink: root.textOnSurface }
 
@@ -407,31 +409,13 @@ Item {
           width: parent.width
           height: Style.space(44)
 
-          Rectangle {
+          BackChevron {
             id: backButton
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(38)
-            height: width
-            radius: width / 2
-            color: root.container
-
-            PressVeil { anchors.fill: parent; radius: parent.radius; on: backArea.pressed }
-
-            Ui.OpticalGlyph {
-              anchors.fill: parent
-              text: "\uF104"
-              fontFamily: Style.font.family
-              fontSize: Style.font.icon
-              color: root.textOnSurface
-            }
-            // 38 drawn, 44 answering (docs/spec/style.md E1, E2).
-            MouseArea {
-              id: backArea
-              anchors.fill: parent
-              anchors.margins: -Style.space(3)
-              onClicked: root.dismiss()
-            }
+            fill: root.container
+            ink: root.textOnSurface
+            onActivated: root.dismiss()
           }
 
           Text {
@@ -445,47 +429,17 @@ Item {
             color: root.textOnSurface
           }
 
-          // The radio switch: a pill rather than a checkbox, because it is the
-          // one control here that is not a list row and has to read as a switch
-          // at a glance.
-          Rectangle {
+          RadioPill {
             id: radioSwitch
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(52)
-            height: Style.space(30)
-            radius: height / 2
-            // No device is not "off" -- there is nothing to switch.
-            opacity: root.wifiDevice ? 1 : 0.4
-            color: root.wifiDevice && Networking.wifiEnabled ? root.accent : root.containerHigh
-            Behavior on color { ColorAnimation { duration: 120 } }
-
-            PressVeil {
-              anchors.fill: parent
-              radius: parent.radius
-              ink: Networking.wifiEnabled ? root.textOnAccent : root.textOnSurface
-              on: radioArea.pressed
-            }
-
-            Rectangle {
-              width: parent.height - Style.space(6)
-              height: width
-              radius: width / 2
-              y: Style.space(3)
-              x: root.wifiDevice && Networking.wifiEnabled
-                 ? parent.width - width - Style.space(3) : Style.space(3)
-              color: root.wifiDevice && Networking.wifiEnabled ? root.textOnAccent : root.textOnSurface
-              Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-            }
-            // 30 tall is what a switch looks like, and 30 is not a target: the
-            // 7px reaches the 44px header it sits in.
-            MouseArea {
-              id: radioArea
-              anchors.fill: parent
-              anchors.margins: -Style.space(7)
-              enabled: !!root.wifiDevice
-              onClicked: Networking.wifiEnabled = !Networking.wifiEnabled
-            }
+            on: !!root.wifiDevice && Networking.wifiEnabled
+            available: !!root.wifiDevice
+            accent: root.accent
+            track: root.containerHigh
+            inkOn: root.textOnAccent
+            inkOff: root.textOnSurface
+            onToggled: Networking.wifiEnabled = !Networking.wifiEnabled
           }
         }
 

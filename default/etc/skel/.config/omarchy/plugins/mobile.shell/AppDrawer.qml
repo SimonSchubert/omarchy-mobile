@@ -968,19 +968,19 @@ Item {
     readonly property color textOnSurface: Color.menu.text
     readonly property color container: Util.alpha(Color.menu.text, 0.08)
     readonly property color containerHigh: Util.alpha(Color.menu.text, 0.14)
-    readonly property color subdued: Util.alpha(Color.menu.text, 0.55)
+    // Measured against `container` rather than the bare sheet, because that is
+    // the harder of the two backgrounds it is drawn on: the container is 8%
+    // toward the ink, so text that clears AA there clears it on the sheet too.
+    readonly property color subdued: Theme.subduedOnContainer(drawerWindow.surface,
+                                                              drawerWindow.textOnSurface)
 
-    // The long-press card (L5), which is the one thing on this surface that is
-    // drawn over an opaque fill of its own rather than straight on the sheet.
-    // So its secondary text is computed against that fill rather than taken at
-    // a constant alpha: moarchy measured a 0.7 foreground over a lifted card
-    // falling below AA in six of the 22 themes, and this card's plan is three
-    // lines of exactly that text.
-    readonly property color cardFill: Theme.mix(drawerWindow.surface,
-                                                drawerWindow.textOnSurface, 0.08)
-    readonly property color cardSubdued: Theme.readableOn(drawerWindow.cardFill,
-                                                          drawerWindow.textOnSurface,
-                                                          0.55, 4.5)
+    // The long-press card (L5), the one thing on this surface drawn over an
+    // opaque fill of its own rather than straight on the sheet. That fill is
+    // `container` composited -- the same colour, named for what it is used for
+    // -- which is why the card's secondary text is `subdued` and not a second
+    // colour computed alongside it.
+    readonly property color cardFill: Theme.containerOn(drawerWindow.surface,
+                                                        drawerWindow.textOnSurface)
 
     // The scrim makes a half-open drawer read as half-open rather than as a
     // window that has not finished drawing. One blended quad with its alpha
@@ -1503,7 +1503,7 @@ Item {
                   text: String(root.detailInfo.comment || "")
                   font.family: Style.font.family
                   font.pixelSize: Style.font.caption
-                  color: drawerWindow.cardSubdued
+                  color: drawerWindow.subdued
                   wrapMode: Text.Wrap
                   maximumLineCount: 2
                   elide: Text.ElideRight
@@ -1533,7 +1533,7 @@ Item {
                 text: String(root.detailInfo.size || "")
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
-                color: drawerWindow.cardSubdued
+                color: drawerWindow.subdued
               }
 
               Text {
@@ -1542,7 +1542,7 @@ Item {
                 text: String(root.detailInfo.id || "")
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
-                color: drawerWindow.cardSubdued
+                color: drawerWindow.subdued
                 elide: Text.ElideMiddle
               }
             }
@@ -1575,7 +1575,7 @@ Item {
                 text: root.detailBlocked
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
-                color: drawerWindow.cardSubdued
+                color: drawerWindow.subdued
                 wrapMode: Text.Wrap
                 maximumLineCount: 3
                 elide: Text.ElideRight
@@ -1589,7 +1589,7 @@ Item {
                 text: String(root.detailPlan.names || "").split(" ").join(", ")
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
-                color: drawerWindow.cardSubdued
+                color: drawerWindow.subdued
                 wrapMode: Text.Wrap
                 maximumLineCount: 4
                 elide: Text.ElideRight
@@ -1619,7 +1619,7 @@ Item {
                     || "This one cannot be removed."
               font.family: Style.font.family
               font.pixelSize: Style.font.caption
-              color: drawerWindow.cardSubdued
+              color: drawerWindow.subdued
               wrapMode: Text.Wrap
             }
 

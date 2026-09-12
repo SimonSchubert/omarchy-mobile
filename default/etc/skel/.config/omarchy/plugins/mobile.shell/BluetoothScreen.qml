@@ -26,7 +26,6 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Bluetooth
 import qs.Commons
-import qs.Ui as Ui
 import "Theme.js" as Theme
 
 Item {
@@ -62,12 +61,8 @@ Item {
   readonly property color accent: Color.accent
   readonly property color textOnAccent: Color.background
 
-  // The same computation as the shade's: `container` is painted with alpha
-  // over the surface, and a constant alpha falls below AA on six themes.
-  readonly property color subduedBase: Theme.mix(
-    Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Color.popups.text, 0.08)
-  readonly property color subdued: Theme.readableOn(root.subduedBase,
-                                                   Color.popups.text, 0.55, 4.5)
+  readonly property color subdued: Theme.subduedOnContainer(root.surface,
+                                                            root.textOnSurface)
 
   component PressVeil: Veil { ink: root.textOnSurface }
 
@@ -434,30 +429,13 @@ Item {
           width: parent.width
           height: Style.space(44)
 
-          Rectangle {
+          BackChevron {
             id: backButton
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(38)
-            height: width
-            radius: width / 2
-            color: root.container
-
-            PressVeil { anchors.fill: parent; radius: parent.radius; on: backArea.pressed }
-
-            Ui.OpticalGlyph {
-              anchors.fill: parent
-              text: "\uF104"
-              fontFamily: Style.font.family
-              fontSize: Style.font.icon
-              color: root.textOnSurface
-            }
-            MouseArea {
-              id: backArea
-              anchors.fill: parent
-              anchors.margins: -Style.space(3)
-              onClicked: root.dismiss()
-            }
+            fill: root.container
+            ink: root.textOnSurface
+            onActivated: root.dismiss()
           }
 
           Text {
@@ -471,45 +449,17 @@ Item {
             color: root.textOnSurface
           }
 
-          // Drawn exactly as Wi-Fi's: the two screens have to read as one app.
-          Rectangle {
+          RadioPill {
             id: radioSwitch
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(52)
-            height: Style.space(30)
-            radius: height / 2
-            // No adapter is not "off" -- there is nothing to switch.
-            opacity: root.adapter ? 1 : 0.4
-            color: root.adapter && root.adapter.enabled ? root.accent : root.containerHigh
-            Behavior on color { ColorAnimation { duration: 120 } }
-
-            PressVeil {
-              anchors.fill: parent
-              radius: parent.radius
-              ink: root.adapter && root.adapter.enabled ? root.textOnAccent
-                                                        : root.textOnSurface
-              on: radioArea.pressed
-            }
-
-            Rectangle {
-              width: parent.height - Style.space(6)
-              height: width
-              radius: width / 2
-              y: Style.space(3)
-              x: root.adapter && root.adapter.enabled
-                 ? parent.width - width - Style.space(3) : Style.space(3)
-              color: root.adapter && root.adapter.enabled ? root.textOnAccent
-                                                          : root.textOnSurface
-              Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-            }
-            MouseArea {
-              id: radioArea
-              anchors.fill: parent
-              anchors.margins: -Style.space(7)
-              enabled: root.adapter !== null
-              onClicked: root.setEnabled(!root.adapter.enabled)
-            }
+            on: !!root.adapter && root.adapter.enabled
+            available: root.adapter !== null
+            accent: root.accent
+            track: root.containerHigh
+            inkOn: root.textOnAccent
+            inkOff: root.textOnSurface
+            onToggled: root.setEnabled(!root.adapter.enabled)
           }
         }
 

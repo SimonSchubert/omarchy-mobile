@@ -31,6 +31,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui as Ui
+import "Theme.js" as Theme
 
 Item {
   id: root
@@ -200,7 +201,10 @@ Item {
   readonly property color cardSurface: Qt.tint(
     Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1),
     Util.alpha(root.textOnSurface, 0.06))
-  readonly property color subdued: Util.alpha(root.textOnSurface, 0.6)
+  // Against the card, which is what this text is drawn on -- not against the
+  // scrim beside it.
+  readonly property color subdued: Theme.subduedOn(root.cardSurface,
+                                                   root.textOnSurface)
 
   readonly property int radiusTile: Style.space(20)
   readonly property int iconSize: Style.space(56)

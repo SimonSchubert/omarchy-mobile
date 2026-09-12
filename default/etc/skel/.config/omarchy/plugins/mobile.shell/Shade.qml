@@ -144,10 +144,8 @@ Item {
   readonly property color container: Util.alpha(Color.popups.text, 0.08)
   readonly property color accent: Color.accent
   readonly property color textOnAccent: Color.background
-  readonly property color subduedBase: Theme.mix(
-    Qt.rgba(root.surface.r, root.surface.g, root.surface.b, 1), Color.popups.text, 0.08)
-  readonly property color subdued: Theme.readableOn(root.subduedBase,
-                                                   Color.popups.text, 0.55, 4.5)
+  readonly property color subdued: Theme.subduedOnContainer(root.surface,
+                                                            root.textOnSurface)
 
   component PressVeil: Veil { ink: root.textOnSurface }
 

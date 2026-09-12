@@ -47,7 +47,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Commons
-import qs.Ui as Ui
 import "Pages.js" as Pages
 import "Guards.js" as Guards
 import "Theme.js" as Theme
@@ -130,12 +129,10 @@ Item {
   readonly property color container: Util.alpha(Color.popups.text, 0.08)
   readonly property color accent: Color.accent
 
-  // The detail line is computed per theme rather than fixed: moarchy measured
-  // foreground at 0.7 over this card below AA in six of the 22 themes. Start
-  // quiet and walk toward the foreground until it clears 4.5:1 against the card
-  // as composited, not against the surface under it.
-  readonly property color cardOpaque: Theme.mix(root.surface, root.textOnSurface, 0.08)
-  readonly property color subdued: Theme.readableOn(root.cardOpaque, root.textOnSurface, 0.55, 4.5)
+  // The detail line is computed per theme rather than fixed, against the card
+  // as composited rather than the surface under it (Theme.js says why).
+  readonly property color subdued: Theme.subduedOnContainer(root.surface,
+                                                            root.textOnSurface)
 
   component PressVeil: Veil { ink: root.textOnSurface }
 
@@ -1109,32 +1106,13 @@ Item {
           width: parent.width
           height: Style.space(44)
 
-          Rectangle {
+          BackChevron {
             id: backButton
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            width: Style.space(38)
-            height: width
-            radius: width / 2
-            color: root.container
-
-            PressVeil { anchors.fill: parent; radius: parent.radius; on: backArea.pressed }
-
-            // fa-angle-left, U+F104, centred on its ink rather than its advance.
-            Ui.OpticalGlyph {
-              anchors.fill: parent
-              text: ""
-              fontFamily: Style.font.family
-              fontSize: Style.font.icon
-              color: root.textOnSurface
-            }
-            // 38 drawn, 44 answering (docs/spec/style.md E1, E2).
-            MouseArea {
-              id: backArea
-              anchors.fill: parent
-              anchors.margins: -Style.space(3)
-              onClicked: { if (!root.goBack()) root.dismiss() }
-            }
+            fill: root.container
+            ink: root.textOnSurface
+            onActivated: if (!root.goBack()) root.dismiss()
           }
 
           Text {

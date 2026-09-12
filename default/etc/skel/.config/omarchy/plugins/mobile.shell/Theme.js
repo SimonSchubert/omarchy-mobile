@@ -36,3 +36,40 @@ function readableOn(bg, fg, from, minRatio) {
     }
     return fg
 }
+
+// ---------------------------------------------------------------------------
+// The roles every surface was deriving for itself
+// ---------------------------------------------------------------------------
+// Six surfaces -- the shade, the drawer, the carousel, the bar, Settings and
+// the two radio screens -- each drew secondary text, and each worked out its
+// own colour for it. Three used this file's recipe; four used a constant alpha
+// -- 0.55 on the drawer and the bar, 0.6 on the carousel, 0.62 on Wi-Fi -- which
+// is exactly what the measurement above rules out. Checked against the 22
+// themes as shipped, against the fill each one is actually drawn on: the drawer
+// was below AA on 18 of them, the bar on 15, Wi-Fi and the carousel on 11 each,
+// all four worst on rose-pine, the drawer's detail line there at 2.36:1. The
+// recipe clears 4.5:1 on all 22 in every one of those four places. It belongs
+// here, once, so a surface asks for "secondary ink on this background" instead
+// of picking a number.
+//
+// `bg` arrives as the colour actually under the text -- a card's fill, not the
+// surface beneath the card -- because contrast is against what is painted.
+
+// A theme may set a surface below alpha 1. Contrast against a colour you can
+// see through is contrast against nothing, so composite it onto itself first:
+// the alpha belongs to what the compositor blends, not to this arithmetic.
+function opaque(c) { return Qt.rgba(c.r, c.g, c.b, 1) }
+
+// The opaque colour a `container` fill paints: the 0.08 ink these surfaces lift
+// their cards with, composited onto the surface under it.
+function containerOn(surface, ink) { return mix(opaque(surface), ink, 0.08) }
+
+// Secondary ink for text drawn straight onto a surface.
+function subduedOn(bg, ink) { return readableOn(opaque(bg), ink, 0.55, 4.5) }
+
+// Secondary ink for text on a container card -- the common case, and the one
+// the constant alphas got wrong, because the card is lighter than the surface
+// and the eye compares against the card.
+function subduedOnContainer(surface, ink) {
+  return subduedOn(containerOn(surface, ink), ink)
+}

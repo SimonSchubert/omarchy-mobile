@@ -38,6 +38,7 @@ import Quickshell.Networking
 import Quickshell.Services.UPower
 import qs.Commons
 import qs.Ui as Ui
+import "Theme.js" as Theme
 
 Item {
   id: root
@@ -133,7 +134,7 @@ Item {
   // ------------------------------------------------------------- appearance
   readonly property color background: Color.bar.background
   readonly property color foreground: Color.bar.text
-  readonly property color dim: Util.alpha(Color.bar.text, 0.55)
+  readonly property color dim: Theme.subduedOn(root.background, root.foreground)
   readonly property int edgePad: Style.space(8)
 
   // DemiBold, not Regular. moarchy measured it on the device: light text on a
