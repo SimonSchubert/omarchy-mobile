@@ -11,6 +11,8 @@ set -euo pipefail
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$REPO_ROOT"
+. scripts/vm-lease.sh
+lease_take "vm-screenshot.sh $*" || exit 1
 
 OUT=${1:-docs/screenshots/$(date +%Y%m%d-%H%M%S).png}
 mkdir -p "$(dirname "$OUT")"

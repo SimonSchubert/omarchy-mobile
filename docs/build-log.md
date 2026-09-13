@@ -1623,7 +1623,6 @@ the three in `patches/`, and it is not this change's -- the colours are right,
 the dialog is too wide either way.
 
 
-
 ## 2026-09-12 -- the browser is GNOME Web
 
 Chromium is upstream's browser and it does not work on a phone-shaped screen.
@@ -1654,10 +1653,13 @@ chromium, and only the second one is the reason to replace it.
 
 ### Epiphany, and why not the others
 
-Epiphany reflows on its own at that width -- URL bar at the bottom of the
+Epiphany's own chrome reflows at that width -- URL bar at the bottom of the
 screen, back/forward/tabs/library as a bottom toolbar under it, everything
-inside thumb reach. No flag, no configuration, no user-agent override; it
-loaded a real Wikipedia article at 360x674 on the first try.
+inside thumb reach. No flag and no configuration: it came up that way and
+loaded a real Wikipedia article at 360x674 on the first try. Worth being exact
+about what that proves, because it is the browser's own interface and not the
+page: the article was fetched at `en.m.wikipedia.org`, so it says nothing about
+what a site serves an unprompted request. See the caveat below.
 
 The cost is the part that settled it. Every one of epiphany's 23 dependencies
 was already installed -- `webkitgtk-6.0`, `gtk4` and `libadwaita` came in for
@@ -1803,6 +1805,23 @@ The drawer shows Web and Document Viewer as tiles. `omarchy-launch-webapp
 https://web.whatsapp.com/` opened the QR login page in an app window with no
 URL bar and a bottom toolbar, and stayed up past the two-minute mark where the
 missing portal keyfile used to kill it.
+
+### What the swap does not fix
+
+That WhatsApp window is also the evidence for the limit of all this. The page
+inside it is laid out wider than the 360px surface and clipped on the right:
+the "Download WhatsApp for Mac" banner runs off the edge, and the QR panel is
+cut. Epiphany's chrome adapts; the page it is given need not.
+
+A site that decides its layout from CSS media queries gets the narrow one. A
+site that decides from the user agent gets whatever WebKitGTK sends, which is a
+desktop one, and nothing in this change alters that. Chromium's `--app=` had
+exactly the same property, so this is not a regression -- it is simply the part
+of "compatible for mobile" that choosing a browser does not buy.
+
+Two things are open and neither was investigated here: whether Epiphany can be
+made to send a mobile user agent, and which of the shipped web app tiles are
+actually affected -- only WhatsApp was opened.
 
 One failure, `I1a` ("on a home screen it is the wallpaper again"), is not this
 change: it compares a pixel on the strip's band against the theme fill, and no
@@ -2191,7 +2210,6 @@ A B C D, S, K and keyboard all still pass -- 76 checks between them, including
 I1a on both sides of the `focusedToplevel()` dedupe and A8 with the new
 MouseArea in the shade. A1 failed once at 5 samples and passed on a rerun at 57;
 its own comment predicts exactly that on a windowed VM while the Mac is busy.
-
 
 
 ## 2026-09-12 -- the icons with a black square behind them

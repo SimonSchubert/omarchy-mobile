@@ -59,6 +59,7 @@ tty1 straight into Hyprland, so there is nothing to type.
 ./scripts/vm-drag.sh 180 712 -300          # swipe up from the bottom edge
 ./scripts/vm-push.sh                       # the overlay into a running guest, no rebuild
 ./scripts/vm-selftest.sh                   # the gestures, one line per acceptance criterion
+./scripts/vm-lease.sh                      # who has the VM; one session drives it at a time
 ./scripts/vm-waydroid.sh install           # Android in a container, as windows Hyprland manages
 ```
 

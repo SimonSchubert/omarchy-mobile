@@ -30,6 +30,8 @@ cd "$REPO_ROOT"
 
 die() { printf '\033[31m!! %s\033[0m\n' "$*" >&2; exit 1; }
 [ $# -ge 3 ] || die "usage: $0 <x> <y> <dy> [steps] [delay_ms]"
+. scripts/vm-lease.sh
+lease_take "${DX:+DX=$DX }${HOLD:+HOLD=$HOLD }vm-drag.sh $*" || exit 1
 
 USER_NAME=$(manifest_get guest user) || exit 1
 PORT=$(manifest_get vm ssh_port)     || exit 1

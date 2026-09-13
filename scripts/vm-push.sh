@@ -19,6 +19,8 @@ set -euo pipefail
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$REPO_ROOT"
 . scripts/manifest.sh
+. scripts/vm-lease.sh
+lease_take --pushing "vm-push.sh" || exit 1
 
 USER_NAME=$(manifest_get guest user) || exit 1
 PORT=$(manifest_get vm ssh_port)     || exit 1
@@ -42,6 +44,7 @@ scp "${SSH_OPTS[@]}" -P "$PORT" -rq \
   "$SKEL/omarchy/hooks" "$SKEL/mimeapps.list" default/etc/skel/.local \
   default/usr/local default/usr/share default/etc/pacman.d patches vm/packages/session \
   "$USER_NAME@127.0.0.1:.cache/omarchy-mobile-push/"
+lease_pushed
 
 ssh "${SSH_OPTS[@]}" -p "$PORT" "$USER_NAME@127.0.0.1" bash -s <<'GUEST'
 set -euo pipefail
