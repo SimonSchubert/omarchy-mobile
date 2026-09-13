@@ -3382,3 +3382,96 @@ nowhere; it installs the directory now.
 
 A `vm-selftest.sh apps` line holds the string to the disk: 32 passed, with
 `the icon theme GTK is pointed at (Adwaita) is installed`.
+
+## 2026-09-13 -- a repository the phone can install from, and the first app in it
+
+Everything this project packages has been installable exactly once, at build
+time, out of a `file://` repo that never leaves the container. On the device the
+consequence is plain and had never been said out loud:
+
+    $ pacman -Si moarchy-keep
+    error: package 'moarchy-keep' was not found
+
+Notes cannot be reinstalled after a removal. Nothing gets a fix without a
+reflash. And the App Store's Install row cannot work for anything we build,
+because moarchy-store's helper execs `pacman -S` against a signed allowlist, and
+pacman can only reach a package that is in a sync database. A package built into
+an image is in none. All 113 catalogue entries were ALARM packages for that
+reason, not by preference.
+
+The repository turned out to already exist. moarchy -- the PinePhone port -- has
+carried one since 20260906: one fixed release tag re-uploaded in place so the
+Server URL never moves, a detached signature per package, a database signed by
+`moarchy package signing`, and a `moarchy-keyring` package that ships the public
+half and runs `pacman-key --populate`. This image had simply never pointed at it.
+
+So the work was wiring, not building. `[repo]` and `[pkg.moarchy-keyring]` in
+the manifest, the keyring in the session tier, and `vm/configure.sh` appending
+the stanza to the guest's `/etc/pacman.conf`. Sharing moarchy's repository
+rather than standing up a second one is the whole decision: both ports are
+aarch64 Arch, the packages are the same packages, and a second repository means
+a second key to guard and a second place to publish. What the two ports do not
+share is what they can *run* -- Flutter's Impeller wants GLES 3.0 and the
+PinePhone's Mali-400 stops at 2.0 -- but that is a per-app question the
+catalogue's `tested` field already answers, not a question about where bytes
+live.
+
+Three details are deliberate and each has a failure behind it.
+
+`SigLevel = Required`, not `Never`: these install as root, and HTTPS says only
+that the bytes came from GitHub, not that they are ours. Appended to
+`pacman.conf`, never inserted, so an upstream package of the same name always
+wins and nothing here can shadow the base system by accident. And primed with
+`pacman -Sy` inside the chroot, because pacstrap caches the databases it used
+and `[moarchy]` is not among them -- without it a flashed image carries a stanza
+with no database behind it, and the Store's Install row opens a terminal that
+prints "database not found" and waits.
+
+It was proven on the running guest before any of it was written down: key
+imported, stanza added, `pacman -Sy` validated the signed database, `cbonsai`
+and `moarchy-keyring` installed under `SigLevel = Required`.
+
+### What went into it: two Flutter apps that were Android-only
+
+The question that started this was whether a Dart app runs here at all.
+`sidhant947/Queens` answered it in under four minutes: `pacman -S dart` covers
+plain Dart on aarch64, and for Flutter the SDK's git checkout bootstraps a
+native arm64 toolchain by itself. Google publishes no arm64 Linux archive --
+every entry in `releases_linux.json` is `dart_sdk_arch: x64` -- but
+`linux-arm64` and `linux-arm64-{debug,profile,release}` are all in the release
+bucket, so `flutter precache --linux` pulls native binaries and nothing is built
+from source. `flutter build linux --release` then took nineteen seconds and
+produced a 23 MB bundle that runs on llvmpipe with no GPU at all.
+
+What neither app had was a phone-shaped window. Flutter's Linux template
+hardcodes a GTK header bar on Wayland -- its own comment says "assume the header
+bar will work" -- which costs 40 of 720 logical pixels for a title and a close
+button nobody taps, in front of a compositor that owns the frame. Both now read
+an environment variable instead, set by the `.desktop` file and unset
+everywhere else, so desktop behaviour is unchanged. Upstream as
+`sidhant947/Queens#15` and `sidhant947/Puzzle#168`; deliberately an env var
+rather than `#ifdef __aarch64__`, because Asahi, a Pi 5 and an Ampere
+workstation are all arm64 *desktops* and would lose their titlebars to that
+check.
+
+The two together corrected something worth recording. Queens measured
+`themed = "no"`, and the tempting conclusion -- a Flutter app draws its own
+pixels, so it cannot follow a GTK theme -- is wrong. Puzzle measured `"yes"` at
+RMSE 0.84, and the two shots agree: it follows light and dark through the
+desktop portal and repaints completely. Flutter apps follow the theme when they
+ask; Queens never asked.
+
+### The publish that unpublished somebody else's work
+
+`repo/publish.sh` deletes every release asset not in `repo/dist`, and
+`repo/build.sh` rebuilds `dist` from `PKGDIR` alone. `PKGDIR` here was a copy of
+`moarchy/packages` taken ten minutes earlier -- and in those ten minutes a peer
+session had added `spot-client` and a newer `moarchy-store-git`. The publish
+removed the first outright and silently downgraded the second from r58 to r22.
+The only warning is a line saying "4 removed", and it scrolls past.
+
+Restored by re-copying `packages/` at publish time and republishing, which also
+finally pruned the stale `moarchy-store-git` r22 the release had been carrying
+beside r58 since 2026-09-07. The rule that follows: stage `PKGDIR` immediately
+before building the database, never earlier, and check the release afterwards
+for what peers put there rather than only for what you added.
