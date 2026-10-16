@@ -167,6 +167,17 @@ that device, one row open at a time: **Connect** or **Pair**, **Disconnect**,
 network, there is no Bluetooth device for which the intent of a tap is
 unambiguous.
 
+Trust is not pairing. A trusted device with neither pairing nor a stored bond
+keeps **Connect** and also offers **Pair**: some protocols connect without
+pairing, while a keyboard may still need its authentication exchange. Pair is
+not offered for an already paired, bonded or connected device, and rechecks
+live state rather than reusing a frozen row. A disconnected trusted-only row
+says `Trusted`; pairing without a saved bond says `Paired (not saved)`, and a
+connection without a saved bond says `Connected (not saved)`. These are observed
+states, not errors or instructions to forget a working connection.
+The actions wrap when the available width cannot fit them, retaining their
+44-style-pixel touch height and growing the open row to contain them.
+
 **S6d-4** The list holds still while a row is open or an action is in flight.
 Discovery reorders it every few seconds, and a list that reshuffles under a
 finger aiming at **Forget** is a mis-tap waiting to happen. (Wi-Fi freezes for a
@@ -201,6 +212,12 @@ wrapper adds.
 says only what it knows: it did not come up in time. Same wording discipline as
 Wi-Fi's join — guessing "wrong PIN" at a device that was simply switched off
 sends somebody to re-pair for no reason.
+
+For **Pair**, a connection alone is intermediate progress, not completion:
+the device must also report paired or bonded, and pairing must no longer be
+in progress. A paired connection without a saved bond is valid completion;
+the row still makes the lack of saved information explicit. **Connect** does
+not require pairing or a bond. Forget/disconnect completion is unchanged.
 
 **S6d-8** The header switch toggles the adapter, and **unblocks rfkill first**
 when the adapter reads blocked, waiting ~700ms before writing `enabled` — the

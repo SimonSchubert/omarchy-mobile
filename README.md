@@ -450,7 +450,12 @@ account, dead ends included.
   WhatsApp Web in a web app window is clipped on the right. Chromium's `--app=`
   behaved the same way. Whether Epiphany can be told to send a mobile user
   agent is not investigated.
-- The Wi-Fi and Bluetooth screens are untested: the VM has neither device.
+- The Wi-Fi and Bluetooth radio workflows are untested: the VM has neither device.
+  Bluetooth's row labels, action routing and completion transitions have a
+  hardware-free regression check: `node --test scripts/test-bluetooth-state.mjs`
+  (Node.js 18+, no dependencies). It executes the actual panel JS with synthetic
+  device rows, including valid unbonded connections and frozen-row rechecks.
+  It does not verify authentication prompts, helper failures or real devices.
   `mac80211_hwsim` and `hci_vhci` are in its kernel, which is where testing
   them starts.
 - Upstream's first-run toasts do not time out, and until dismissed they take

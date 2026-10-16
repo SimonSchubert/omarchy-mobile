@@ -99,6 +99,9 @@ Item {
         connected: !!d.connected,
         // BlueZ pairs, bonds and trusts separately; "remembered" is any.
         known: !!(d.paired || d.bonded || d.trusted),
+        paired: !!d.paired,
+        bonded: !!d.bonded,
+        trusted: !!d.trusted,
         pairing: !!d.pairing,
         blocked: !!d.blocked,
         batteryAvailable: !!d.batteryAvailable,
@@ -158,6 +161,31 @@ Item {
   }
 
   // ----------------------------------------------------------- interaction
+  // Trust permits reconnection; it is not evidence of pairing. Pairing can
+  // also be valid without storing a bond, so never call that state a failure.
+  function rowStatus(row) {
+    if (row.pairing) return "Pairing…"
+    if (row.blocked) return "Blocked"
+    if (row.connected) return row.bonded ? "Connected" : "Connected (not saved)"
+    if (row.bonded) return "Paired"
+    if (row.paired) return "Paired (not saved)"
+    return row.trusted ? "Trusted" : "Available"
+  }
+
+  function canPair(row) {
+    return !row.connected && !row.paired && !row.bonded
+  }
+
+  function actionComplete(verb, row) {
+    if (verb === "Forgetting") return !row || !row.known
+    if (verb === "Disconnecting") return !row || !row.connected
+    if (!row || !row.connected) return false
+    // Pair() first opens a connection. Do not mistake that intermediate
+    // connection (or trust left by the helper) for completed pairing.
+    if (verb === "Pairing") return !row.pairing && !!(row.paired || row.bonded)
+    return true
+  }
+
   property string expandedAddress: ""
   property string busyAddress: ""
   property string busyVerb: ""
@@ -187,9 +215,22 @@ Item {
   }
 
   function connectRow(row) {
-    if (row.connected) return
-    // pair for a device BlueZ has no record of, connect for one it has.
-    root.runAction(row, row.known ? "connect" : "pair", row.known ? "Connecting" : "Pairing")
+    if (row.connected || row.blocked || root.busyAddress !== "") return
+    // Keep Connect for remembered devices, including protocols that do not
+    // pair. Trusted-but-unpaired rows also offer an explicit Pair action.
+    if (row.known) root.runAction(row, "connect", "Connecting")
+    else root.pairRow(row)
+  }
+
+  function pairRow(row) {
+    // The drawer freezes row snapshots. Recheck live state before pairing so
+    // a saved bond established since it opened is not paired again.
+    var current = null
+    for (var i = 0; i < root.liveRows.length; i++)
+      if (root.liveRows[i].address === row.address) { current = root.liveRows[i]; break }
+    if (!current || !root.canPair(current) || current.pairing || current.blocked
+        || root.busyAddress !== "") return
+    root.runAction(current, "pair", "Pairing")
   }
 
   function disconnectRow(row) {
@@ -215,12 +256,7 @@ Item {
     for (var i = 0; i < root.liveRows.length; i++)
       if (root.liveRows[i].address === root.busyAddress) { found = root.liveRows[i]; break }
 
-    var done = false
-    if (root.busyVerb === "Forgetting") done = !found || !found.known
-    else if (root.busyVerb === "Disconnecting") done = !found || !found.connected
-    else done = !!(found && found.connected)
-
-    if (!done) return
+    if (!root.actionComplete(root.busyVerb, found)) return
     actionTimeout.stop()
     root.busyAddress = ""
     root.busyVerb = ""
@@ -498,10 +534,12 @@ Item {
             readonly property bool isExpanded: root.expandedAddress === rowItem.modelData.address
             readonly property bool isBusy: root.busyAddress === rowItem.modelData.address
             readonly property bool hasError: root.errorAddress === rowItem.modelData.address
+            readonly property bool canPairSeparately: rowItem.modelData.known
+                                                     && root.canPair(rowItem.modelData)
 
             width: list.width
             height: Style.space(58)
-                    + (rowItem.isExpanded ? Style.space(60) : 0)
+                    + (rowItem.isExpanded ? Math.max(Style.space(60), actionRow.height + Style.space(16)) : 0)
                     + (rowItem.hasError ? Style.space(30) : 0)
             Behavior on height { NumberAnimation { duration: 120 } }
             radius: root.radiusCard
@@ -551,11 +589,7 @@ Item {
                 anchors.top: nameText.bottom
                 anchors.topMargin: Style.space(2)
                 text: rowItem.isBusy ? root.busyVerb + "…"
-                    : rowItem.modelData.pairing ? "Pairing…"
-                    : rowItem.modelData.blocked ? "Blocked"
-                    : rowItem.modelData.connected ? "Connected"
-                    : rowItem.modelData.known ? "Paired"
-                    : "Available"
+                    : root.rowStatus(rowItem.modelData)
                 elide: Text.ElideRight
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
@@ -602,16 +636,17 @@ Item {
               color: root.accent
             }
 
-            // One row of verbs: at most two show at once, and they fit a line.
-            Row {
+            // A trusted-but-unpaired device offers both Connect and Pair:
+            // trust alone does not tell us which protocol the user wants.
+            Flow {
               id: actionRow
+              width: Math.max(0, parent.width - Style.space(24))
               visible: rowItem.isExpanded
               anchors.bottom: parent.bottom
               anchors.bottomMargin: Style.space(8)
               anchors.right: parent.right
               anchors.rightMargin: Style.space(12)
               spacing: Style.space(8)
-              height: Style.space(44)
 
               // On visibility AND on completion: a delegate built with
               // `visible` already true never emits visibleChanged.
@@ -626,7 +661,7 @@ Item {
               Rectangle {
                 visible: !rowItem.modelData.connected
                 width: Style.space(110)
-                height: parent.height
+                height: Style.space(44)
                 radius: height / 2
                 // A blocked device rejects every connection at the system
                 // level, so offering the verb would be offering a failure.
@@ -657,9 +692,36 @@ Item {
               }
 
               Rectangle {
+                visible: rowItem.canPairSeparately
+                width: Style.space(80)
+                height: Style.space(44)
+                radius: height / 2
+                readonly property bool ready: !rowItem.modelData.blocked
+                                              && !rowItem.modelData.pairing
+                                              && root.busyAddress === ""
+                color: root.containerHigh
+                opacity: ready ? 1 : 0.6
+                PressVeil { anchors.fill: parent; radius: parent.radius; on: pairArea.pressed }
+                Text {
+                  anchors.centerIn: parent
+                  text: "Pair"
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.body
+                  font.weight: root.textWeight
+                  color: parent.ready ? root.textOnSurface : root.subdued
+                }
+                MouseArea {
+                  id: pairArea
+                  anchors.fill: parent
+                  enabled: parent.ready
+                  onClicked: root.pairRow(rowItem.modelData)
+                }
+              }
+
+              Rectangle {
                 visible: rowItem.modelData.connected
                 width: Style.space(120)
-                height: parent.height
+                height: Style.space(44)
                 radius: height / 2
                 color: root.containerHigh
                 PressVeil { anchors.fill: parent; radius: parent.radius; on: disconnectArea.pressed }
@@ -681,7 +743,7 @@ Item {
               Rectangle {
                 visible: rowItem.modelData.known
                 width: Style.space(96)
-                height: parent.height
+                height: Style.space(44)
                 radius: height / 2
                 color: root.containerHigh
                 PressVeil { anchors.fill: parent; radius: parent.radius; on: forgetArea.pressed }
